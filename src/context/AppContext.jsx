@@ -276,6 +276,53 @@ export const AppProvider = ({ children }) => {
     }));
   };
 
+  const registrarAbonoCuota = (clienteId, creditoId, nroCuota, valorAbono, fechaAbono = null) => {
+    setClientes(prev => prev.map(cliente => {
+      if (cliente.id === clienteId) {
+        return {
+          ...cliente,
+          creditos: cliente.creditos.map(credito => {
+            if (credito.id === creditoId) {
+              const cuotaActual = credito.cuotas.find(c => c.nroCuota === nroCuota);
+              if (!cuotaActual) return credito;
+
+              const abonosPrevios = cuotaActual.abonosCuota || [];
+              const totalAbonado = abonosPrevios.reduce((sum, a) => sum + a.valor, 0) + valorAbono;
+              const valorCuota = credito.valorCuota;
+              const saldoPendiente = valorCuota - totalAbonado;
+
+              const nuevoAbono = {
+                id: Date.now().toString(),
+                valor: valorAbono,
+                fecha: fechaAbono || obtenerFechaLocal(),
+                fechaCreacion: obtenerFechaHoraLocal()
+              };
+
+              return {
+                ...credito,
+                cuotas: credito.cuotas.map(cuota => {
+                  if (cuota.nroCuota === nroCuota) {
+                    return {
+                      ...cuota,
+                      abonosCuota: [...abonosPrevios, nuevoAbono],
+                      saldoPendiente: saldoPendiente > 0 ? saldoPendiente : 0,
+                      tieneAbono: true,
+                      pagado: saldoPendiente <= 0,
+                      fechaPago: saldoPendiente <= 0 ? (fechaAbono || obtenerFechaLocal()) : null
+                    };
+                  }
+                  return cuota;
+                })
+              };
+            }
+            return credito;
+          })
+        };
+      }
+      return cliente;
+    }));
+  };
+
   const editarFechaCuota = (clienteId, creditoId, nroCuota, nuevaFecha) => {
     setClientes(prev => prev.map(cliente => {
       if (cliente.id === clienteId) {
@@ -630,6 +677,7 @@ export const AppProvider = ({ children }) => {
     // Pagos
     registrarPago,
     cancelarPago,
+    registrarAbonoCuota,
     editarFechaCuota,
     // Abonos
     agregarAbono,
