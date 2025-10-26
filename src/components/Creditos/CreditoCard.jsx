@@ -9,8 +9,8 @@ import {
 } from '../../utils/creditCalculations';
 
 const CreditoCard = ({ credito, onClick }) => {
-  const estado = determinarEstadoCredito(credito.cuotas);
-  const progreso = calcularProgreso(credito.cuotas);
+  const estado = determinarEstadoCredito(credito.cuotas, credito);
+  const progreso = calcularProgreso(credito.cuotas, credito);
   const colorEstado = getColorEstado(estado);
 
   return (

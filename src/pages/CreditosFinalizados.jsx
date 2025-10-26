@@ -42,7 +42,7 @@ const CreditosFinalizados = () => {
   const creditosConCliente = clientes.flatMap(cliente =>
     (cliente.creditos || [])
       .filter(credito => {
-        const estado = determinarEstadoCredito(credito.cuotas);
+        const estado = determinarEstadoCredito(credito.cuotas, credito);
         return estado === 'finalizado';
       })
       .map(credito => ({
@@ -82,8 +82,10 @@ const CreditosFinalizados = () => {
   );
 
   const handleVerCredito = (credito, clienteId) => {
+    // Buscar el cliente completo
+    const cliente = clientes.find(c => c.id === clienteId);
     setCreditoSeleccionado(credito);
-    setClienteSeleccionado(clienteId);
+    setClienteSeleccionado(cliente);
   };
 
   return (
@@ -269,7 +271,8 @@ const CreditosFinalizados = () => {
       {creditoSeleccionado && clienteSeleccionado && (
         <CreditoDetalle
           credito={creditoSeleccionado}
-          clienteId={clienteSeleccionado}
+          clienteId={clienteSeleccionado.id}
+          cliente={clienteSeleccionado}
           onClose={() => {
             setCreditoSeleccionado(null);
             setClienteSeleccionado(null);

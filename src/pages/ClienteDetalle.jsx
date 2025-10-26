@@ -222,6 +222,7 @@ const ClienteDetalle = () => {
         <CreditoDetalle
           credito={creditoSeleccionado}
           clienteId={id}
+          cliente={cliente}
           onClose={() => setCreditoSeleccionado(null)}
         />
       )}

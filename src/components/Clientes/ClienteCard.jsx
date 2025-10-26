@@ -7,12 +7,12 @@ const ClienteCard = ({ cliente }) => {
   const navigate = useNavigate();
 
   const creditosActivos = cliente.creditos?.filter(c => {
-    const estado = determinarEstadoCredito(c.cuotas);
+    const estado = determinarEstadoCredito(c.cuotas, c);
     return estado === 'activo' || estado === 'mora';
   }).length || 0;
 
   const creditosEnMora = cliente.creditos?.filter(c => {
-    const estado = determinarEstadoCredito(c.cuotas);
+    const estado = determinarEstadoCredito(c.cuotas, c);
     return estado === 'mora';
   }).length || 0;
 

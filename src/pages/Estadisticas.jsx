@@ -15,9 +15,9 @@ const Estadisticas = () => {
     const todosLosCreditos = clientes.flatMap(c => c.creditos || []);
   
   const creditosPorEstado = {
-    activos: todosLosCreditos.filter(c => determinarEstadoCredito(c.cuotas) === 'activo').length,
-    mora: todosLosCreditos.filter(c => determinarEstadoCredito(c.cuotas) === 'mora').length,
-    finalizados: todosLosCreditos.filter(c => determinarEstadoCredito(c.cuotas) === 'finalizado').length,
+    activos: todosLosCreditos.filter(c => determinarEstadoCredito(c.cuotas, c) === 'activo').length,
+    mora: todosLosCreditos.filter(c => determinarEstadoCredito(c.cuotas, c) === 'mora').length,
+    finalizados: todosLosCreditos.filter(c => determinarEstadoCredito(c.cuotas, c) === 'finalizado').length,
   };
 
   const creditosPorTipo = {
@@ -27,10 +27,10 @@ const Estadisticas = () => {
 
   const totalPrestado = todosLosCreditos.reduce((sum, c) => sum + c.monto, 0);
   const totalACobrar = todosLosCreditos
-    .filter(c => determinarEstadoCredito(c.cuotas) !== 'finalizado')
+    .filter(c => determinarEstadoCredito(c.cuotas, c) !== 'finalizado')
     .reduce((sum, c) => sum + c.totalAPagar, 0);
   const totalCobrado = todosLosCreditos
-    .filter(c => determinarEstadoCredito(c.cuotas) === 'finalizado')
+    .filter(c => determinarEstadoCredito(c.cuotas, c) === 'finalizado')
     .reduce((sum, c) => sum + c.totalAPagar, 0);
 
   // Datos para gráficos
@@ -53,7 +53,7 @@ const Estadisticas = () => {
 
     // Calcular tasa de mora
     const creditosActivos = todosLosCreditos.filter(c => {
-      const estado = determinarEstadoCredito(c.cuotas);
+      const estado = determinarEstadoCredito(c.cuotas, c);
       return estado === 'activo' || estado === 'mora';
     });
     const tasaMora = creditosActivos.length > 0 
@@ -77,7 +77,7 @@ const Estadisticas = () => {
     // Calcular clientes activos (con créditos activos o en mora)
     const clientesActivos = clientes.filter(cliente => {
       return (cliente.creditos || []).some(c => {
-        const estado = determinarEstadoCredito(c.cuotas);
+        const estado = determinarEstadoCredito(c.cuotas, c);
         return estado === 'activo' || estado === 'mora';
       });
     }).length;
