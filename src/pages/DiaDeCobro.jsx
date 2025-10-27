@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { Calendar, DollarSign, Users, Wallet, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, parseISO, startOfDay, addDays, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { formatearMoneda, calcularTotalMultasCuota } from '../utils/creditCalculations';
+import { formatearMoneda, calcularTotalMultasCuota, aplicarAbonosAutomaticamente } from '../utils/creditCalculations';
 
 const DiaDeCobro = () => {
   const { clientes } = useApp();
@@ -30,21 +30,35 @@ const DiaDeCobro = () => {
         // Solo procesar créditos activos o en mora (no finalizados)
         if (!credito.cuotas) return;
 
+        // Aplicar abonos automáticamente para obtener cuotas actualizadas con abonoAplicado y multasCubiertas
+        const { cuotasActualizadas } = aplicarAbonosAutomaticamente(credito);
+        
         // Cuotas pendientes programadas para la fecha seleccionada
         // O cuotas con multas pendientes (sin importar la fecha)
-        const cuotasDelDia = credito.cuotas.filter(cuota => {
-          if (cuota.pagado || cuota.tieneAbono) return false;
+        const cuotasDelDia = cuotasActualizadas.filter((cuota, index) => {
+          const cuotaOriginal = credito.cuotas[index];
+          if (cuotaOriginal.pagado) return false;
+          
+          // Calcular el valor pendiente de la cuota (ya incluye abonos aplicados)
+          const abonoAplicado = cuota.abonoAplicado || 0;
+          const valorCuotaPendiente = credito.valorCuota - abonoAplicado;
+          
+          // Calcular multas pendientes (ya incluye multas cubiertas)
+          const totalMultas = calcularTotalMultasCuota(cuota);
+          const multasCubiertas = cuota.multasCubiertas || 0;
+          const multasPendientes = totalMultas - multasCubiertas;
+          
+          // Si la cuota tiene saldo pendiente (valor de cuota o multas)
+          const tieneSaldoPendiente = valorCuotaPendiente > 0 || multasPendientes > 0;
           
           // Incluir si es la fecha programada
-          if (cuota.fechaProgramada === fechaSeleccionadaStr) return true;
+          if (cuotaOriginal.fechaProgramada === fechaSeleccionadaStr) return tieneSaldoPendiente;
           
-          // Incluir si tiene multas pendientes y la fecha programada ya pasó
-          const totalMultas = calcularTotalMultasCuota(cuota);
-          const multasPendientes = totalMultas - (cuota.multasCubiertas || 0);
-          const fechaProgramada = new Date(cuota.fechaProgramada);
+          // Incluir si tiene saldo pendiente y la fecha programada ya pasó
+          const fechaProgramada = new Date(cuotaOriginal.fechaProgramada);
           const fechaSeleccionadaDate = new Date(fechaSeleccionadaStr);
           
-          return multasPendientes > 0 && fechaProgramada <= fechaSeleccionadaDate;
+          return tieneSaldoPendiente && fechaProgramada <= fechaSeleccionadaDate;
         });
 
         // Cuotas cobradas en la fecha seleccionada
@@ -139,16 +153,56 @@ const DiaDeCobro = () => {
         cuotasAbonadas.forEach(cuota => {
           const abonosDelDia = cuota.abonosCuota.filter(a => a.fecha === fechaSeleccionadaStr);
           const totalAbonadoHoy = abonosDelDia.reduce((sum, a) => sum + a.valor, 0);
-          const totalAbonado = cuota.abonosCuota.reduce((sum, a) => sum + a.valor, 0);
           
-          // Calcular multas
-          const totalMultas = calcularTotalMultasCuota(cuota);
-          const multasCubiertas = cuota.multasCubiertas || 0;
+          // Encontrar la cuota actualizada correspondiente
+          const indexCuota = credito.cuotas.findIndex(c => c.nroCuota === cuota.nroCuota);
+          const cuotaActualizada = cuotasActualizadas[indexCuota];
+          
+          // Usar los valores de la cuota actualizada
+          const abonoAplicado = cuotaActualizada.abonoAplicado || 0;
+          const totalMultas = calcularTotalMultasCuota(cuotaActualizada);
+          const multasCubiertas = cuotaActualizada.multasCubiertas || 0;
           const multasPendientes = totalMultas - multasCubiertas;
           
-          // El saldo pendiente incluye la cuota pendiente + multas pendientes
-          const cuotaPendiente = credito.valorCuota - totalAbonado;
+          // El saldo pendiente de la cuota
+          const cuotaPendiente = credito.valorCuota - abonoAplicado;
           const saldoPendiente = cuotaPendiente + multasPendientes;
+          
+          // Calcular la distribución del abono de hoy (similar a abonos generales)
+          // Calcular el estado ANTES del abono de hoy
+          const abonosCuotaAntesDeHoy = cuota.abonosCuota.filter(a => a.fecha !== fechaSeleccionadaStr);
+          const totalAbonadoAntesDeHoy = abonosCuotaAntesDeHoy.reduce((sum, a) => sum + a.valor, 0);
+          
+          // Simular aplicar abonos sin el abono de hoy
+          const creditoSinAbonoHoy = {
+            ...credito,
+            cuotas: credito.cuotas.map(c => {
+              if (c.nroCuota === cuota.nroCuota) {
+                return {
+                  ...c,
+                  abonosCuota: abonosCuotaAntesDeHoy
+                };
+              }
+              return c;
+            })
+          };
+          
+          // Nota: Los abonos a cuotas específicas no se procesan por aplicarAbonosAutomaticamente
+          // Se aplican directamente a la cuota, así que calculamos manualmente
+          let abonoHoyAMultas = 0;
+          let abonoHoyACuota = 0;
+          
+          // Calcular multas antes del abono de hoy
+          const multasAntesDeHoy = totalMultas; // Las multas no cambian con abonos
+          const multasCubiertasAntesDeHoy = Math.max(0, multasCubiertas - totalAbonadoHoy);
+          const multasPendientesAntesDeHoy = multasAntesDeHoy - multasCubiertasAntesDeHoy;
+          
+          if (multasPendientesAntesDeHoy > 0) {
+            abonoHoyAMultas = Math.min(totalAbonadoHoy, multasPendientesAntesDeHoy);
+            abonoHoyACuota = totalAbonadoHoy - abonoHoyAMultas;
+          } else {
+            abonoHoyACuota = totalAbonadoHoy;
+          }
 
           const abonado = {
             clienteId: cliente.id,
@@ -157,7 +211,7 @@ const DiaDeCobro = () => {
             creditoId: credito.id,
             nroCuota: cuota.nroCuota,
             valorCuota: credito.valorCuota,
-            totalAbonado: totalAbonado,
+            totalAbonado: abonoAplicado + multasCubiertas,
             totalAbonadoHoy: totalAbonadoHoy,
             saldoPendiente: saldoPendiente,
             cartera: cliente.cartera,
@@ -165,7 +219,9 @@ const DiaDeCobro = () => {
             totalMultas: totalMultas,
             multasCubiertas: multasCubiertas,
             multasPendientes: multasPendientes,
-            cuotaPendiente: cuotaPendiente
+            cuotaPendiente: cuotaPendiente,
+            abonoHoyAMultas: abonoHoyAMultas,
+            abonoHoyACuota: abonoHoyACuota
           };
 
           if (cliente.cartera === 'K1') {
@@ -180,47 +236,59 @@ const DiaDeCobro = () => {
           const totalAbonadoHoy = abonosGeneralesDelDia.reduce((sum, a) => sum + a.valor, 0);
           const totalAbonosCredito = (credito.abonos || []).reduce((sum, a) => sum + a.valor, 0);
           
-          // Encontrar la primera cuota pendiente para calcular multas
-          const primeraCuotaPendiente = credito.cuotas.find(c => !c.pagado);
+          // Encontrar la primera cuota pendiente (usando cuotas actualizadas)
+          const indexPrimeraCuotaPendiente = credito.cuotas.findIndex(c => !c.pagado);
           
           let multasPendientes = 0;
           let multasCubiertasTotal = 0;
           let nroCuotaPendiente = 'General';
           let abonoHoyAMultas = 0;
           let abonoHoyACuota = 0;
+          let cuotaPendiente = credito.valorCuota;
           
-          if (primeraCuotaPendiente) {
-            const totalMultas = calcularTotalMultasCuota(primeraCuotaPendiente);
-            multasCubiertasTotal = primeraCuotaPendiente.multasCubiertas || 0;
+          if (indexPrimeraCuotaPendiente !== -1) {
+            const cuotaActualizada = cuotasActualizadas[indexPrimeraCuotaPendiente];
+            const cuotaOriginal = credito.cuotas[indexPrimeraCuotaPendiente];
+            
+            // Usar los valores calculados por aplicarAbonosAutomaticamente
+            const totalMultas = calcularTotalMultasCuota(cuotaActualizada);
+            multasCubiertasTotal = cuotaActualizada.multasCubiertas || 0;
             multasPendientes = totalMultas - multasCubiertasTotal;
-            nroCuotaPendiente = primeraCuotaPendiente.nroCuota;
+            nroCuotaPendiente = cuotaOriginal.nroCuota;
+            
+            // Calcular el valor pendiente de la cuota usando abonoAplicado
+            const abonoAplicado = cuotaActualizada.abonoAplicado || 0;
+            cuotaPendiente = credito.valorCuota - abonoAplicado;
             
             // Calcular cuánto del abono de HOY se aplicó a multas y cuánto a la cuota
-            // Primero se cubren multas, luego la cuota
-            if (multasPendientes > 0) {
-              // Si hay multas pendientes, el abono de hoy primero cubre multas
-              abonoHoyAMultas = Math.min(totalAbonadoHoy, multasPendientes);
+            // Necesitamos calcular esto basándonos en el estado ANTES del abono de hoy
+            // Para simplificar, asumimos que el abono de hoy sigue la misma lógica:
+            // primero multas, luego cuota
+            
+            // Calcular multas y abonos ANTES del abono de hoy
+            const totalAbonosAntesDeHoy = totalAbonosCredito - totalAbonadoHoy;
+            const { cuotasActualizadas: cuotasAntesDeHoy } = aplicarAbonosAutomaticamente({
+              ...credito,
+              abonos: (credito.abonos || []).filter(a => {
+                const fechaAbono = a.fecha?.split('T')[0] || a.fecha;
+                return fechaAbono !== fechaSeleccionadaStr;
+              })
+            });
+            
+            const cuotaAntesDeHoy = cuotasAntesDeHoy[indexPrimeraCuotaPendiente];
+            const multasAntesDeHoy = calcularTotalMultasCuota(cuotaAntesDeHoy);
+            const multasCubiertasAntesDeHoy = cuotaAntesDeHoy.multasCubiertas || 0;
+            const multasPendientesAntesDeHoy = multasAntesDeHoy - multasCubiertasAntesDeHoy;
+            
+            // El abono de hoy primero cubre multas pendientes
+            if (multasPendientesAntesDeHoy > 0) {
+              abonoHoyAMultas = Math.min(totalAbonadoHoy, multasPendientesAntesDeHoy);
               abonoHoyACuota = totalAbonadoHoy - abonoHoyAMultas;
             } else {
               // Si no hay multas pendientes, todo el abono va a la cuota
               abonoHoyACuota = totalAbonadoHoy;
             }
           }
-          
-          // Calcular cuántas cuotas se han pagado completamente
-          const cuotasPagadas = credito.cuotas.filter(c => c.pagado).length;
-          const totalPagadoEnCuotas = cuotasPagadas * credito.valorCuota;
-          
-          // Calcular el saldo de abonos que no ha completado una cuota
-          const abonosRestantes = totalAbonosCredito - totalPagadoEnCuotas;
-          
-          // El restante por pagar de la cuota (sin multas)
-          const restantePorPagarCuota = abonosRestantes > 0 && abonosRestantes < credito.valorCuota 
-            ? credito.valorCuota - abonosRestantes 
-            : credito.valorCuota;
-          
-          // El saldo total incluye la cuota pendiente + multas pendientes
-          const saldoPendiente = restantePorPagarCuota + multasPendientes;
 
           const abonadoGeneral = {
             clienteId: cliente.id,
@@ -231,12 +299,12 @@ const DiaDeCobro = () => {
             valorCuota: credito.valorCuota,
             totalAbonado: totalAbonosCredito,
             totalAbonadoHoy: totalAbonadoHoy,
-            saldoPendiente: saldoPendiente,
+            saldoPendiente: cuotaPendiente + multasPendientes,
             cartera: cliente.cartera,
             esAbonoGeneral: true,
             multasPendientes: multasPendientes,
             multasCubiertas: multasCubiertasTotal,
-            cuotaPendiente: restantePorPagarCuota,
+            cuotaPendiente: cuotaPendiente,
             abonoHoyAMultas: abonoHoyAMultas,
             abonoHoyACuota: abonoHoyACuota
           };
@@ -287,7 +355,11 @@ const DiaDeCobro = () => {
 
   const CobroCard = ({ cobro }) => {
     const tieneMultas = cobro.totalMultas && cobro.totalMultas > 0;
+    const tieneAbonos = cobro.abonoAplicado > 0 || cobro.multasCubiertas > 0;
     const tieneSaldoOMultas = cobro.tieneSaldoPendiente || tieneMultas;
+    
+    // Determinar si es un caso simple (sin abonos previos ni multas)
+    const esCasoSimple = !tieneAbonos && !tieneMultas;
     
     return (
       <div className={`border rounded-lg p-4 hover:shadow-md transition-shadow ${
@@ -295,7 +367,7 @@ const DiaDeCobro = () => {
       }`}>
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mb-2">
               <h3 className="font-semibold text-gray-900 text-lg">{cobro.clienteNombre}</h3>
               {cobro.tieneSaldoPendiente && (
                 <span className="inline-flex items-center px-2 py-1 bg-orange-500 text-white rounded-full text-xs font-semibold">
@@ -308,7 +380,14 @@ const DiaDeCobro = () => {
                 </span>
               )}
             </div>
-            <div className="mt-2 space-y-1 text-sm text-gray-600">
+            
+            {/* TOTAL A PAGAR - Destacado al inicio */}
+            <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg px-4 py-3 mb-3 shadow-md">
+              <p className="text-xs font-medium opacity-90">DEBE PAGAR</p>
+              <p className="text-2xl font-bold">{formatearMoneda(cobro.valorCuota)}</p>
+            </div>
+            
+            <div className="space-y-1 text-sm text-gray-600">
               <p className="flex items-center gap-2">
                 <span className="font-medium">Teléfono:</span>
                 <span>{cobro.clienteTelefono}</span>
@@ -327,48 +406,71 @@ const DiaDeCobro = () => {
                 <span className="font-medium">Cuota:</span>
                 <span>{cobro.nroCuota} de {cobro.totalCuotas}</span>
               </p>
-              {(tieneSaldoOMultas || cobro.abonoAplicado > 0 || cobro.multasCubiertas > 0) && (
-                <div className="mt-2 pt-2 border-t border-orange-200 space-y-1">
-                  <p className="text-xs text-gray-700">
-                    <span className="font-medium">Cuota original:</span> {formatearMoneda(cobro.valorCuotaOriginal)}
-                  </p>
+              
+              {/* Versión compacta para casos simples */}
+              {esCasoSimple && (
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <p className="text-xs text-gray-500">Cuota completa sin abonos previos</p>
+                </div>
+              )}
+              
+              {/* Versión detallada para casos con abonos o multas */}
+              {!esCasoSimple && (
+                <div className="mt-3 pt-3 border-t-2 border-orange-300">
+                  <p className="text-xs font-bold text-gray-700 mb-2">📊 Desglose:</p>
                   
-                  {cobro.abonoAplicado > 0 && (
-                    <p className="text-xs text-blue-700">
-                      <span className="font-medium">- Abono aplicado a cuota:</span> {formatearMoneda(cobro.abonoAplicado)}
+                  {/* Cuota original */}
+                  <div className="bg-blue-50 border-l-4 border-blue-400 px-3 py-2 mb-1">
+                    <p className="text-sm font-semibold text-blue-900">
+                      Cuota #{cobro.nroCuota}: {formatearMoneda(cobro.valorCuotaOriginal)}
                     </p>
-                  )}
+                  </div>
                   
-                  {cobro.valorCuotaPendiente > 0 && cobro.valorCuotaPendiente < cobro.valorCuotaOriginal && (
-                    <p className="text-xs text-orange-700">
-                      <span className="font-medium">Pendiente de cuota:</span> {formatearMoneda(cobro.valorCuotaPendiente)}
-                    </p>
-                  )}
-                  
+                  {/* Multas (si existen) */}
                   {(cobro.totalMultas > 0 || cobro.multasCubiertas > 0) && (
-                    <div className="pt-1 border-t border-orange-100">
+                    <div className="bg-red-50 border-l-4 border-red-400 px-3 py-2 mb-1">
+                      <p className="text-sm font-semibold text-red-900">
+                        + Multas: {formatearMoneda(cobro.totalMultas + cobro.multasCubiertas)}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Total a pagar */}
+                  {(cobro.totalMultas > 0 || cobro.multasCubiertas > 0) && (
+                    <div className="bg-purple-50 border-l-4 border-purple-400 px-3 py-2 mb-2">
+                      <p className="text-sm font-bold text-purple-900">
+                        = Total: {formatearMoneda(cobro.valorCuotaOriginal + (cobro.totalMultas + cobro.multasCubiertas))}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Abonos aplicados (si existen) */}
+                  {tieneAbonos && (
+                    <div className="bg-green-50 border-l-4 border-green-400 px-3 py-2 mb-1">
+                      <p className="text-sm font-semibold text-green-900">
+                        - Ya pagó: {formatearMoneda(cobro.abonoAplicado + cobro.multasCubiertas)}
+                      </p>
                       {cobro.multasCubiertas > 0 && (
-                        <p className="text-xs text-blue-700">
-                          <span className="font-medium">- Abono aplicado a multas:</span> {formatearMoneda(cobro.multasCubiertas)}
+                        <p className="text-xs text-green-700 ml-2">
+                          • Multas: {formatearMoneda(cobro.multasCubiertas)}
                         </p>
                       )}
-                      {cobro.totalMultas > 0 && (
-                        <p className="text-xs text-red-700">
-                          <span className="font-medium">+ Multas pendientes:</span> {formatearMoneda(cobro.totalMultas)}
+                      {cobro.abonoAplicado > 0 && (
+                        <p className="text-xs text-green-700 ml-2">
+                          • Cuota: {formatearMoneda(cobro.abonoAplicado)}
                         </p>
                       )}
                     </div>
                   )}
+                  
+                  {/* Total pendiente */}
+                  <div className="bg-orange-100 border-l-4 border-orange-500 px-3 py-2 mt-2">
+                    <p className="text-sm font-bold text-orange-900">
+                      = Pendiente: {formatearMoneda(cobro.valorCuota)}
+                    </p>
+                  </div>
                 </div>
               )}
-            </div>
-          </div>
-          <div className="ml-4 text-right">
-            <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold ${
-              tieneSaldoOMultas ? 'bg-orange-500 text-white' : 'bg-green-100 text-green-800'
-            }`}>
-              <DollarSign className="h-4 w-4" />
-              {formatearMoneda(cobro.valorCuota)}
             </div>
           </div>
         </div>
@@ -399,12 +501,14 @@ const DiaDeCobro = () => {
 
   const ClienteAbonadoCard = ({ abonado }) => {
     const tieneMultas = abonado.multasPendientes && abonado.multasPendientes > 0;
+    const multasPagadasCompleto = abonado.abonoHoyAMultas > 0 && abonado.multasPendientes === 0;
+    const saldoTotal = abonado.cuotaPendiente + (abonado.multasPendientes || 0);
     
     return (
-      <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4">
+      <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-3">
               <h3 className="font-semibold text-gray-900 text-lg">{abonado.clienteNombre}</h3>
               <span className="inline-flex items-center px-2 py-1 bg-yellow-500 text-white rounded-full text-xs font-semibold">
                 💰 Abono {abonado.esAbonoGeneral ? 'General' : ''}
@@ -415,57 +519,62 @@ const DiaDeCobro = () => {
                 </span>
               )}
             </div>
-            <div className="space-y-1 text-sm text-gray-600">
-              <p className="flex items-center gap-2">
-                <span className="font-medium">Teléfono:</span>
-                <span>{abonado.clienteTelefono}</span>
-              </p>
-              <p className="flex items-center gap-2">
-                <span className="font-medium">Cuota pendiente:</span>
-                <span>#{abonado.nroCuota}</span>
-              </p>
+            
+            {/* SECCIÓN 1: Lo que abonó HOY */}
+            <div className="bg-blue-100 border-2 border-blue-400 rounded-lg p-3 mb-3">
+              <p className="text-xs font-bold text-blue-900 mb-2">💰 ABONÓ HOY:</p>
+              <p className="text-2xl font-bold text-blue-900 mb-2">{formatearMoneda(abonado.totalAbonadoHoy)}</p>
               
-              <div className="mt-2 pt-2 border-t border-yellow-200 space-y-2">
-                {/* Distribución del abono de hoy */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
-                  <p className="text-xs font-semibold text-blue-900 mb-2">💰 Distribución del abono de hoy:</p>
-                  <p className="text-sm font-bold text-blue-700">
-                    Total abonado: {formatearMoneda(abonado.totalAbonadoHoy)}
-                  </p>
-                  
-                  {abonado.abonoHoyAMultas > 0 && (
-                    <p className="text-xs text-green-700">
-                      ✓ Pagó multas: {formatearMoneda(abonado.abonoHoyAMultas)}
-                    </p>
-                  )}
-                  
-                  {abonado.abonoHoyACuota > 0 && (
-                    <p className="text-xs text-green-700">
-                      ✓ Abonó a la cuota: {formatearMoneda(abonado.abonoHoyACuota)}
-                    </p>
-                  )}
-                </div>
-                
-                {/* Resumen de lo que falta */}
-                <div className="space-y-2 pt-2 border-t border-yellow-100">
-                  <p className="text-xs font-semibold text-gray-700">Resumen pendiente:</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-xs text-gray-500">Valor cuota</p>
-                      <p className="font-bold text-gray-700">{formatearMoneda(abonado.valorCuota)}</p>
-                    </div>
-                    {(abonado.multasPendientes > 0 || abonado.abonoHoyAMultas > 0) && (
-                      <div>
-                        <p className="text-xs text-gray-500">Multas pendientes</p>
-                        <p className="font-bold text-red-600">{formatearMoneda(abonado.multasPendientes || 0)}</p>
-                      </div>
+              <div className="space-y-1">
+                {abonado.abonoHoyAMultas > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-semibold ${multasPagadasCompleto ? 'text-green-700' : 'text-blue-700'}`}>
+                      {multasPagadasCompleto ? '✓ Multas pagadas:' : '• A multas:'}
+                    </span>
+                    <span className="text-sm font-bold text-blue-900">
+                      {formatearMoneda(abonado.abonoHoyAMultas)}
+                    </span>
+                    {multasPagadasCompleto && (
+                      <span className="text-xs text-green-600">(completo)</span>
                     )}
                   </div>
-                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 mt-2">
-                    <p className="text-xs text-gray-500">Total restante por pagar</p>
-                    <p className="text-lg font-bold text-orange-700">
-                      {formatearMoneda(abonado.cuotaPendiente + (abonado.multasPendientes || 0))}
-                    </p>
+                )}
+                {abonado.abonoHoyACuota > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-blue-700">
+                      • A cuota:
+                    </span>
+                    <span className="text-sm font-bold text-blue-900">
+                      {formatearMoneda(abonado.abonoHoyACuota)}
+                    </span>
+                    <span className="text-xs text-blue-600">(parcial)</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* SECCIÓN 2: Saldo después del abono */}
+            <div className="bg-white border border-gray-200 rounded-lg p-3">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-medium text-gray-600">Teléfono:</p>
+                <p className="text-sm text-gray-900">{abonado.clienteTelefono}</p>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-xs font-medium text-gray-600">Cuota:</p>
+                <p className="text-sm text-gray-900">#{abonado.nroCuota}</p>
+              </div>
+              
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <p className="text-xs font-bold text-gray-700 mb-2">⚠️ AÚN DEBE:</p>
+                <div className="bg-orange-100 border-2 border-orange-400 rounded-lg px-4 py-3">
+                  <p className="text-2xl font-bold text-orange-900">{formatearMoneda(saldoTotal)}</p>
+                  <div className="mt-2 space-y-1 text-xs text-orange-800">
+                    {abonado.cuotaPendiente > 0 && (
+                      <p>• Cuota: {formatearMoneda(abonado.cuotaPendiente)}</p>
+                    )}
+                    {tieneMultas && (
+                      <p>• Multas: {formatearMoneda(abonado.multasPendientes)}</p>
+                    )}
                   </div>
                 </div>
               </div>
