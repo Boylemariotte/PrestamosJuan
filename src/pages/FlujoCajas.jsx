@@ -33,48 +33,66 @@ const FlujoCajas = () => {
       
       <div className="p-6">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="w-full border-collapse bg-white rounded-lg overflow-hidden shadow-sm">
             <thead>
-              <tr className="bg-gray-200">
-                <th className="border border-gray-500 px-4 py-10 text-left text-lg font-semibold text-gray-700">
-                  Caja
+              <tr className="bg-gradient-to-r from-gray-700 to-gray-800">
+                <th className="border-r border-gray-600 px-6 py-4 text-left">
+                  <div className="flex flex-col">
+                    <span className="text-white text-base font-bold uppercase tracking-wide">Caja</span>
+                    <span className="text-gray-300 text-xs font-normal mt-1">Saldo inicial</span>
+                  </div>
                 </th>
-                <th className="border border-gray-500 px-4 py-3 text-left text-lg font-semibold text-gray-700">
-                  Gastos
+                <th className="border-r border-gray-600 px-6 py-4 text-left">
+                  <div className="flex flex-col">
+                    <span className="text-white text-base font-bold uppercase tracking-wide">Gastos</span>
+                    <span className="text-gray-300 text-xs font-normal mt-1">Egresos del día</span>
+                  </div>
                 </th>
-                <th className="border border-gray-500 px-4 py-3 text-left text-lg font-semibold text-gray-700">
-                  Préstamos y RF
+                <th className="border-r border-gray-600 px-6 py-4 text-left">
+                  <div className="flex flex-col">
+                    <span className="text-white text-base font-bold uppercase tracking-wide">Préstamos y RF</span>
+                    <span className="text-gray-300 text-xs font-normal mt-1">Créditos otorgados</span>
+                  </div>
                 </th>
-                <th className="border border-gray-500 px-4 py-3 text-left text-lg font-semibold text-gray-700">
-                  Por
+                <th className="border-r border-gray-600 px-6 py-4 text-left">
+                  <div className="flex flex-col">
+                    <span className="text-white text-base font-bold uppercase tracking-wide">Por</span>
+                    <span className="text-gray-300 text-xs font-normal mt-1">Por cobrar</span>
+                  </div>
                 </th>
-                <th className="border border-gray-500 px-4 py-3 text-left text-lg font-semibold text-gray-700">
-                  PP
+                <th className="border-r border-gray-600 px-6 py-4 text-left">
+                  <div className="flex flex-col">
+                    <span className="text-white text-base font-bold uppercase tracking-wide">PP</span>
+                    <span className="text-gray-300 text-xs font-normal mt-1">Pagos parciales</span>
+                  </div>
                 </th>
-                <th className="border border-gray-500 px-4 py-3 text-left text-lg font-semibold text-gray-700">
-                  E
+                <th className="px-6 py-4 text-left">
+                  <div className="flex flex-col">
+                    <span className="text-white text-base font-bold uppercase tracking-wide">E</span>
+                    <span className="text-gray-300 text-xs font-normal mt-1">Efectivo final</span>
+                  </div>
                 </th>
               </tr>
             </thead>
             <tbody>
               {/* Fila vacía por ahora - se llenará con datos más adelante */}
-              <tr>
-                <td className="border border-gray-500 px-4 py-50 text-sm text-gray-600">
+              <tr className="hover:bg-gray-50 transition-colors">
+                <td className="border-r border-t border-gray-300 px-6 py-20 text-base text-gray-700 font-medium">
                   {/* Datos de caja */}
                 </td>
-                <td className="border border-gray-500 px-4 py-3 text-sm text-gray-600">
+                <td className="border-r border-t border-gray-300 px-6 py-20 text-base text-gray-700">
                   {/* Datos de gastos */}
                 </td>
-                <td className="border border-gray-500 px-4 py-3 text-sm text-gray-600">
+                <td className="border-r border-t border-gray-300 px-6 py-20 text-base text-gray-700">
                   {/* Datos de préstamos y RF */}
                 </td>
-                <td className="border border-gray-500 px-4 py-3 text-sm text-gray-600">
+                <td className="border-r border-t border-gray-300 px-6 py-20 text-base text-gray-700">
                   {/* Datos de Por */}
                 </td>
-                <td className="border border-gray-500 px-4 py-3 text-sm text-gray-600">
+                <td className="border-r border-t border-gray-300 px-6 py-20 text-base text-gray-700">
                   {/* Datos de PP */}
                 </td>
-                <td className="border border-gray-500 px-4 py-3 text-sm text-gray-600">
+                <td className="border-t border-gray-300 px-6 py-20 text-base text-gray-700">
                   {/* Datos de E */}
                 </td>
               </tr>
