@@ -12,6 +12,7 @@ import CreditosFinalizados from './pages/CreditosFinalizados';
 import Estadisticas from './pages/Estadisticas';
 import Configuracion from './pages/Configuracion';
 import DiaDeCobro from './pages/DiaDeCobro';
+import FlujoCajas from './pages/FlujoCajas';
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
                     <Route path="/" element={<Clientes />} />
                     <Route path="/cliente/:id" element={<ClienteDetalle />} />
                     <Route path="/dia-de-cobro" element={<DiaDeCobro />} />
+                    <Route path="/caja" element={<FlujoCajas />} />
                     <Route path="/creditos-activos" element={<CreditosActivos />} />
                     <Route path="/creditos-finalizados" element={<CreditosFinalizados />} />
                     <Route path="/estadisticas" element={

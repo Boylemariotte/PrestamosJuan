@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Check, Calendar, DollarSign, AlertCircle, StickyNote, Trash2, Plus, Award, Tag, RefreshCw, Edit2, Download } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import RenovacionForm from './RenovacionForm';
-import TarjetaControlPagos from './TarjetaControlPagos';
 import CowImage from '../../Icon/Cow.png';
 import { 
   determinarEstadoCredito, 
