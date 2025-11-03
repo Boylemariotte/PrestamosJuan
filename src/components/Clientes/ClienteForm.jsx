@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, ChevronDown } from 'lucide-react';
+import { BARRIOS_TULUA } from '../../constants/barrios';
 
 const ClienteForm = ({ cliente, onSubmit, onClose }) => {
   const [formData, setFormData] = useState({
@@ -7,6 +8,7 @@ const ClienteForm = ({ cliente, onSubmit, onClose }) => {
     documento: '',
     telefono: '',
     direccion: '',
+    barrio: '',
     direccionTrabajo: '',
     correo: '',
     cartera: 'K1', // Por defecto K1
@@ -26,6 +28,7 @@ const ClienteForm = ({ cliente, onSubmit, onClose }) => {
         documento: cliente.documento || '',
         telefono: cliente.telefono || '',
         direccion: cliente.direccion || '',
+        barrio: cliente.barrio || '',
         direccionTrabajo: cliente.direccionTrabajo || '',
         correo: cliente.correo || '',
         cartera: cliente.cartera || 'K1',
@@ -134,7 +137,7 @@ const ClienteForm = ({ cliente, onSubmit, onClose }) => {
               </div>
 
               <div className="md:col-span-2">
-                <label className="label">Dirección de Residencia</label>
+                <label className="label">Dirección de Residencia *</label>
                 <input
                   type="text"
                   name="direccion"
@@ -142,7 +145,31 @@ const ClienteForm = ({ cliente, onSubmit, onClose }) => {
                   onChange={handleChange}
                   className="input-field"
                   placeholder="Ej: Calle 45 #23-15"
+                  required
                 />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="label">Barrio *</label>
+                <div className="relative">
+                  <select
+                    name="barrio"
+                    value={formData.barrio}
+                    onChange={handleChange}
+                    className="input-field appearance-none pr-10 cursor-pointer"
+                    required
+                  >
+                    <option value="">Seleccione un barrio</option>
+                    {BARRIOS_TULUA.map((barrio) => (
+                      <option key={barrio} value={barrio}>
+                        {barrio}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    <ChevronDown className="h-5 w-5 text-gray-400" />
+                  </div>
+                </div>
               </div>
 
               <div className="md:col-span-2">
