@@ -42,8 +42,11 @@ const ClienteCard = ({ cliente }) => {
   return (
     <div
       onClick={handleClick}
-      className={`card cursor-pointer hover:scale-[1.02] transition-transform duration-200 ${colors.bg} ${colors.border} border-2`}
+      className={`card cursor-pointer hover:scale-[1.02] transition-transform duration-200 ${colors.bg} ${colors.border} border-2 relative`}
     >
+      <div className="absolute top-3 left-3 text-blue-900 text-xl font-bold">
+        {cliente.posicion || 'N/A'}
+      </div>
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center flex-1">
           <div className={`${colors.icon} p-3 rounded-full`}>

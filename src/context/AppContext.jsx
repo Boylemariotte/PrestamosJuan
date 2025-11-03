@@ -48,12 +48,28 @@ export const AppProvider = ({ children }) => {
 
   // CRUD de Clientes
   const agregarCliente = (clienteData) => {
+    // Obtener la siguiente posición disponible para la cartera
+    const clientesCartera = clientes.filter(c => c.cartera === (clienteData.cartera || 'K1'));
+    const posicionesOcupadas = clientesCartera.map(c => c.posicion).filter(Boolean);
+    
+    // Encontrar la próxima posición disponible (1-150)
+    let posicion = 1;
+    while (posicionesOcupadas.includes(posicion) && posicion <= 150) {
+      posicion++;
+    }
+    
+    if (posicion > 150) {
+      throw new Error(`No hay cupos disponibles para la cartera ${clienteData.cartera || 'K1'}. Límite de 150 clientes alcanzado.`);
+    }
+    
     const nuevoCliente = {
       id: Date.now().toString(),
       ...clienteData,
+      posicion,
       creditos: [],
       fechaCreacion: obtenerFechaHoraLocal()
     };
+    
     setClientes(prev => [...prev, nuevoCliente]);
     return nuevoCliente;
   };
@@ -581,12 +597,23 @@ export const AppProvider = ({ children }) => {
 
   // Gestión de Caja
   const agregarMovimientoCaja = (movimientoData) => {
+    // Si es un préstamo y ya tiene papelería definida, asegurarse de que el montoEntregado sea correcto
+    if (movimientoData.tipo === 'prestamo' && movimientoData.papeleria !== undefined) {
+      movimientoData = {
+        ...movimientoData,
+        montoEntregado: movimientoData.valor - (movimientoData.papeleria || 0)
+      };
+    }
+    
     const nuevoMovimiento = {
       id: `MOV-${Date.now()}`,
       ...movimientoData,
       fecha: movimientoData.fecha || obtenerFechaLocal().split('T')[0],
       fechaCreacion: obtenerFechaHoraLocal()
     };
+    
+    console.log('Nuevo movimiento de caja:', nuevoMovimiento); // Para depuración
+    
     setMovimientosCaja(prev => [...prev, nuevoMovimiento]);
     return nuevoMovimiento;
   };
