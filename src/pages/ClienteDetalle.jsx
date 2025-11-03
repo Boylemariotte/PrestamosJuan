@@ -42,8 +42,12 @@ const ClienteDetalle = () => {
   };
 
   const handleAgregarCredito = (creditoData) => {
-    agregarCredito(id, creditoData);
-    setShowCreditoForm(false);
+    try {
+      agregarCredito(id, creditoData);
+      setShowCreditoForm(false);
+    } catch (e) {
+      alert(e.message || 'No fue posible crear el crédito.');
+    }
   };
 
   return (

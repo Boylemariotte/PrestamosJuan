@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Plus, Search, Users as UsersIcon, Briefcase, Filter } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import ClienteCard from '../components/Clientes/ClienteCard';
 import ClienteForm from '../components/Clientes/ClienteForm';
+import { determinarEstadoCredito } from '../utils/creditCalculations';
 
 const Clientes = () => {
   const { clientes, agregarCliente, loading } = useApp();
@@ -11,22 +12,61 @@ const Clientes = () => {
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroCartera, setFiltroCartera] = useState('todas'); // 'todas', 'K1', 'K2'
+  const [filtroTipoPago, setFiltroTipoPago] = useState('todos'); // 'todos', 'diario', 'semanal', 'quincenal', 'mensual'
 
   const handleAgregarCliente = (clienteData) => {
     agregarCliente(clienteData);
     setShowForm(false);
   };
 
-  // Filtrar por búsqueda y cartera
+  // Obtener tipos de pago activos del cliente (según créditos activos o en mora)
+  const getTiposPagoActivos = (cliente) => {
+    const tipos = new Set();
+    (cliente.creditos || []).forEach((c) => {
+      const estadoC = determinarEstadoCredito(c.cuotas, c);
+      if (estadoC === 'activo' || estadoC === 'mora') {
+        if (c.tipo) tipos.add(c.tipo);
+      }
+    });
+    return Array.from(tipos);
+  };
+
+  // Capacidades por cartera/tipo de pago
+  const CAPACIDADES = {
+    K1: { diario: 20, semanal: 150, quincenal: 150 },
+    K2: { quincenal: 150, mensual: 20 }
+  };
+
+  // Ocupación actual por cartera/tipo (considera clientes con créditos activos/en mora)
+  const ocupacion = useMemo(() => {
+    const base = {
+      K1: { diario: 0, semanal: 0, quincenal: 0 },
+      K2: { quincenal: 0, mensual: 0 }
+    };
+    clientes.forEach((cliente) => {
+      const cartera = cliente.cartera || 'K1';
+      const tipos = getTiposPagoActivos(cliente);
+      tipos.forEach((t) => {
+        if (base[cartera] && typeof base[cartera][t] === 'number') {
+          base[cartera][t] += 1;
+        }
+      });
+    });
+    return base;
+  }, [clientes]);
+
+  // Filtrar por búsqueda, cartera y tipo de pago
   const clientesFiltrados = clientes.filter(cliente => {
     const coincideBusqueda = cliente.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       cliente.documento.includes(searchTerm) ||
       cliente.telefono.includes(searchTerm);
-    
-    const coincideCartera = filtroCartera === 'todas' || 
-      (cliente.cartera || 'K1') === filtroCartera;
-    
-    return coincideBusqueda && coincideCartera;
+
+    const coincideCartera = filtroCartera === 'todas' || (cliente.cartera || 'K1') === filtroCartera;
+
+    const tiposCliente = getTiposPagoActivos(cliente);
+    const coincideTipo = filtroTipoPago === 'todos' || tiposCliente.includes(filtroTipoPago);
+
+    return coincideBusqueda && coincideCartera && coincideTipo;
   });
 
   // Contar clientes por cartera
@@ -72,6 +112,11 @@ const Clientes = () => {
               <p className="text-blue-100 text-sm">Cartera K1</p>
               <p className="text-3xl font-bold mt-1">{clientesK1}</p>
               <p className="text-blue-100 text-xs mt-1">clientes</p>
+              <div className="mt-3 space-y-1 text-[11px]">
+                <p className="text-blue-100">Diario: {ocupacion.K1.diario}/{CAPACIDADES.K1.diario}</p>
+                <p className="text-blue-100">Semanal: {ocupacion.K1.semanal}/{CAPACIDADES.K1.semanal}</p>
+                <p className="text-blue-100">Quincenal: {ocupacion.K1.quincenal}/{CAPACIDADES.K1.quincenal}</p>
+              </div>
             </div>
             <Briefcase className="h-12 w-12 text-blue-200" />
           </div>
@@ -83,6 +128,10 @@ const Clientes = () => {
               <p className="text-green-100 text-sm">Cartera K2</p>
               <p className="text-3xl font-bold mt-1">{clientesK2}</p>
               <p className="text-green-100 text-xs mt-1">clientes</p>
+              <div className="mt-3 space-y-1 text-[11px]">
+                <p className="text-green-100">Quincenal: {ocupacion.K2.quincenal}/{CAPACIDADES.K2.quincenal}</p>
+                <p className="text-green-100">Mensual: {ocupacion.K2.mensual}/{CAPACIDADES.K2.mensual}</p>
+              </div>
             </div>
             <Briefcase className="h-12 w-12 text-green-200" />
           </div>
@@ -155,6 +204,29 @@ const Clientes = () => {
             <Briefcase className="h-4 w-4" />
             Cartera K2 ({clientesK2})
           </button>
+        </div>
+      </div>
+
+      {/* Filtro por tipo de pago */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter className="h-5 w-5 text-gray-600" />
+          <h3 className="text-sm font-semibold text-gray-700">Filtrar por tipo de pago:</h3>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {['todos','diario','semanal','quincenal','mensual'].map((tipo) => (
+            <button
+              key={tipo}
+              onClick={() => setFiltroTipoPago(tipo)}
+              className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${
+                filtroTipoPago === tipo
+                  ? 'bg-purple-100 text-purple-800 border-purple-300 ring-2 ring-purple-400'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
+            </button>
+          ))}
         </div>
       </div>
 

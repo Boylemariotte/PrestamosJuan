@@ -12,6 +12,7 @@ import {
   calcularPapeleria,
   calcularMontoEntregado
 } from '../utils/creditCalculations';
+import { determinarEstadoCredito } from '../utils/creditCalculations';
 
 const AppContext = createContext();
 
@@ -91,6 +92,42 @@ export const AppProvider = ({ children }) => {
   // CRUD de Créditos
   const agregarCredito = (clienteId, creditoData) => {
     const { monto, tipo, fechaInicio, tipoQuincenal, papeleriaManual, usarPapeleriaManual } = creditoData;
+    // Validación de cupos por cartera/tipo de pago y asignación de cartera
+    const CAPACIDADES = {
+      K1: { diario: 20, semanal: 150, quincenal: 150 },
+      K2: { quincenal: 150, mensual: 20 }
+    };
+
+    const clienteActual = obtenerCliente(clienteId);
+    let carteraObjetivo = clienteActual?.cartera || 'K1';
+    if (tipo === 'mensual') {
+      carteraObjetivo = 'K2';
+    } else if (tipo === 'diario' || tipo === 'semanal') {
+      carteraObjetivo = 'K1';
+    } else if (tipo === 'quincenal') {
+      carteraObjetivo = carteraObjetivo === 'K2' ? 'K2' : 'K1';
+    }
+
+    if (!CAPACIDADES[carteraObjetivo] || CAPACIDADES[carteraObjetivo][tipo] == null) {
+      throw new Error(`El tipo de pago "${tipo}" no está permitido en la cartera ${carteraObjetivo}.`);
+    }
+
+    // Ocupación actual: clientes con créditos activos o en mora de ese tipo en la cartera objetivo
+    const ocupacionActual = new Set();
+    clientes.forEach((c) => {
+      const carteraCliente = c.cartera || 'K1';
+      if (carteraCliente !== carteraObjetivo) return;
+      const tieneTipo = (c.creditos || []).some((cred) => {
+        const estado = determinarEstadoCredito(cred.cuotas, cred);
+        return (estado === 'activo' || estado === 'mora') && cred.tipo === tipo;
+      });
+      if (tieneTipo) ocupacionActual.add(c.id);
+    });
+
+    const capacidad = CAPACIDADES[carteraObjetivo][tipo];
+    if (ocupacionActual.size >= capacidad) {
+      throw new Error(`Cupo lleno en cartera ${carteraObjetivo} para pagos ${tipo}. (${ocupacionActual.size}/${capacidad})`);
+    }
     
     // Obtener configuración de cuotas según monto y tipo
     const totalAPagar = calcularTotalAPagar(monto, tipo);
@@ -141,6 +178,7 @@ export const AppProvider = ({ children }) => {
       if (cliente.id === clienteId) {
         return {
           ...cliente,
+          cartera: carteraObjetivo,
           creditos: [...(cliente.creditos || []), nuevoCredito]
         };
       }
