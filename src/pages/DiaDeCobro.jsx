@@ -864,107 +864,39 @@ const DiaDeCobro = () => {
     const diasPosposicion = Math.ceil((fechaNueva - fechaVencimiento) / (1000 * 60 * 60 * 24));
 
     // Actualizar el estado de clientes con el crédito pospuesto
-    setClientes(prevClientes => 
-      prevClientes.map(cliente => {
-        if (cliente.id === clienteId) {
-          return {
-            ...cliente,
-            creditos: cliente.creditos.map(credito => {
-              if (credito.creditoId === creditoId) {
-                // Actualizar la cuota específica que se está posponiendo
-                const cuotasActualizadas = credito.cuotas.map((cuota, index) => {
-                  if (index === modalPosponer.credito.nroCuota - 1) {
-                    return {
-                      ...cuota,
-                      fechaVencimiento: nuevaFechaVencimiento,
-                      pospuesto: true,
-                      fechaPosposicion: nuevaFechaVencimiento,
-                      diasPosposicion: diasPosposicion,
-                      fechaVencimientoOriginal: cuota.fechaVencimientoOriginal || cuota.fechaVencimiento
-                    };
-                  }
-                  return cuota;
-                });
-
-                // Actualizar también la fecha de vencimiento del crédito
-                return {
-                  ...credito,
-                  fechaVencimiento: nuevaFechaVencimiento,
-                  pospuesto: true,
-                  fechaPosposicion: nuevaFechaVencimiento,
-                  diasPosposicion: diasPosposicion,
-                  fechaVencimientoOriginal: credito.fechaVencimientoOriginal || credito.fechaVencimiento,
-                  cuotas: cuotasActualizadas
-                };
-              }
-              return credito;
-            })
-          };
-        }
-        return cliente;
-      })
-    );
-
-    // Actualizar también el estado del barrio seleccionado si existe
-    if (barrioSeleccionado) {
-      setBarrioSeleccionado(prevBarrio => {
-        if (!prevBarrio) return null;
-        
+    const clientesActualizados = clientes.map(cliente => {
+      if (cliente.clienteId === clienteId) {
         return {
-          ...prevBarrio,
-          clientes: prevBarrio.clientes.map(cliente => {
-            if (cliente.clienteId === clienteId) {
+          ...cliente,
+          creditos: cliente.creditos.map(credito => {
+            if (credito.creditoId === creditoId) {
               return {
-                ...cliente,
-                creditos: cliente.creditos.map(credito => {
-                  if (credito.creditoId === creditoId) {
-                    return {
-                      ...credito,
-                      fechaVencimiento: nuevaFechaVencimiento,
-                      pospuesto: true,
-                      fechaPosposicion: nuevaFechaVencimiento,
-                      diasPosposicion: diasPosposicion,
-                      fechaVencimientoOriginal: credito.fechaVencimientoOriginal || credito.fechaVencimiento
-                    };
-                  }
-                  return credito;
-                })
+                ...credito,
+                fechaVencimiento: nuevaFechaVencimiento,
+                fechaVencimientoOriginal: credito.fechaVencimientoOriginal || credito.fechaVencimiento,
+                pospuesto: true
               };
             }
-            return cliente;
+            return credito;
           })
         };
-      });
-    }
+      }
+      return cliente;
+    });
 
-    // Mostrar notificación de éxito
-    toast.success(`Se ha pospuesto el pago correctamente por ${diasPosposicion} días`);
-    
+    // Actualizar el estado global
+    setClientes(clientesActualizados);
+
+    // Mostrar mensaje de éxito
+    toast.success(`Prórroga de ${diasPosposicion} días aplicada correctamente`);
+
     // Cerrar el modal de posposición
     cerrarModalPosponer();
     
-    // Cerrar el modal de clientes del barrio
-    if (setModalClientesAbierto) {
-      setModalClientesAbierto(false);
-    }
+    // Cerrar el modal de clientes
+    setModalClientesAbierto(false);
     
     // Redirigir a la vista de rutas
-    if (setMostrarVistaRutas) {
-      setMostrarVistaRutas(true);
-    }
-
-    // Mostrar notificación
-    toast.success(`Se ha pospuesto el pago para el cliente ${modalPosponer.cliente?.nombre} hasta el ${modalPosponer.fechaPosposicion}`);
-    
-    // Cerrar el modal de posposición
-    cerrarModalPosponer();
-    
-    // Cerrar el modal de clientes del barrio
-    if (setModalClientesAbierto) {
-      setModalClientesAbierto(false);
-    }
-    
-    // Mostrar la vista de rutas del día de cobro
     setMostrarVistaRutas(true);
   };
 
