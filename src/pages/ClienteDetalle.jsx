@@ -7,11 +7,12 @@ import CreditoCard from '../components/Creditos/CreditoCard';
 import CreditoForm from '../components/Creditos/CreditoForm';
 import CreditoDetalle from '../components/Creditos/CreditoDetalle';
 import MapaUbicaciones from '../components/Clientes/MapaUbicaciones';
+import ActualizarUbicacion from '../components/Clientes/ActualizarUbicacion';
 
 const ClienteDetalle = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { obtenerCliente, actualizarCliente, eliminarCliente, agregarCredito } = useApp();
+  const { obtenerCliente, actualizarCliente, eliminarCliente, agregarCredito, actualizarCoordenadasGPS } = useApp();
   
   const [showEditForm, setShowEditForm] = useState(false);
   const [showCreditoForm, setShowCreditoForm] = useState(false);
@@ -165,6 +166,57 @@ const ClienteDetalle = () => {
         </div>
       </div>
 
+      {/* Sección de actualización de ubicaciones GPS */}
+      <div className="mb-8">
+        <div className="card">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+            <MapPin className="h-5 w-5 mr-2 text-blue-600" />
+            Actualizar ubicaciones GPS
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-gray-900">Cliente</p>
+              {cliente.direccion && (
+                <ActualizarUbicacion
+                  tipo="residencia"
+                  onActualizar={(tipo, coords) => actualizarCoordenadasGPS(cliente.id, tipo, coords, 'cliente')}
+                  coordenadasActuales={cliente.coordenadasResidencia}
+                  label="Actualizar ubicación GPS de residencia"
+                />
+              )}
+              {cliente.direccionTrabajo && (
+                <ActualizarUbicacion
+                  tipo="trabajo"
+                  onActualizar={(tipo, coords) => actualizarCoordenadasGPS(cliente.id, tipo, coords, 'cliente')}
+                  coordenadasActuales={cliente.coordenadasTrabajo}
+                  label="Actualizar ubicación GPS de trabajo"
+                />
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-gray-900">Fiador</p>
+              {cliente.fiador?.direccion && (
+                <ActualizarUbicacion
+                  tipo="residencia"
+                  onActualizar={(tipo, coords) => actualizarCoordenadasGPS(cliente.id, tipo, coords, 'fiador')}
+                  coordenadasActuales={cliente.fiador?.coordenadasResidencia}
+                  label="Actualizar ubicación GPS de residencia del fiador"
+                />
+              )}
+              {cliente.fiador?.direccionTrabajo && (
+                <ActualizarUbicacion
+                  tipo="trabajo"
+                  onActualizar={(tipo, coords) => actualizarCoordenadasGPS(cliente.id, tipo, coords, 'fiador')}
+                  coordenadasActuales={cliente.fiador?.coordenadasTrabajo}
+                  label="Actualizar ubicación GPS de trabajo del fiador"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Mapa de Ubicaciones - Ocupa todo el ancho */}
       {((cliente.direccion || cliente.direccionTrabajo) || 
         (cliente.fiador && (cliente.fiador.direccion || cliente.fiador.direccionTrabajo))) && 
@@ -182,6 +234,10 @@ const ClienteDetalle = () => {
               fiadorDireccion={cliente.fiador?.direccion}
               fiadorDireccionTrabajo={cliente.fiador?.direccionTrabajo}
               fiadorNombre={cliente.fiador?.nombre}
+              clienteCoordenadasResidencia={cliente.coordenadasResidencia}
+              clienteCoordenadasTrabajo={cliente.coordenadasTrabajo}
+              fiadorCoordenadasResidencia={cliente.fiador?.coordenadasResidencia}
+              fiadorCoordenadasTrabajo={cliente.fiador?.coordenadasTrabajo}
             />
           </div>
         </div>

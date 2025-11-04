@@ -35,7 +35,11 @@ const MapaUbicaciones = ({
   clienteNombre,
   fiadorDireccion,
   fiadorDireccionTrabajo,
-  fiadorNombre
+  fiadorNombre,
+  clienteCoordenadasResidencia,
+  clienteCoordenadasTrabajo,
+  fiadorCoordenadasResidencia,
+  fiadorCoordenadasTrabajo
 }) => {
   const [coordenadas, setCoordenadas] = useState({
     clienteResidencia: null,
@@ -55,11 +59,20 @@ const MapaUbicaciones = ({
       setError(null);
 
       try {
+        // Priorizar coordenadas GPS guardadas para el cliente
         const resultados = await Promise.all([
-          clienteDireccion ? geocodificarDireccion(clienteDireccion) : Promise.resolve(null),
-          clienteDireccionTrabajo ? geocodificarDireccion(clienteDireccionTrabajo) : Promise.resolve(null),
-          fiadorDireccion ? geocodificarDireccion(fiadorDireccion) : Promise.resolve(null),
-          fiadorDireccionTrabajo ? geocodificarDireccion(fiadorDireccionTrabajo) : Promise.resolve(null)
+          clienteCoordenadasResidencia 
+            ? Promise.resolve({ lat: clienteCoordenadasResidencia.lat, lon: clienteCoordenadasResidencia.lon })
+            : (clienteDireccion ? geocodificarDireccion(clienteDireccion) : Promise.resolve(null)),
+          clienteCoordenadasTrabajo 
+            ? Promise.resolve({ lat: clienteCoordenadasTrabajo.lat, lon: clienteCoordenadasTrabajo.lon })
+            : (clienteDireccionTrabajo ? geocodificarDireccion(clienteDireccionTrabajo) : Promise.resolve(null)),
+          fiadorCoordenadasResidencia
+            ? Promise.resolve({ lat: fiadorCoordenadasResidencia.lat, lon: fiadorCoordenadasResidencia.lon })
+            : (fiadorDireccion ? geocodificarDireccion(fiadorDireccion) : Promise.resolve(null)),
+          fiadorCoordenadasTrabajo
+            ? Promise.resolve({ lat: fiadorCoordenadasTrabajo.lat, lon: fiadorCoordenadasTrabajo.lon })
+            : (fiadorDireccionTrabajo ? geocodificarDireccion(fiadorDireccionTrabajo) : Promise.resolve(null))
         ]);
 
         setCoordenadas({
@@ -77,7 +90,7 @@ const MapaUbicaciones = ({
     };
 
     cargarCoordenadas();
-  }, [clienteDireccion, clienteDireccionTrabajo, fiadorDireccion, fiadorDireccionTrabajo]);
+  }, [clienteDireccion, clienteDireccionTrabajo, fiadorDireccion, fiadorDireccionTrabajo, clienteCoordenadasResidencia, clienteCoordenadasTrabajo, fiadorCoordenadasResidencia, fiadorCoordenadasTrabajo]);
 
   // Crear marcadores y bounds
   const marcadores = [];
