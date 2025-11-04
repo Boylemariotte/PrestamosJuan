@@ -242,6 +242,7 @@ const ClienteDetalle = () => {
         <CreditoForm
           onSubmit={handleAgregarCredito}
           onClose={() => setShowCreditoForm(false)}
+          carteraCliente={cliente.cartera || 'K1'}
         />
       )}
 

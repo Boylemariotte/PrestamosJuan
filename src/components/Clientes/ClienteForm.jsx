@@ -180,29 +180,6 @@ const ClienteForm = ({ cliente, onSubmit, onClose }) => {
               </div>
 
               <div className="md:col-span-2">
-                <label className="label">Barrio *</label>
-                <div className="relative">
-                  <select
-                    name="barrio"
-                    value={formData.barrio}
-                    onChange={handleChange}
-                    className="input-field appearance-none pr-10 cursor-pointer"
-                    required
-                  >
-                    <option value="">Seleccione un barrio</option>
-                    {BARRIOS_TULUA.map((barrio) => (
-                      <option key={barrio} value={barrio}>
-                        {barrio}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                    <ChevronDown className="h-5 w-5 text-gray-400" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="md:col-span-2">
                 <label className="label flex items-center gap-2">
                   Dirección de Trabajo
                   <span className="text-xs text-gray-500 font-normal">
