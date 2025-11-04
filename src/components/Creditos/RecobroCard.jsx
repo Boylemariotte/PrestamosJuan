@@ -4,7 +4,7 @@ import { formatearMoneda, formatearFechaCorta } from '../../utils/creditCalculat
 
 const RecobroCard = ({ todasLasMultas }) => {
   return (
-    <div key="recobro" className="border-2 border-blue-600 rounded-lg p-3 flex flex-col min-h-36 col-span-2 sm:col-span-2 md:col-span-3 lg:col-span-2 print-grid-item">
+    <div key="recobro" className="border-2 border-blue-600 rounded-lg p-3 flex flex-col min-h-36 col-span-2 sm:col-span-3 md:col-span-4 lg:col-span-5 xl:col-span-6 print-grid-item">
       <div className="flex items-center justify-between mb-2">
         <span className="text-blue-600 font-bold text-xs uppercase tracking-wide">Recobro</span>
         {todasLasMultas.length > 0 && (

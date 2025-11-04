@@ -6,6 +6,7 @@ import ClienteForm from '../components/Clientes/ClienteForm';
 import CreditoCard from '../components/Creditos/CreditoCard';
 import CreditoForm from '../components/Creditos/CreditoForm';
 import CreditoDetalle from '../components/Creditos/CreditoDetalle';
+import MapaUbicaciones from '../components/Clientes/MapaUbicaciones';
 
 const ClienteDetalle = () => {
   const { id } = useParams();
@@ -163,6 +164,28 @@ const ClienteDetalle = () => {
           )}
         </div>
       </div>
+
+      {/* Mapa de Ubicaciones - Ocupa todo el ancho */}
+      {((cliente.direccion || cliente.direccionTrabajo) || 
+        (cliente.fiador && (cliente.fiador.direccion || cliente.fiador.direccionTrabajo))) && 
+        !showEditForm && !showCreditoForm && !creditoSeleccionado && (
+        <div className="mb-8">
+          <div className="card">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+              <MapPin className="h-5 w-5 mr-2 text-blue-600" />
+              Ubicaciones en el Mapa
+            </h2>
+            <MapaUbicaciones
+              clienteDireccion={cliente.direccion}
+              clienteDireccionTrabajo={cliente.direccionTrabajo}
+              clienteNombre={cliente.nombre}
+              fiadorDireccion={cliente.fiador?.direccion}
+              fiadorDireccionTrabajo={cliente.fiador?.direccionTrabajo}
+              fiadorNombre={cliente.fiador?.nombre}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Créditos */}
       <div>
