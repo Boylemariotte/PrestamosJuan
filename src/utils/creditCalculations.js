@@ -1,4 +1,4 @@
-import { addWeeks, addDays, format, parseISO, isBefore, isAfter, startOfDay } from 'date-fns';
+import { addWeeks, addDays, format, parseISO, isBefore, isAfter, startOfDay, isPast } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 // Tasa de interés mensual
@@ -393,6 +393,18 @@ export const calcularTotalMultasCredito = (cuotas) => {
 // Calcular valor total a pagar de una cuota (incluyendo multas)
 export const calcularValorTotalCuota = (valorCuota, cuota) => {
   return valorCuota + calcularTotalMultasCuota(cuota);
+};
+
+// Verificar si una fecha ha pasado
+export const isFechaPasada = (fecha) => {
+  if (!fecha) return false;
+  try {
+    const fechaObj = typeof fecha === 'string' ? parseISO(fecha) : new Date(fecha);
+    return isPast(startOfDay(fechaObj));
+  } catch (error) {
+    console.error('Error al verificar fecha:', error);
+    return false;
+  }
 };
 
 // Calcular valor PENDIENTE de una cuota (valor cuota - abonos + multas pendientes)

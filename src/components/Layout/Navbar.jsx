@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Users, TrendingUp, CheckCircle, BarChart3, Settings, LogOut, User, Calendar, ChevronDown, Wallet } from 'lucide-react';
+import { Users, TrendingUp, CheckCircle, BarChart3, Settings, LogOut, User, Calendar, ChevronDown, Wallet, Route } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const Navbar = () => {
@@ -38,6 +38,7 @@ const Navbar = () => {
   const navItems = [
     { path: '/', label: 'Clientes', icon: Users },
     { path: '/dia-de-cobro', label: 'Día de Cobro', icon: Calendar },
+    { path: '/rutas-de-cobro', label: 'Rutas de Cobro', icon: Route },
     { path: '/caja', label: 'Caja', icon: Wallet },
     { path: '/creditos-activos', label: 'Créditos Activos', icon: TrendingUp },
     { path: '/creditos-finalizados', label: 'Finalizados', icon: CheckCircle },

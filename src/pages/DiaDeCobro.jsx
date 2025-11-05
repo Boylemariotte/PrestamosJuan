@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Calendar, DollarSign, Users, Wallet, ChevronLeft, ChevronRight, MapPin, Map, List, X, CalendarPlus, Clock } from 'lucide-react';
+import { Calendar, DollarSign, Users, Wallet, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { format, parseISO, startOfDay, addDays, subDays, isToday, isSameDay, isPast } from 'date-fns';
+import { format, parseISO, startOfDay, addDays, subDays, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatearMoneda, calcularTotalMultasCuota, aplicarAbonosAutomaticamente } from '../utils/creditCalculations';
 
@@ -323,83 +323,6 @@ const DiaDeCobro = () => {
     return { cobrosK1, cobrosK2, cobradosK1, cobradosK2, abonadosK1, abonadosK2 };
   }, [clientes, fechaSeleccionadaStr]);
 
-  // Agrupar clientes por barrio para la vista de rutas
-  const clientesPorBarrio = useMemo(() => {
-    // Usar un objeto simple en lugar de Map para mayor compatibilidad
-    const barriosObj = {};
-    
-    // Procesar clientes con cobros pendientes
-    const todosLosCobros = [...(cobrosDelDia.cobrosK1 || []), ...(cobrosDelDia.cobrosK2 || [])];
-    
-    todosLosCobros.forEach(cobro => {
-      const cliente = clientes.find(c => c.id === cobro.clienteId);
-      if (!cliente || !cliente.barrio) return;
-      
-      const barrio = (cliente.barrio || '').trim() || 'Sin barrio';
-      
-      // Inicializar el barrio si no existe
-      if (!barriosObj[barrio]) {
-        barriosObj[barrio] = {
-          nombre: barrio,
-          clientes: [],
-          totalPendiente: 0,
-          cantidadClientes: 0
-        };
-      }
-      
-      const barrioData = barriosObj[barrio];
-      
-      // Verificar si el cliente ya está en el barrio
-      let clienteData = barrioData.clientes.find(c => c.clienteId === cobro.clienteId);
-      
-      // Si el cliente no está en el barrio, agregarlo
-      if (!clienteData) {
-        clienteData = {
-          clienteId: cobro.clienteId,
-          nombre: cobro.clienteNombre,
-          direccion: cobro.clienteDireccion || 'Sin dirección',
-          telefono: cobro.clienteTelefono || 'Sin teléfono',
-          valorPendiente: 0,
-          creditos: []
-        };
-        barrioData.clientes.push(clienteData);
-        barrioData.cantidadClientes++;
-      }
-      
-      // Buscar si ya existe el crédito para este cliente
-      let creditoExistente = clienteData.creditos.find(c => c.creditoId === cobro.creditoId);
-      
-      if (creditoExistente) {
-        // Si el crédito ya existe, sumar al valor pendiente
-        creditoExistente.valorPendiente += cobro.valorCuota || 0;
-      } else {
-        // Si no existe, agregar el crédito
-        clienteData.creditos.push({
-          creditoId: cobro.creditoId || `cred-${Math.random().toString(36).substr(2, 9)}`,
-          valorPendiente: cobro.valorCuota || 0,
-          nroCuota: cobro.nroCuota || 1,
-          totalCuotas: cobro.totalCuotas || 1
-        });
-      }
-      
-      // Actualizar totales
-      const valorCuota = cobro.valorCuota || 0;
-      barrioData.totalPendiente += valorCuota;
-      clienteData.valorPendiente += valorCuota;
-    });
-    
-    // Convertir el objeto a array y ordenar alfabéticamente
-    const barriosArray = Object.values(barriosObj).sort((a, b) => 
-      a.nombre.localeCompare(b.nombre)
-    );
-    
-    // Ordenar clientes dentro de cada barrio por nombre
-    barriosArray.forEach(barrio => {
-      barrio.clientes.sort((a, b) => a.nombre.localeCompare(b.nombre));
-    });
-    
-    return barriosArray;
-  }, [cobrosDelDia, clientes]);
 
   // Calcular totales pendientes
   const totalPendienteK1 = cobrosDelDia.cobrosK1.reduce((sum, cobro) => sum + cobro.valorCuota, 0);
@@ -423,7 +346,7 @@ const DiaDeCobro = () => {
 
   // Funciones de navegación de fecha
   const irAyer = () => setFechaSeleccionada(subDays(fechaSeleccionada, 1));
-  const irHoy = () => setFechaSeleccionada(hoy);
+  const irHoy = () => setFechaSeleccionada(startOfDay(new Date()));
   const irMañana = () => setFechaSeleccionada(addDays(fechaSeleccionada, 1));
   const cambiarFecha = (e) => {
     const nuevaFecha = parseISO(e.target.value);
@@ -431,10 +354,7 @@ const DiaDeCobro = () => {
   };
 
   // Verificar si la fecha seleccionada es hoy
-  const esHoy = format(fechaSeleccionada, 'yyyy-MM-dd') === format(hoy, 'yyyy-MM-dd');
-
-  // Estado para controlar la vista de rutas
-  const [mostrarVistaRutas, setMostrarVistaRutas] = useState(false);
+  const esHoy = format(fechaSeleccionada, 'yyyy-MM-dd') === format(startOfDay(new Date()), 'yyyy-MM-dd');
 
   const CobroCard = ({ cobro }) => {
     const tieneMultas = cobro.totalMultas && cobro.totalMultas > 0;
@@ -749,337 +669,11 @@ const DiaDeCobro = () => {
     </div>
   );
 
-  // Estado para el barrio seleccionado en el modal
-  const [barrioSeleccionado, setBarrioSeleccionado] = useState(null);
-  
-  // Estado para rastrear clientes visitados
-  const [clientesVisitados, setClientesVisitados] = useState({});
-  
-  // Estado para controlar el modal de posposición de cuota
-  const [modalPosponer, setModalPosponer] = useState({
-    isOpen: false,
-    cliente: null,
-    credito: null,
-    fechaSeleccionada: null,
-    proximasFechas: []
-  });
-  
-  // Función para alternar el estado de visita de un cliente
-  const toggleClienteVisitado = (clienteId) => {
-    setClientesVisitados(prev => ({
-      ...prev,
-      [clienteId]: !prev[clienteId]
-    }));
-  };
-
-  // Función para abrir el modal de posposición
-  const abrirModalPosponer = (cliente, credito) => {
-    const fechaActual = new Date();
-    
-    // Asegurarse de que la fecha de vencimiento sea un objeto Date
-    const fechaVencimiento = credito.fechaVencimiento 
-      ? new Date(credito.fechaVencimiento) 
-      : new Date();
-    
-    // Si la fecha de vencimiento es pasada, usar la fecha actual
-    const fechaBase = fechaVencimiento < fechaActual ? fechaActual : fechaVencimiento;
-    
-    // Calcular las próximas 5 fechas (hoy + 1 a 5 días)
-    const proximasFechas = Array.from({ length: 5 }, (_, i) => {
-      const fecha = new Date(fechaBase);
-      fecha.setDate(fechaBase.getDate() + i + 1);
-      return fecha.toISOString().split('T')[0];
-    });
-    
-    setModalPosponer({
-      isOpen: true,
-      cliente: cliente,
-      credito: credito,
-      fechaSeleccionada: proximasFechas[0],
-      proximasFechas: proximasFechas
-    });
-  };
-
-  // Función para cerrar el modal de posposición
-  const cerrarModalPosponer = () => {
-    setModalPosponer({
-      isOpen: false,
-      cliente: null,
-      credito: null,
-      fechaSeleccionada: null,
-      proximasFechas: []
-    });
-  };
-
-  // Función para manejar el cambio en los días de posposición
-  const handleCambioDias = (e) => {
-    const dias = parseInt(e.target.value, 10);
-    if (dias >= 1 && dias <= 5 && modalPosponer.credito) {
-      const fechaActual = new Date();
-      
-      // Obtener la fecha de vencimiento del crédito
-      const fechaVencimiento = modalPosponer.credito.fechaVencimiento 
-        ? new Date(modalPosponer.credito.fechaVencimiento) 
-        : new Date();
-      
-      // Si la fecha de vencimiento es pasada, usar la fecha actual
-      const fechaBase = fechaVencimiento < fechaActual ? fechaActual : fechaVencimiento;
-      
-      // Calcular la nueva fecha sumando los días desde la fecha base
-      const fechaPosposicion = new Date(fechaBase);
-      fechaPosposicion.setDate(fechaBase.getDate() + dias);
-      
-      setModalPosponer(prev => ({
-        ...prev,
-        diasPosposicion: dias,
-        fechaPosposicion: fechaPosposicion.toISOString().split('T')[0]
-      }));
-    }
-  };
-
-  // Función para manejar la selección de fecha
-  const seleccionarFecha = (fecha) => {
-    setModalPosponer(prev => ({
-      ...prev,
-      fechaSeleccionada: fecha
-    }));
-  };
-
-  // Función para confirmar la posposición
-  const confirmarPosposicion = () => {
-    if (!modalPosponer.cliente || !modalPosponer.credito || !modalPosponer.fechaSeleccionada) {
-      toast.error('Por favor selecciona una fecha para la prórroga');
-      return;
-    }
-
-    const nuevaFechaVencimiento = modalPosponer.fechaSeleccionada;
-    const clienteId = modalPosponer.cliente.clienteId;
-    const creditoId = modalPosponer.credito.creditoId;
-    
-    // Calcular la diferencia de días para mostrar en el mensaje
-    const fechaVencimiento = modalPosponer.credito.fechaVencimiento 
-      ? new Date(modalPosponer.credito.fechaVencimiento)
-      : new Date();
-    const fechaNueva = new Date(nuevaFechaVencimiento);
-    const diasPosposicion = Math.ceil((fechaNueva - fechaVencimiento) / (1000 * 60 * 60 * 24));
-
-    // Actualizar el estado de clientes con el crédito pospuesto
-    const clientesActualizados = clientes.map(cliente => {
-      if (cliente.clienteId === clienteId) {
-        return {
-          ...cliente,
-          creditos: cliente.creditos.map(credito => {
-            if (credito.creditoId === creditoId) {
-              return {
-                ...credito,
-                fechaVencimiento: nuevaFechaVencimiento,
-                fechaVencimientoOriginal: credito.fechaVencimientoOriginal || credito.fechaVencimiento,
-                pospuesto: true
-              };
-            }
-            return credito;
-          })
-        };
-      }
-      return cliente;
-    });
-
-    // Actualizar el estado global
-    setClientes(clientesActualizados);
-
-    // Mostrar mensaje de éxito
-    toast.success(`Prórroga de ${diasPosposicion} días aplicada correctamente`);
-
-    // Cerrar el modal de posposición
-    cerrarModalPosponer();
-    
-    // Cerrar el modal de clientes
-    setModalClientesAbierto(false);
-    
-    // Redirigir a la vista de rutas
-    setMostrarVistaRutas(true);
-  };
-
-  // Función para abrir el modal con los clientes de un barrio
-  const abrirModalClientes = (barrio) => {
-    setBarrioSeleccionado(barrio);
-  };
-
-  // Función para cerrar el modal
-  const cerrarModalClientes = () => {
-    setBarrioSeleccionado(null);
-  };
-
-  // Función para renderizar la vista de rutas
-  const renderVistaRutas = () => (
-    <div className="space-y-6">
-      <div className="bg-white rounded-xl shadow-md overflow-hidden">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-            <MapPin className="h-6 w-6 text-blue-600" />
-            Rutas de Cobro
-          </h2>
-          
-          {clientesPorBarrio.length === 0 ? (
-            <div className="text-center py-12">
-              <Map className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 text-lg">No hay clientes con cobros pendientes en esta fecha</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {clientesPorBarrio.map((barrio) => (
-                <BarrioCard 
-                  key={barrio.nombre} 
-                  barrio={barrio} 
-                  onVerClientes={abrirModalClientes}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-      
-      {/* Botón para volver a la vista normal */}
-      <div className="flex justify-center">
-        <button
-          onClick={() => setMostrarVistaRutas(false)}
-          className="flex items-center gap-2 px-6 py-3 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-full font-medium transition-colors"
-        >
-          <List className="h-5 w-5" />
-          <span>Volver a la vista normal</span>
-        </button>
-      </div>
-    </div>
-  );
-
-  // Renderizar la vista normal o la vista de rutas según el estado
-  if (mostrarVistaRutas) {
-    return (
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-slate-700 to-slate-900 rounded-xl shadow-lg p-8 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold flex items-center gap-3">
-                <MapPin className="h-8 w-8" />
-                Rutas de Cobro
-              </h1>
-              <p className="text-slate-200 text-lg mt-2">
-                {format(fechaSeleccionada, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Users className="h-6 w-6 text-slate-300" />
-              <div className="text-right">
-                <p className="text-sm text-slate-300">Barrios con cobros</p>
-                <p className="text-3xl font-bold">{clientesPorBarrio.length}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {renderVistaRutas()}
-        
-        {/* Modal para ver clientes de un barrio */}
-        {barrioSeleccionado && (
-          <ClientesBarrioModal 
-            barrio={barrioSeleccionado} 
-            onClose={cerrarModalClientes}
-            clientesVisitados={clientesVisitados}
-            onToggleVisitado={toggleClienteVisitado}
-            onPosponerPago={abrirModalPosponer}
-          />
-        )}
-
-        {/* Modal para posponer pago */}
-        {modalPosponer.isOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    <CalendarPlus className="h-5 w-5 inline-block mr-2 text-blue-600" />
-                    Posponer pago
-                  </h3>
-                  <button 
-                    onClick={cerrarModalPosponer}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="h-6 w-6" />
-                  </button>
-                </div>
-                
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Cliente</p>
-                    <p className="font-medium">{modalPosponer.cliente?.nombre}</p>
-                  </div>
-                  
-                  <div>
-                    <p className="text-sm text-gray-500 mb-2">Selecciona una fecha de prórroga:</p>
-                    <div className="grid grid-cols-2 gap-2 mb-4">
-                      {modalPosponer.proximasFechas.map((fecha, index) => {
-                        const fechaObj = new Date(fecha);
-                        const diaSemana = fechaObj.toLocaleDateString('es-ES', { weekday: 'short' });
-                        const diaMes = fechaObj.getDate();
-                        const mes = fechaObj.toLocaleDateString('es-ES', { month: 'short' });
-                        const isSelected = modalPosponer.fechaSeleccionada === fecha;
-                        
-                        return (
-                          <button
-                            key={fecha}
-                            type="button"
-                            onClick={() => seleccionarFecha(fecha)}
-                            className={`p-3 border rounded-lg text-center transition-colors ${
-                              isSelected 
-                                ? 'bg-blue-100 border-blue-500 text-blue-700' 
-                                : 'border-gray-200 hover:bg-gray-50'
-                            }`}
-                          >
-                            <div className="text-sm font-medium">{diaSemana}</div>
-                            <div className="text-2xl font-bold">{diaMes}</div>
-                            <div className="text-xs text-gray-500">{mes}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                    <button
-                      type="button"
-                      onClick={cerrarModalPosponer}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={confirmarPosposicion}
-                      disabled={!modalPosponer.fechaSeleccionada}
-                      className={`px-4 py-2 text-sm font-medium text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                        modalPosponer.fechaSeleccionada 
-                          ? 'bg-blue-600 hover:bg-blue-700' 
-                          : 'bg-blue-400 cursor-not-allowed'
-                      }`}
-                    >
-                      Aceptar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   // Vista normal
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-slate-700 to-slate-900 rounded-xl shadow-lg p-8 text-white">
+      <div className="bg-gradient-to-r from-slate-700 to-slate-900 rounded-xl shadow-md overflow-hidden">
         <div className="flex items-center justify-between mb-6">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-3">
@@ -1146,7 +740,7 @@ const DiaDeCobro = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
             <p className="text-sm text-slate-300 mb-1">📊 Total Esperado</p>
-            <p className="text-3xl font-bold">{formatearMoneda(totalPendienteGeneral + totalCobradoGeneral + totalAbonadoGeneral)}</p>
+            <p className="text-3xl font-bold text-white">{formatearMoneda(totalPendienteGeneral + totalCobradoGeneral + totalAbonadoGeneral)}</p>
             <p className="text-sm text-slate-300 mt-1">
               Para el día de {esHoy ? 'hoy' : 'cobro'}
             </p>
@@ -1169,23 +763,6 @@ const DiaDeCobro = () => {
           </div>
         </div>
 
-        {/* Botón para alternar vista de rutas */}
-        <div className="mt-6 flex justify-center">
-          <button
-            onClick={() => setMostrarVistaRutas(!mostrarVistaRutas)}
-            className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium transition-colors ${
-              mostrarVistaRutas 
-                ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
-                : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800'
-            }`}
-          >
-            {mostrarVistaRutas ? (
-              <><List className="h-5 w-5" /><span>Ver Vista Normal</span></>
-            ) : (
-              <><Map className="h-5 w-5" /><span>Ver Rutas de Cobro</span></>
-            )}
-          </button>
-        </div>
       </div>
 
       {/* Resumen por Cartera */}
@@ -1280,175 +857,6 @@ const DiaDeCobro = () => {
           total={totalPendienteK2}
           color="bg-gradient-to-r from-green-600 to-green-700"
         />
-      </div>
-    </div>
-  );
-};
-
-// Componente para mostrar la tarjeta de un barrio en la vista de rutas
-const BarrioCard = ({ barrio, onVerClientes }) => {
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-      <div className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-100 p-2 rounded-full">
-              <MapPin className="h-5 w-5 text-blue-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 text-lg">{barrio.nombre}</h3>
-              <p className="text-sm text-gray-600">
-                {barrio.cantidadClientes} {barrio.cantidadClientes === 1 ? 'cliente' : 'clientes'}
-              </p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-gray-500">Total pendiente</p>
-            <p className="text-lg font-bold text-blue-700">{formatearMoneda(barrio.totalPendiente)}</p>
-          </div>
-        </div>
-        
-        <button
-          onClick={() => onVerClientes(barrio)}
-          className="mt-3 w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-        >
-          <List className="h-4 w-4" />
-          Ver clientes
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// Componente para mostrar los clientes de un barrio específico
-const ClientesBarrioModal = ({ barrio, onClose, clientesVisitados, onToggleVisitado, onPosponerPago }) => {
-  if (!barrio) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <MapPin className="h-6 w-6 text-blue-600" />
-            <h2 className="text-xl font-bold text-gray-900">
-              {barrio.nombre} - {barrio.clientes.length} {barrio.clientes.length === 1 ? 'cliente' : 'clientes'}
-            </h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-              Total: {formatearMoneda(barrio.totalPendiente)}
-            </span>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors p-1"
-              aria-label="Cerrar modal"
-            >
-              <X className="h-6 w-6" />
-            </button>
-          </div>
-        </div>
-        
-        <div className="p-6">
-          <div className="space-y-4">
-            {barrio.clientes.map((cliente) => (
-              <div 
-                key={cliente.clienteId} 
-                className={`border rounded-lg p-4 transition-colors ${
-                  onToggleVisitado && onToggleVisitado[cliente.clienteId] 
-                    ? 'bg-gray-50 border-gray-200 text-gray-500' 
-                    : 'border-gray-200 hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="flex items-center justify-between w-full">
-                      <h3 className="font-semibold text-gray-900">{cliente.nombre}</h3>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleVisitado(cliente.clienteId);
-                        }}
-                        className="ml-2 p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                        aria-label={clientesVisitados && clientesVisitados[cliente.clienteId] ? 'Marcar como no visitado' : 'Marcar como visitado'}
-                      >
-                        {clientesVisitados && clientesVisitados[cliente.clienteId] ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 100-12 6 6 0 000 12z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-                    <p className="text-sm text-gray-600">{cliente.direccion}</p>
-                    {cliente.telefono && (
-                      <p className="text-sm text-blue-600 mt-1">
-                        📞 {cliente.telefono}
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-blue-700">
-                      {formatearMoneda(cliente.valorPendiente)}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {cliente.creditos.length} {cliente.creditos.length === 1 ? 'crédito' : 'créditos'}
-                    </p>
-                  </div>
-                </div>
-                
-                {cliente.creditos.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-gray-100">
-                    <p className="text-xs font-medium text-gray-500 mb-2">DETALLE DE CRÉDITOS</p>
-                    <div className="space-y-3">
-                      {cliente.creditos.map((credito, idx) => (
-                        <div key={idx} className="border border-gray-200 rounded-lg p-3">
-                          <div className="flex justify-between items-center mb-1">
-                            <div>
-                              <span className="text-sm font-medium">Crédito #{String(credito.creditoId || '').slice(-4)}</span>
-                              {credito.pospuesto && (
-                                <span className="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs rounded-full inline-flex items-center">
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  Pospuesto
-                                </span>
-                              )}
-                            </div>
-                            <span className="font-medium">{formatearMoneda(credito.valorPendiente)}</span>
-                          </div>
-                          <div className="flex justify-between items-center text-xs text-gray-600">
-                            <span>Cuota {credito.nroCuota}/{credito.totalCuotas}</span>
-                            {credito.fechaVencimiento && (
-                              <span className={`text-xs ${isFechaPasada(credito.fechaVencimiento) ? 'text-red-600' : 'text-gray-500'}`}>
-                                Vence: {formatearFecha(credito.fechaVencimiento)}
-                                {credito.diasPosposicion > 0 && ` (+${credito.diasPosposicion} días)`}
-                              </span>
-                            )}
-                          </div>
-                          {!credito.pospuesto && onPosponerPago && (
-                            <div className="mt-2 pt-2 border-t border-gray-100">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onPosponerPago(cliente, credito);
-                                }}
-                                className="w-full py-1 px-2 text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 rounded hover:bg-yellow-100 transition-colors flex items-center justify-center gap-1"
-                              >
-                                <CalendarPlus className="h-3 w-3" />
-                                <span>Posponer pago</span>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );
