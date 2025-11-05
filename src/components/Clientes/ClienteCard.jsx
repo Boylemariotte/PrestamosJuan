@@ -6,15 +6,37 @@ import { determinarEstadoCredito, getColorEstado } from '../../utils/creditCalcu
 const ClienteCard = ({ cliente }) => {
   const navigate = useNavigate();
 
-  const creditosActivos = cliente.creditos?.filter(c => {
+  // Obtener créditos activos con su información
+  const creditosActivosLista = cliente.creditos?.filter(c => {
     const estado = determinarEstadoCredito(c.cuotas, c);
     return estado === 'activo' || estado === 'mora';
-  }).length || 0;
+  }) || [];
+
+  const creditosActivos = creditosActivosLista.length;
 
   const creditosEnMora = cliente.creditos?.filter(c => {
     const estado = determinarEstadoCredito(c.cuotas, c);
     return estado === 'mora';
   }).length || 0;
+
+  // Obtener tipos únicos de créditos activos
+  const tiposCreditosActivos = [...new Set(creditosActivosLista.map(c => c.tipo))];
+  
+  // Nombres de tipos de crédito
+  const nombresTipos = {
+    diario: 'Diario',
+    semanal: 'Semanal',
+    quincenal: 'Quincenal',
+    mensual: 'Mensual'
+  };
+
+  // Colores para los tipos de crédito
+  const coloresTipos = {
+    diario: 'bg-purple-100 text-purple-700 border-purple-300',
+    semanal: 'bg-blue-100 text-blue-700 border-blue-300',
+    quincenal: 'bg-orange-100 text-orange-700 border-orange-300',
+    mensual: 'bg-green-100 text-green-700 border-green-300'
+  };
 
   const handleClick = () => {
     navigate(`/cliente/${cliente.id}`);
@@ -128,6 +150,26 @@ const ClienteCard = ({ cliente }) => {
                 {cliente.fiador.direccionTrabajo}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Tipos de créditos activos */}
+      {tiposCreditosActivos.length > 0 && (
+        <div className="border-t pt-3 mb-3">
+          <div className="flex items-center gap-2 mb-2">
+            <CreditCard className="h-4 w-4 text-gray-400" />
+            <span className="text-xs font-semibold text-gray-600">Tipos de Crédito Activos:</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {tiposCreditosActivos.map((tipo) => (
+              <span
+                key={tipo}
+                className={`px-2 py-1 rounded-md text-xs font-medium border ${coloresTipos[tipo] || 'bg-gray-100 text-gray-700 border-gray-300'}`}
+              >
+                {nombresTipos[tipo] || tipo}
+              </span>
+            ))}
           </div>
         </div>
       )}

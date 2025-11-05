@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, ChevronDown } from 'lucide-react';
+import { X, Info, ChevronDown } from 'lucide-react';
+import DireccionAutocomplete from './DireccionAutocomplete';
 import { BARRIOS_TULUA } from '../../constants/barrios';
 
 const ClienteForm = ({ cliente, onSubmit, onClose }) => {
@@ -137,16 +138,22 @@ const ClienteForm = ({ cliente, onSubmit, onClose }) => {
               </div>
 
               <div className="md:col-span-2">
-                <label className="label">Dirección de Residencia *</label>
-                <input
-                  type="text"
+                <label className="label flex items-center gap-2">
+                  Dirección de Residencia *
+                  <span className="text-xs text-gray-500 font-normal">
+                    (Formato: Calle 23 Número 45-30)
+                  </span>
+                </label>
+                <DireccionAutocomplete
                   name="direccion"
                   value={formData.direccion}
                   onChange={handleChange}
-                  className="input-field"
-                  placeholder="Ej: Calle 45 #23-15"
-                  required
+                  placeholder="Ej: Calle 23 Número 45-30, Barrio Centro"
                 />
+                <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                  <Info className="h-3 w-3" />
+                  Escribe al menos 3 caracteres para ver sugerencias
+                </p>
               </div>
 
               <div className="md:col-span-2">
@@ -173,15 +180,22 @@ const ClienteForm = ({ cliente, onSubmit, onClose }) => {
               </div>
 
               <div className="md:col-span-2">
-                <label className="label">Dirección de Trabajo</label>
-                <input
-                  type="text"
+                <label className="label flex items-center gap-2">
+                  Dirección de Trabajo
+                  <span className="text-xs text-gray-500 font-normal">
+                    (Formato: Carrera 10 Número 50-30)
+                  </span>
+                </label>
+                <DireccionAutocomplete
                   name="direccionTrabajo"
                   value={formData.direccionTrabajo}
                   onChange={handleChange}
-                  className="input-field"
-                  placeholder="Ej: Carrera 10 #50-30, Oficina 201"
+                  placeholder="Ej: Carrera 10 Número 50-30, Oficina 201"
                 />
+                <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                  <Info className="h-3 w-3" />
+                  Escribe al menos 3 caracteres para ver sugerencias
+                </p>
               </div>
 
               {/* Selección de Cartera */}
@@ -269,27 +283,41 @@ const ClienteForm = ({ cliente, onSubmit, onClose }) => {
               </div>
 
               <div className="md:col-span-2">
-                <label className="label">Dirección de Residencia</label>
-                <input
-                  type="text"
+                <label className="label flex items-center gap-2">
+                  Dirección de Residencia
+                  <span className="text-xs text-gray-500 font-normal">
+                    (Formato: Calle 23 Número 45-30)
+                  </span>
+                </label>
+                <DireccionAutocomplete
                   name="fiador.direccion"
                   value={formData.fiador.direccion}
                   onChange={handleChange}
-                  className="input-field"
-                  placeholder="Ej: Calle 45 #23-15"
+                  placeholder="Ej: Calle 23 Número 45-30, Barrio Centro"
                 />
+                <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                  <Info className="h-3 w-3" />
+                  Escribe al menos 3 caracteres para ver sugerencias
+                </p>
               </div>
 
               <div className="md:col-span-2">
-                <label className="label">Dirección de Trabajo</label>
-                <input
-                  type="text"
+                <label className="label flex items-center gap-2">
+                  Dirección de Trabajo
+                  <span className="text-xs text-gray-500 font-normal">
+                    (Formato: Carrera 10 Número 50-30)
+                  </span>
+                </label>
+                <DireccionAutocomplete
                   name="fiador.direccionTrabajo"
                   value={formData.fiador.direccionTrabajo}
                   onChange={handleChange}
-                  className="input-field"
-                  placeholder="Ej: Carrera 10 #50-30, Oficina 201"
+                  placeholder="Ej: Carrera 10 Número 50-30, Oficina 201"
                 />
+                <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                  <Info className="h-3 w-3" />
+                  Escribe al menos 3 caracteres para ver sugerencias
+                </p>
               </div>
             </div>
           </div>

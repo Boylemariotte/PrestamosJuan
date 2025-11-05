@@ -76,9 +76,50 @@ export const AppProvider = ({ children }) => {
   };
 
   const actualizarCliente = (id, clienteData) => {
-    setClientes(prev => prev.map(cliente => 
-      cliente.id === id ? { ...cliente, ...clienteData } : cliente
-    ));
+    setClientes(prev => prev.map(cliente => {
+      if (cliente.id === id) {
+        const clienteActualizado = { ...cliente, ...clienteData };
+        
+        // Limpiar coordenadas GPS si las direcciones cambiaron o fueron eliminadas
+        
+        // Para el cliente - Residencia
+        const direccionResidenciaCambio = cliente.direccion !== clienteActualizado.direccion;
+        const direccionResidenciaEliminada = !clienteActualizado.direccion || clienteActualizado.direccion.trim() === '';
+        if (direccionResidenciaCambio || direccionResidenciaEliminada) {
+          delete clienteActualizado.coordenadasResidencia;
+          delete clienteActualizado.coordenadasResidenciaActualizada;
+        }
+        
+        // Para el cliente - Trabajo
+        const direccionTrabajoCambio = cliente.direccionTrabajo !== clienteActualizado.direccionTrabajo;
+        const direccionTrabajoEliminada = !clienteActualizado.direccionTrabajo || clienteActualizado.direccionTrabajo.trim() === '';
+        if (direccionTrabajoCambio || direccionTrabajoEliminada) {
+          delete clienteActualizado.coordenadasTrabajo;
+          delete clienteActualizado.coordenadasTrabajoActualizada;
+        }
+        
+        // Para el fiador - Residencia
+        const fiadorResidenciaCambio = cliente.fiador?.direccion !== clienteActualizado.fiador?.direccion;
+        const fiadorResidenciaEliminada = !clienteActualizado.fiador?.direccion || clienteActualizado.fiador.direccion.trim() === '';
+        if ((fiadorResidenciaCambio || fiadorResidenciaEliminada) && clienteActualizado.fiador) {
+          clienteActualizado.fiador = { ...clienteActualizado.fiador };
+          delete clienteActualizado.fiador.coordenadasResidencia;
+          delete clienteActualizado.fiador.coordenadasResidenciaActualizada;
+        }
+        
+        // Para el fiador - Trabajo
+        const fiadorTrabajoCambio = cliente.fiador?.direccionTrabajo !== clienteActualizado.fiador?.direccionTrabajo;
+        const fiadorTrabajoEliminada = !clienteActualizado.fiador?.direccionTrabajo || clienteActualizado.fiador.direccionTrabajo.trim() === '';
+        if ((fiadorTrabajoCambio || fiadorTrabajoEliminada) && clienteActualizado.fiador) {
+          clienteActualizado.fiador = { ...clienteActualizado.fiador };
+          delete clienteActualizado.fiador.coordenadasTrabajo;
+          delete clienteActualizado.fiador.coordenadasTrabajoActualizada;
+        }
+        
+        return clienteActualizado;
+      }
+      return cliente;
+    }));
   };
 
   const eliminarCliente = (id) => {
@@ -87,6 +128,46 @@ export const AppProvider = ({ children }) => {
 
   const obtenerCliente = (id) => {
     return clientes.find(cliente => cliente.id === id);
+  };
+
+  // Actualizar coordenadas GPS del cliente o fiador (residencia o trabajo)
+  // entidad: 'cliente' (default) o 'fiador'
+  const actualizarCoordenadasGPS = (clienteId, tipo, coordenadas, entidad = 'cliente') => {
+    setClientes(prev => prev.map(cliente => {
+      if (cliente.id === clienteId) {
+        const campo = tipo === 'trabajo' ? 'coordenadasTrabajo' : 'coordenadasResidencia';
+        const campoFecha = tipo === 'trabajo' ? 'coordenadasTrabajoActualizada' : 'coordenadasResidenciaActualizada';
+
+        if (entidad === 'fiador') {
+          const fiadorActual = cliente.fiador || {};
+          return {
+            ...cliente,
+            fiador: {
+              ...fiadorActual,
+              [campo]: {
+                lat: coordenadas.lat,
+                lon: coordenadas.lon,
+                precision: coordenadas.precision,
+                timestamp: coordenadas.timestamp
+              },
+              [campoFecha]: new Date().toISOString()
+            }
+          };
+        }
+
+        return {
+          ...cliente,
+          [campo]: {
+            lat: coordenadas.lat,
+            lon: coordenadas.lon,
+            precision: coordenadas.precision,
+            timestamp: coordenadas.timestamp
+          },
+          [campoFecha]: new Date().toISOString()
+        };
+      }
+      return cliente;
+    }));
   };
 
   // CRUD de Créditos
@@ -732,6 +813,7 @@ export const AppProvider = ({ children }) => {
     actualizarCliente,
     eliminarCliente,
     obtenerCliente,
+    actualizarCoordenadasGPS,
     // Créditos
     agregarCredito,
     actualizarCredito,
