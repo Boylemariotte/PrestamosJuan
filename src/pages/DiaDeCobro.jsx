@@ -6,9 +6,10 @@ import 'react-toastify/dist/ReactToastify.css';
 import { format, parseISO, startOfDay, addDays, subDays, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatearMoneda, calcularTotalMultasCuota, aplicarAbonosAutomaticamente } from '../utils/creditCalculations';
+import CreditoDetalle from '../components/Creditos/CreditoDetalle';
 
 const DiaDeCobro = () => {
-  const { clientes, setClientes } = useApp();
+  const { clientes, setClientes, obtenerCliente, obtenerCredito } = useApp();
   const hoy = startOfDay(new Date());
 
   // Estado para la fecha seleccionada
@@ -356,6 +357,10 @@ const DiaDeCobro = () => {
   // Verificar si la fecha seleccionada es hoy
   const esHoy = format(fechaSeleccionada, 'yyyy-MM-dd') === format(startOfDay(new Date()), 'yyyy-MM-dd');
 
+  // Estado para el crédito seleccionado desde CobroCard
+  const [creditoSeleccionado, setCreditoSeleccionado] = useState(null);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
+
   const CobroCard = ({ cobro }) => {
     const tieneMultas = cobro.totalMultas && cobro.totalMultas > 0;
     const tieneAbonos = cobro.abonoAplicado > 0 || cobro.multasCubiertas > 0;
@@ -363,11 +368,23 @@ const DiaDeCobro = () => {
     
     // Determinar si es un caso simple (sin abonos previos ni multas)
     const esCasoSimple = !tieneAbonos && !tieneMultas;
+
+    const handleClick = () => {
+      const cliente = obtenerCliente(cobro.clienteId);
+      const credito = obtenerCredito(cobro.clienteId, cobro.creditoId);
+      if (cliente && credito) {
+        setClienteSeleccionado(cliente);
+        setCreditoSeleccionado(credito);
+      }
+    };
     
     return (
-      <div className={`border rounded-lg p-4 hover:shadow-md transition-shadow ${
-        tieneSaldoOMultas ? 'bg-orange-50 border-orange-300' : 'bg-white border-gray-200'
-      }`}>
+      <div 
+        onClick={handleClick}
+        className={`border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer ${
+          tieneSaldoOMultas ? 'bg-orange-50 border-orange-300' : 'bg-white border-gray-200'
+        }`}
+      >
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
@@ -858,6 +875,19 @@ const DiaDeCobro = () => {
           color="bg-gradient-to-r from-green-600 to-green-700"
         />
       </div>
+
+      {/* Modal de detalle de crédito */}
+      {creditoSeleccionado && clienteSeleccionado && (
+        <CreditoDetalle
+          credito={creditoSeleccionado}
+          clienteId={clienteSeleccionado.id}
+          cliente={clienteSeleccionado}
+          onClose={() => {
+            setCreditoSeleccionado(null);
+            setClienteSeleccionado(null);
+          }}
+        />
+      )}
     </div>
   );
 };

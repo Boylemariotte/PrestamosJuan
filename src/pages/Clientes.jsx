@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Search, Users as UsersIcon, Briefcase, Filter } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -10,13 +10,53 @@ const Clientes = () => {
   const { clientes, agregarCliente, loading } = useApp();
   const { hasPermission } = useAuth();
   const [showForm, setShowForm] = useState(false);
+  const [formCartera, setFormCartera] = useState(null);
+  const [formTipoPago, setFormTipoPago] = useState(null);
+  const [formPosicion, setFormPosicion] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroCartera, setFiltroCartera] = useState('todas'); // 'todas', 'K1', 'K2'
   const [filtroTipoPago, setFiltroTipoPago] = useState('todos'); // 'todos', 'diario', 'semanal', 'quincenal', 'mensual'
 
+  // Tipos de pago disponibles según la cartera seleccionada
+  const tiposPagoDisponibles = useMemo(() => {
+    if (filtroCartera === 'todas') {
+      return ['todos', 'diario', 'semanal', 'quincenal', 'mensual'];
+    } else if (filtroCartera === 'K1') {
+      return ['todos', 'diario', 'semanal', 'quincenal'];
+    } else if (filtroCartera === 'K2') {
+      return ['todos', 'quincenal', 'mensual'];
+    }
+    return ['todos', 'diario', 'semanal', 'quincenal', 'mensual'];
+  }, [filtroCartera]);
+
+  // Resetear filtro de tipo de pago si el tipo actual no está disponible en la cartera seleccionada
+  useEffect(() => {
+    if (!tiposPagoDisponibles.includes(filtroTipoPago)) {
+      setFiltroTipoPago('todos');
+    }
+  }, [filtroCartera, tiposPagoDisponibles, filtroTipoPago]);
+
   const handleAgregarCliente = (clienteData) => {
+    // Si hay posición predefinida, agregarla
+    if (formPosicion) {
+      clienteData.posicion = formPosicion;
+    }
+    // Si hay tipo de pago predefinido, guardarlo como tipo de pago esperado (respaldo)
+    if (formTipoPago) {
+      clienteData.tipoPagoEsperado = formTipoPago;
+    }
     agregarCliente(clienteData);
     setShowForm(false);
+    setFormCartera(null);
+    setFormTipoPago(null);
+    setFormPosicion(null);
+  };
+
+  const handleAgregarDesdeCard = (cartera, tipoPago, posicion) => {
+    setFormCartera(cartera);
+    setFormTipoPago(tipoPago);
+    setFormPosicion(posicion);
+    setShowForm(true);
   };
 
   // Obtener tipos de pago activos del cliente (según créditos activos o en mora)
@@ -33,11 +73,11 @@ const Clientes = () => {
 
   // Capacidades por cartera/tipo de pago
   const CAPACIDADES = {
-    K1: { diario: 20, semanal: 150, quincenal: 150 },
-    K2: { quincenal: 150, mensual: 20 }
+    K1: { diario: 75, semanal: 150, quincenal: 150 },
+    K2: { quincenal: 150, mensual: 75 }
   };
 
-  // Ocupación actual por cartera/tipo (considera clientes con créditos activos/en mora)
+  // Ocupación actual por cartera/tipo (considera clientes con créditos activos/en mora o tipoPagoEsperado)
   const ocupacion = useMemo(() => {
     const base = {
       K1: { diario: 0, semanal: 0, quincenal: 0 },
@@ -45,7 +85,12 @@ const Clientes = () => {
     };
     clientes.forEach((cliente) => {
       const cartera = cliente.cartera || 'K1';
-      const tipos = getTiposPagoActivos(cliente);
+      const tiposActivos = getTiposPagoActivos(cliente);
+      // Si tiene créditos activos, usar esos tipos; si no, usar tipoPagoEsperado
+      const tipos = tiposActivos.length > 0 
+        ? tiposActivos 
+        : (cliente.tipoPagoEsperado ? [cliente.tipoPagoEsperado] : []);
+      
       tipos.forEach((t) => {
         if (base[cartera] && typeof base[cartera][t] === 'number') {
           base[cartera][t] += 1;
@@ -55,18 +100,83 @@ const Clientes = () => {
     return base;
   }, [clientes]);
 
-  // Filtrar por búsqueda, cartera y tipo de pago
-  const clientesFiltrados = clientes.filter(cliente => {
-    const coincideBusqueda = cliente.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cliente.documento.includes(searchTerm) ||
-      cliente.telefono.includes(searchTerm);
+  // Generar todas las cards posibles según capacidades
+  const todasLasCards = useMemo(() => {
+    const cards = [];
+    
+    // Generar cards para K1
+    Object.entries(CAPACIDADES.K1).forEach(([tipo, capacidad]) => {
+      for (let i = 1; i <= capacidad; i++) {
+        cards.push({
+          cartera: 'K1',
+          tipoPago: tipo,
+          posicion: i,
+          cliente: null
+        });
+      }
+    });
+    
+    // Generar cards para K2
+    Object.entries(CAPACIDADES.K2).forEach(([tipo, capacidad]) => {
+      for (let i = 1; i <= capacidad; i++) {
+        cards.push({
+          cartera: 'K2',
+          tipoPago: tipo,
+          posicion: i,
+          cliente: null
+        });
+      }
+    });
+    
+    // Asignar clientes a las cards correspondientes
+    clientes.forEach(cliente => {
+      const carteraCliente = cliente.cartera || 'K1';
+      const tiposActivos = getTiposPagoActivos(cliente);
+      
+      // Si el cliente tiene créditos activos, usar esos tipos
+      // Si no tiene créditos pero tiene tipoPagoEsperado, usar ese
+      const tiposAAsignar = tiposActivos.length > 0 
+        ? tiposActivos 
+        : (cliente.tipoPagoEsperado ? [cliente.tipoPagoEsperado] : []);
+      
+      // Si no hay tipos para asignar, no hacer nada
+      if (tiposAAsignar.length === 0) return;
+      
+      tiposAAsignar.forEach(tipo => {
+        // Buscar la card correspondiente
+        // Convertir posiciones a número para comparación correcta
+        const posicionCliente = Number(cliente.posicion);
+        const cardIndex = cards.findIndex(c => {
+          return c.cartera === carteraCliente && 
+            c.tipoPago === tipo && 
+            Number(c.posicion) === posicionCliente &&
+            c.cliente === null;
+        });
+        
+        if (cardIndex !== -1) {
+          cards[cardIndex].cliente = cliente;
+        }
+      });
+    });
+    
+    return cards;
+  }, [clientes]);
 
-    const coincideCartera = filtroCartera === 'todas' || (cliente.cartera || 'K1') === filtroCartera;
+  // Filtrar cards según búsqueda, cartera y tipo de pago
+  const cardsFiltradas = todasLasCards.filter(card => {
+    // Si hay búsqueda, solo mostrar cards con cliente que coincida
+    if (searchTerm) {
+      if (!card.cliente) return false;
+      const coincideBusqueda = card.cliente.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        card.cliente.documento.includes(searchTerm) ||
+        card.cliente.telefono.includes(searchTerm);
+      if (!coincideBusqueda) return false;
+    }
 
-    const tiposCliente = getTiposPagoActivos(cliente);
-    const coincideTipo = filtroTipoPago === 'todos' || tiposCliente.includes(filtroTipoPago);
+    const coincideCartera = filtroCartera === 'todas' || card.cartera === filtroCartera;
+    const coincideTipo = filtroTipoPago === 'todos' || card.tipoPago === filtroTipoPago;
 
-    return coincideBusqueda && coincideCartera && coincideTipo;
+    return coincideCartera && coincideTipo;
   });
 
   // Contar clientes por cartera
@@ -86,22 +196,13 @@ const Clientes = () => {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Clientes</h1>
           <p className="text-gray-600 mt-1">
             Gestiona la información de tus clientes
           </p>
         </div>
-        {hasPermission('crearClientes') && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="btn-primary flex items-center"
-          >
-            <Plus className="h-5 w-5 mr-2" />
-            Nuevo Cliente
-          </button>
-        )}
       </div>
 
       {/* Estadísticas por cartera */}
@@ -214,7 +315,7 @@ const Clientes = () => {
           <h3 className="text-sm font-semibold text-gray-700">Filtrar por tipo de pago:</h3>
         </div>
         <div className="flex flex-wrap gap-2">
-          {['todos','diario','semanal','quincenal','mensual'].map((tipo) => (
+          {tiposPagoDisponibles.map((tipo) => (
             <button
               key={tipo}
               onClick={() => setFiltroTipoPago(tipo)}
@@ -230,12 +331,12 @@ const Clientes = () => {
         </div>
       </div>
 
-      {/* Lista de clientes */}
-      {clientesFiltrados.length === 0 ? (
+      {/* Lista de cards */}
+      {cardsFiltradas.length === 0 ? (
         <div className="text-center py-12">
           <UsersIcon className="h-16 w-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm ? 'No se encontraron clientes' : 'No hay clientes registrados'}
+            {searchTerm ? 'No se encontraron clientes' : 'No hay cards disponibles'}
           </h3>
           <p className="text-gray-600 mb-6">
             {searchTerm
@@ -254,8 +355,16 @@ const Clientes = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {clientesFiltrados.map((cliente) => (
-            <ClienteCard key={cliente.id} cliente={cliente} />
+          {cardsFiltradas.map((card, index) => (
+            <ClienteCard
+              key={`${card.cartera}-${card.tipoPago}-${card.posicion}-${index}`}
+              cliente={card.cliente}
+              cardVacia={!card.cliente}
+              numeroCard={card.posicion}
+              cartera={card.cartera}
+              tipoPago={card.tipoPago}
+              onAgregarCliente={handleAgregarDesdeCard}
+            />
           ))}
         </div>
       )}
@@ -264,7 +373,14 @@ const Clientes = () => {
       {showForm && (
         <ClienteForm
           onSubmit={handleAgregarCliente}
-          onClose={() => setShowForm(false)}
+          onClose={() => {
+            setShowForm(false);
+            setFormCartera(null);
+            setFormTipoPago(null);
+            setFormPosicion(null);
+          }}
+          carteraPredefinida={formCartera}
+          tipoPagoPredefinido={formTipoPago}
         />
       )}
     </div>

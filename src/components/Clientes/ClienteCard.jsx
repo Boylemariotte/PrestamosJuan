@@ -1,10 +1,74 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Phone, MapPin, Mail, UserCheck, CreditCard, AlertCircle, Briefcase } from 'lucide-react';
+import { User, Phone, MapPin, Mail, UserCheck, CreditCard, AlertCircle, Briefcase, Plus, Trash2 } from 'lucide-react';
 import { determinarEstadoCredito, getColorEstado } from '../../utils/creditCalculations';
+import { useApp } from '../../context/AppContext';
 
-const ClienteCard = ({ cliente }) => {
+const ClienteCard = ({ cliente, cardVacia, numeroCard, cartera, tipoPago, onAgregarCliente }) => {
   const navigate = useNavigate();
+  const { eliminarCliente } = useApp();
+
+  // Si es una card vacía, mostrar diseño diferente
+  if (cardVacia) {
+    const carteraColors = {
+      K1: {
+        bg: 'bg-blue-50',
+        border: 'border-blue-200',
+        icon: 'bg-blue-100 text-blue-600',
+        badge: 'bg-blue-100 text-blue-700 border-blue-300'
+      },
+      K2: {
+        bg: 'bg-green-100',
+        border: 'border-green-300',
+        icon: 'bg-green-200 text-green-700',
+        badge: 'bg-green-200 text-green-800 border-green-400'
+      }
+    };
+    const colors = carteraColors[cartera] || carteraColors.K1;
+    const nombresTipos = {
+      diario: 'Diario',
+      semanal: 'Semanal',
+      quincenal: 'Quincenal',
+      mensual: 'Mensual'
+    };
+
+    return (
+      <div
+        className={`card hover:scale-[1.02] transition-transform duration-200 bg-gray-100 border-gray-300 border-2 relative`}
+      >
+        <div className="absolute top-3 left-3 text-gray-600 text-xl font-bold">
+          {numeroCard}
+        </div>
+        <div className="flex flex-col items-center justify-center min-h-[300px] p-6">
+          <div className="bg-gray-200 p-4 rounded-full mb-4">
+            <User className="h-8 w-8 text-gray-400" />
+          </div>
+          <div className="text-center mb-4">
+            <p className="text-sm text-gray-500 mb-2">Card vacía</p>
+            <div className="flex items-center gap-2 justify-center mb-2">
+              <span className={`px-2 py-1 rounded-md text-xs font-bold border ${colors.badge}`}>
+                <Briefcase className="h-3 w-3 inline mr-1" />
+                {cartera}
+              </span>
+              <span className="px-2 py-1 rounded-md text-xs font-medium border bg-gray-200 text-gray-700 border-gray-300">
+                {nombresTipos[tipoPago] || tipoPago}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onAgregarCliente(cartera, tipoPago, numeroCard);
+            }}
+            className="btn-primary flex items-center gap-2 w-full justify-center"
+          >
+            <Plus className="h-4 w-4" />
+            Agregar cliente a esta card
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Obtener créditos activos con su información
   const creditosActivosLista = cliente.creditos?.filter(c => {
@@ -42,24 +106,34 @@ const ClienteCard = ({ cliente }) => {
     navigate(`/cliente/${cliente.id}`);
   };
 
+  const handleEliminar = (e) => {
+    e.stopPropagation(); // Evitar que se active el onClick de la card
+    const confirmar = window.confirm(
+      `¿Estás seguro de eliminar al cliente "${cliente.nombre}"?\n\nEsta acción eliminará todos los datos del cliente, incluyendo sus créditos, y no se puede deshacer.`
+    );
+    if (confirmar) {
+      eliminarCliente(cliente.id);
+    }
+  };
+
   // Colores según cartera
   const carteraColors = {
     K1: {
-      bg: 'bg-blue-50',
+      bg: 'bg-white',
       border: 'border-blue-200',
       icon: 'bg-blue-100 text-blue-600',
       badge: 'bg-blue-100 text-blue-700 border-blue-300'
     },
     K2: {
-      bg: 'bg-green-100',
+      bg: 'bg-white',
       border: 'border-green-300',
       icon: 'bg-green-200 text-green-700',
       badge: 'bg-green-200 text-green-800 border-green-400'
     }
   };
 
-  const cartera = cliente.cartera || 'K1';
-  const colors = carteraColors[cartera];
+  const carteraCliente = cliente.cartera || 'K1';
+  const colors = carteraColors[carteraCliente];
 
   return (
     <div
@@ -79,7 +153,7 @@ const ClienteCard = ({ cliente }) => {
               <h3 className="text-lg font-semibold text-gray-900">{cliente.nombre}</h3>
               <span className={`px-2 py-0.5 rounded-md text-xs font-bold border ${colors.badge} flex items-center gap-1`}>
                 <Briefcase className="h-3 w-3" />
-                {cartera}
+                {carteraCliente}
               </span>
             </div>
             <p className="text-sm text-gray-500">CC: {cliente.documento}</p>
@@ -182,12 +256,22 @@ const ClienteCard = ({ cliente }) => {
           </span>
         </div>
         
-        <button
-          onClick={handleClick}
-          className="text-sky-600 hover:text-sky-700 text-sm font-medium"
-        >
-          Ver detalles →
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleEliminar}
+            className="text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1 transition-colors"
+            title="Eliminar cliente"
+          >
+            <Trash2 className="h-4 w-4" />
+            Eliminar
+          </button>
+          <button
+            onClick={handleClick}
+            className="text-sky-600 hover:text-sky-700 text-sm font-medium"
+          >
+            Ver detalles →
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -11,14 +11,16 @@ import {
 } from '../../utils/creditCalculations';
 import { obtenerFechaLocal } from '../../utils/dateUtils';
 
-const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1' }) => {
-  // Tipos de pago permitidos según la cartera
-  const tiposPermitidos = carteraCliente === 'K1' 
-    ? ['diario', 'semanal', 'quincenal']
-    : ['quincenal', 'mensual'];
+const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefinido = null }) => {
+  // Si hay tipo de pago predefinido, solo usar ese; si no, usar los permitidos según la cartera
+  const tiposPermitidos = tipoPagoPredefinido 
+    ? [tipoPagoPredefinido]
+    : (carteraCliente === 'K1' 
+      ? ['diario', 'semanal', 'quincenal']
+      : ['quincenal', 'mensual']);
   
-  // Tipo por defecto según la cartera
-  const tipoPorDefecto = carteraCliente === 'K1' ? 'semanal' : 'quincenal';
+  // Tipo por defecto: predefinido si existe, sino según la cartera
+  const tipoPorDefecto = tipoPagoPredefinido || (carteraCliente === 'K1' ? 'semanal' : 'quincenal');
   
   const [formData, setFormData] = useState({
     monto: MONTOS_DISPONIBLES[0],
@@ -29,16 +31,21 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1' }) => {
     usarPapeleriaManual: false
   });
 
-  // Ajustar tipo automáticamente si no está permitido para la cartera
+  // Ajustar tipo automáticamente si hay tipo predefinido o si no está permitido para la cartera
   useEffect(() => {
-    if (!tiposPermitidos.includes(formData.tipo)) {
+    if (tipoPagoPredefinido) {
+      setFormData(prev => ({
+        ...prev,
+        tipo: tipoPagoPredefinido
+      }));
+    } else if (!tiposPermitidos.includes(formData.tipo)) {
       setFormData(prev => ({
         ...prev,
         tipo: tipoPorDefecto
       }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [carteraCliente]);
+  }, [carteraCliente, tipoPagoPredefinido]);
 
   const papeleriaAutomatica = calcularPapeleria(formData.monto);
   const papeleria = formData.usarPapeleriaManual && formData.papeleriaManual 
@@ -103,76 +110,107 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1' }) => {
                 (Cartera {carteraCliente})
               </span>
             </label>
-            <div className="space-y-3">
-              {tiposPermitidos.includes('diario') && (
-                <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                  <input
-                    type="radio"
-                    name="tipo"
-                    value="diario"
-                    checked={formData.tipo === 'diario'}
-                    onChange={handleChange}
-                    className="h-4 w-4 text-sky-600 focus:ring-sky-500"
-                  />
-                  <div className="ml-3">
-                    <span className="font-medium text-gray-900">Diario</span>
-                    <p className="text-sm text-gray-500">60 cuotas - Cada día</p>
+            {tipoPagoPredefinido ? (
+              // Si hay tipo predefinido, mostrar solo ese tipo bloqueado
+              <div className="p-4 border-2 rounded-lg bg-gray-50 border-gray-300">
+                <div className="flex items-center">
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      checked={true}
+                      disabled
+                      className="h-4 w-4 text-sky-600 focus:ring-sky-500 cursor-not-allowed"
+                    />
+                    <div className="ml-3">
+                      <span className="font-medium text-gray-900 capitalize">
+                        {tipoPagoPredefinido}
+                      </span>
+                      <p className="text-sm text-gray-500">
+                        {tipoPagoPredefinido === 'diario' && '60 cuotas - Cada día'}
+                        {tipoPagoPredefinido === 'semanal' && '10 cuotas - Cada sábado'}
+                        {tipoPagoPredefinido === 'quincenal' && '5 cuotas'}
+                        {tipoPagoPredefinido === 'mensual' && '3 cuotas - Cada mes'}
+                      </p>
+                    </div>
                   </div>
-                </label>
-              )}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  El tipo de pago está bloqueado según la card desde la cual se creó el cliente
+                </p>
+              </div>
+            ) : (
+              // Si no hay tipo predefinido, mostrar todas las opciones permitidas
+              <div className="space-y-3">
+                {tiposPermitidos.includes('diario') && (
+                  <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input
+                      type="radio"
+                      name="tipo"
+                      value="diario"
+                      checked={formData.tipo === 'diario'}
+                      onChange={handleChange}
+                      className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                    />
+                    <div className="ml-3">
+                      <span className="font-medium text-gray-900">Diario</span>
+                      <p className="text-sm text-gray-500">60 cuotas - Cada día</p>
+                    </div>
+                  </label>
+                )}
 
-              {tiposPermitidos.includes('semanal') && (
-                <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                  <input
-                    type="radio"
-                    name="tipo"
-                    value="semanal"
-                    checked={formData.tipo === 'semanal'}
-                    onChange={handleChange}
-                    className="h-4 w-4 text-sky-600 focus:ring-sky-500"
-                  />
-                  <div className="ml-3">
-                    <span className="font-medium text-gray-900">Semanal</span>
-                    <p className="text-sm text-gray-500">10 cuotas - Cada sábado</p>
-                  </div>
-                </label>
-              )}
+                {tiposPermitidos.includes('semanal') && (
+                  <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input
+                      type="radio"
+                      name="tipo"
+                      value="semanal"
+                      checked={formData.tipo === 'semanal'}
+                      onChange={handleChange}
+                      className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                    />
+                    <div className="ml-3">
+                      <span className="font-medium text-gray-900">Semanal</span>
+                      <p className="text-sm text-gray-500">10 cuotas - Cada sábado</p>
+                    </div>
+                  </label>
+                )}
 
-              {tiposPermitidos.includes('quincenal') && (
-                <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                  <input
-                    type="radio"
-                    name="tipo"
-                    value="quincenal"
-                    checked={formData.tipo === 'quincenal'}
-                    onChange={handleChange}
-                    className="h-4 w-4 text-sky-600 focus:ring-sky-500"
-                  />
-                  <div className="ml-3">
-                    <span className="font-medium text-gray-900">Quincenal</span>
-                    <p className="text-sm text-gray-500">5 cuotas</p>
-                  </div>
-                </label>
-              )}
+                {tiposPermitidos.includes('quincenal') && (
+                  <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input
+                      type="radio"
+                      name="tipo"
+                      value="quincenal"
+                      checked={formData.tipo === 'quincenal'}
+                      onChange={handleChange}
+                      className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                    />
+                    <div className="ml-3">
+                      <span className="font-medium text-gray-900">Quincenal</span>
+                      <p className="text-sm text-gray-500">5 cuotas</p>
+                    </div>
+                  </label>
+                )}
 
-              {tiposPermitidos.includes('mensual') && (
-                <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                  <input
-                    type="radio"
-                    name="tipo"
-                    value="mensual"
-                    checked={formData.tipo === 'mensual'}
-                    onChange={handleChange}
-                    className="h-4 w-4 text-sky-600 focus:ring-sky-500"
-                  />
-                  <div className="ml-3">
-                    <span className="font-medium text-gray-900">Mensual</span>
-                    <p className="text-sm text-gray-500">3 cuotas - Cada mes</p>
-                  </div>
-                </label>
-              )}
-            </div>
-            {tiposPermitidos.length === 0 && (
+                {tiposPermitidos.includes('mensual') && (
+                  <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input
+                      type="radio"
+                      name="tipo"
+                      value="mensual"
+                      checked={formData.tipo === 'mensual'}
+                      onChange={handleChange}
+                      className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                    />
+                    <div className="ml-3">
+                      <span className="font-medium text-gray-900">Mensual</span>
+                      <p className="text-sm text-gray-500">3 cuotas - Cada mes</p>
+                    </div>
+                  </label>
+                )}
+              </div>
+            )}
+            {tiposPermitidos.length === 0 && !tipoPagoPredefinido && (
               <p className="text-sm text-red-600 mt-2">
                 ⚠️ No hay tipos de pago disponibles para esta cartera
               </p>

@@ -49,18 +49,70 @@ export const AppProvider = ({ children }) => {
 
   // CRUD de Clientes
   const agregarCliente = (clienteData) => {
-    // Obtener la siguiente posición disponible para la cartera
-    const clientesCartera = clientes.filter(c => c.cartera === (clienteData.cartera || 'K1'));
-    const posicionesOcupadas = clientesCartera.map(c => c.posicion).filter(Boolean);
+    let posicion = clienteData.posicion; // Usar posición predefinida si existe
+    const cartera = clienteData.cartera || 'K1';
+    const tipoPagoEsperado = clienteData.tipoPagoEsperado;
     
-    // Encontrar la próxima posición disponible (1-150)
-    let posicion = 1;
-    while (posicionesOcupadas.includes(posicion) && posicion <= 150) {
-      posicion++;
-    }
-    
-    if (posicion > 150) {
-      throw new Error(`No hay cupos disponibles para la cartera ${clienteData.cartera || 'K1'}. Límite de 150 clientes alcanzado.`);
+    // Si no hay posición predefinida, buscar la siguiente disponible para la cartera y tipo de pago
+    if (!posicion) {
+      // Filtrar clientes que tengan la misma cartera y tipo de pago esperado
+      const clientesMismoTipo = clientes.filter(c => {
+        const carteraCliente = c.cartera || 'K1';
+        if (carteraCliente !== cartera) return false;
+        
+        // Si el cliente tiene créditos activos, verificar si alguno coincide con el tipo esperado
+        if (tipoPagoEsperado && c.creditos && c.creditos.length > 0) {
+          const tieneTipo = c.creditos.some(cred => {
+            const estado = determinarEstadoCredito(cred.cuotas, cred);
+            return (estado === 'activo' || estado === 'mora') && cred.tipo === tipoPagoEsperado;
+          });
+          if (tieneTipo) return true;
+        }
+        
+        // Si no tiene créditos activos, verificar tipoPagoEsperado
+        return c.tipoPagoEsperado === tipoPagoEsperado;
+      });
+      
+      const posicionesOcupadas = clientesMismoTipo.map(c => c.posicion).filter(Boolean);
+      
+      // Encontrar la próxima posición disponible (1-150 o 1-75 según el tipo)
+      const capacidadMaxima = tipoPagoEsperado === 'diario' || tipoPagoEsperado === 'mensual' ? 75 : 150;
+      posicion = 1;
+      while (posicionesOcupadas.includes(posicion) && posicion <= capacidadMaxima) {
+        posicion++;
+      }
+      
+      if (posicion > capacidadMaxima) {
+        throw new Error(`No hay cupos disponibles para la cartera ${cartera} con tipo de pago ${tipoPagoEsperado || 'sin tipo'}. Límite alcanzado.`);
+      }
+    } else {
+      // Verificar que la posición no esté ocupada por otro cliente con la misma cartera + tipo de pago
+      const posicionOcupada = clientes.some(c => {
+        const carteraCliente = c.cartera || 'K1';
+        if (carteraCliente !== cartera) return false;
+        if (c.posicion !== posicion) return false;
+        
+        // Verificar si comparten el mismo tipo de pago
+        // Si el cliente nuevo tiene tipoPagoEsperado, verificar contra créditos activos o tipoPagoEsperado del existente
+        if (tipoPagoEsperado) {
+          // Si el cliente existente tiene créditos activos del mismo tipo
+          if (c.creditos && c.creditos.length > 0) {
+            const tieneTipo = c.creditos.some(cred => {
+              const estado = determinarEstadoCredito(cred.cuotas, cred);
+              return (estado === 'activo' || estado === 'mora') && cred.tipo === tipoPagoEsperado;
+            });
+            if (tieneTipo) return true;
+          }
+          // Si el cliente existente tiene el mismo tipoPagoEsperado
+          if (c.tipoPagoEsperado === tipoPagoEsperado) return true;
+        }
+        
+        return false;
+      });
+      
+      if (posicionOcupada) {
+        throw new Error(`La posición ${posicion} ya está ocupada en la cartera ${cartera} para el tipo de pago ${tipoPagoEsperado || 'sin tipo'}.`);
+      }
     }
     
     const nuevoCliente = {
@@ -175,8 +227,8 @@ export const AppProvider = ({ children }) => {
     const { monto, tipo, fechaInicio, tipoQuincenal, papeleriaManual, usarPapeleriaManual } = creditoData;
     // Validación de cupos por cartera/tipo de pago y asignación de cartera
     const CAPACIDADES = {
-      K1: { diario: 20, semanal: 150, quincenal: 150 },
-      K2: { quincenal: 150, mensual: 20 }
+      K1: { diario: 75, semanal: 150, quincenal: 150 },
+      K2: { quincenal: 150, mensual: 75 }
     };
 
     const clienteActual = obtenerCliente(clienteId);
