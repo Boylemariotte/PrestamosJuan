@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Users, TrendingUp, CheckCircle, BarChart3, Settings, LogOut, User, Calendar, ChevronDown, Wallet, Route } from 'lucide-react';
+import { Users, TrendingUp, CheckCircle, BarChart3, Settings, LogOut, User, Calendar, ChevronDown, Wallet, Route, ClipboardList } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const Navbar = () => {
@@ -40,6 +40,7 @@ const Navbar = () => {
     { path: '/dia-de-cobro', label: 'Día de Cobro', icon: Calendar },
     { path: '/rutas-de-cobro', label: 'Rutas de Cobro', icon: Route },
     { path: '/caja', label: 'Caja', icon: Wallet },
+    { path: '/papeleria', label: 'Papelería', icon: ClipboardList },
     { path: '/creditos-activos', label: 'Créditos Activos', icon: TrendingUp },
     { path: '/creditos-finalizados', label: 'Finalizados', icon: CheckCircle },
     { path: '/estadisticas', label: 'Estadísticas', icon: BarChart3 },
@@ -63,8 +64,8 @@ const Navbar = () => {
           <div className="flex items-center min-w-[200px]">
             <div className="flex items-center gap-3">
               <TrendingUp className="h-8 w-8 text-slate-700" />
-              <span className="text-xl font-bold text-slate-800 whitespace-nowrap">
-                Prestamos Juan
+              <span className="text-xl font-extrabold text-slate-800 whitespace-nowrap tracking-tight">
+                Servi Carnes
               </span>
             </div>
           </div>

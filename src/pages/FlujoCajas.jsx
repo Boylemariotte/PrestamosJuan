@@ -1,9 +1,10 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, Wallet, Plus, DollarSign, FileText, X, Trash2, CheckCircle } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Wallet, Plus, DollarSign, FileText, X, Trash2, CheckCircle, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { format, startOfDay, addDays, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useApp } from '../context/AppContext';
 import { formatearMoneda, calcularPapeleria, calcularMontoEntregado } from '../utils/creditCalculations';
+import { savePapeleriaTransaction, getPapeleriaTransactions, deletePapeleriaTransaction } from '../utils/papeleriaStorage';
 
 // Componente Modal reutilizable
 const Modal = ({ titulo, onClose, children, color = 'blue' }) => (
@@ -268,6 +269,13 @@ const CajaSection = React.memo(({
   onEliminarMovimiento,
   movimientosCaja
 }) => {
+  // Calcular total de retiros de papelería para esta caja
+  const totalRetiros = useMemo(() => {
+    return movimientos
+      .filter(mov => mov.tipo === 'retiroPapeleria' && mov.caja === numero)
+      .reduce((sum, mov) => sum + (mov.valor || 0), 0);
+  }, [movimientos, numero]);
+
   // Agrupar todos los movimientos en filas: emparejar inicios de caja, gastos y préstamos
   const filasMovimientos = useMemo(() => {
     const iniciosCaja = [...movimientos].filter(mov => mov.tipo === 'inicioCaja')
@@ -616,49 +624,17 @@ const CajaSection = React.memo(({
         </div>
       </div>
       
-      {/* Sección de Papelería */}
+      {/* Sección de Papelería - Versión simplificada */}
       <div className="bg-gray-50 border-t border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-orange-600" />
-            <h3 className="text-lg font-semibold text-gray-800">Fondo de Papelería</h3>
-          </div>
-          <div className="text-xl font-bold text-orange-600">
-            {formatearMoneda(papeleriaAcumulada)}
-          </div>
-        </div>
-        
-        {/* Lista de retiros de papelería */}
-        <div className="mt-4 space-y-2 max-h-40 overflow-y-auto mb-3">
-          {movimientosCaja
-            .filter(mov => mov.tipo === 'retiroPapeleria' && mov.caja === numero)
-            .map((retiro, index) => (
-              <div key={retiro.id} className="bg-white p-2 rounded border border-gray-200 flex justify-between items-center">
-                <div>
-                  <div className="font-medium text-gray-800">
-                    {retiro.descripcion || 'Retiro sin descripción'}
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    {retiro.fecha} - {formatearMoneda(retiro.valor)}
-                  </div>
-                </div>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEliminarMovimiento(retiro.id);
-                  }}
-                  className="text-red-500 hover:text-red-700 p-1"
-                  title="Eliminar retiro"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+            <div>
+              <div className="text-sm font-medium text-gray-700">Fondo de Papelería</div>
+              <div className="text-lg font-bold text-orange-600">
+                {formatearMoneda(papeleriaAcumulada)}
               </div>
-            ))}
-        </div>
-        
-        <div className="flex justify-between items-center">
-          <div className="text-sm text-gray-500">
-            Total acumulado de papelería en todos los préstamos
+            </div>
           </div>
           <button
             onClick={() => onRetirarPapeleria(numero)}
@@ -890,9 +866,14 @@ const FlujoCajas = () => {
     const esPrestamo = tipo === 'prestamo';
     const esRetiroPapeleria = tipo === 'retiroPapeleria';
     
-    const papeleria = esPrestamo && datosAdicionales.papeleria !== undefined 
-      ? parseFloat(datosAdicionales.papeleria) 
-      : 0;
+    // Calcular papelería automáticamente para préstamos (5,000 por cada 100,000)
+    let papeleria = 0;
+    if (esPrestamo) {
+      // Si se proporciona un valor manual, usarlo, de lo contrario calcularlo
+      papeleria = datosAdicionales.papeleria !== undefined && datosAdicionales.papeleria !== null
+        ? parseFloat(datosAdicionales.papeleria)
+        : calcularPapeleria(monto);
+    }
     
     const montoEntregado = esPrestamo ? (monto - papeleria) : 0;
 
@@ -923,16 +904,62 @@ const FlujoCajas = () => {
       } : {})
     };
 
-    console.log('Guardando movimiento:', movimientoData); // Para depuración
-    agregarMovimientoCaja(movimientoData);
+    // Guardar el movimiento en la caja
+    const movimientoId = agregarMovimientoCaja(movimientoData);
+    
+    // Si es un préstamo con papelería, guardar también en el historial de papelería
+    if (esPrestamo && papeleria > 0) {
+      savePapeleriaTransaction({
+        tipo: 'ingreso',
+        cantidad: papeleria,
+        descripcion: `Ingreso por préstamo - ${descripcion || 'Sin descripción'}`,
+        fecha: new Date().toISOString(),
+        movimientoId: movimientoId,
+        caja: cajaSeleccionada,
+        tipoMovimiento: 'ingreso',
+        cliente: descripcion || 'Cliente no especificado',
+        montoPrestamo: monto
+      });
+    }
+    
+    // Si es un retiro de papelería, guardar en el historial de papelería
+    if (esRetiroPapeleria) {
+      savePapeleriaTransaction({
+        tipo: 'retiro',
+        cantidad: monto,
+        descripcion: `Retiro de papelería - ${descripcion || 'Sin descripción'}`,
+        fecha: new Date().toISOString(),
+        movimientoId: movimientoId,
+        caja: cajaSeleccionada,
+        tipoMovimiento: 'retiro'
+      });
+    }
+    
     handleCerrarModal();
   }, [cajaSeleccionada, fechaFormato, agregarMovimientoCaja, handleCerrarModal, datosCajas]);
 
   const handleEliminarMovimiento = useCallback((movimientoId) => {
     if (window.confirm('¿Estás seguro de eliminar este movimiento?')) {
+      // Buscar el movimiento para ver su tipo
+      const movimiento = movimientosCaja.find(mov => mov.id === movimientoId);
+      
+      // Si se encuentra el movimiento, verificar si tiene una transacción de papelería asociada
+      if (movimiento) {
+        const transacciones = getPapeleriaTransactions();
+        const transaccionRelacionada = transacciones.find(
+          tx => tx.movimientoId === movimientoId
+        );
+        
+        // Eliminar la transacción de papelería si existe
+        if (transaccionRelacionada) {
+          deletePapeleriaTransaction(transaccionRelacionada.id);
+        }
+      }
+      
+      // Eliminar el movimiento de la caja
       eliminarMovimientoCaja(movimientoId);
     }
-  }, [eliminarMovimientoCaja]);
+  }, [eliminarMovimientoCaja, movimientosCaja]);
 
   const fechaFormateada = useMemo(() => 
     format(fechaSeleccionada, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es }),

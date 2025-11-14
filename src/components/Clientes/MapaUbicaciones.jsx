@@ -184,6 +184,23 @@ const MapaUbicaciones = ({
 
   const GEOAPIFY_API_KEY = import.meta.env.VITE_GEOAPIFY_KEY;
 
+  // Verificar si hay API key
+  if (!GEOAPIFY_API_KEY) {
+    return (
+      <div className="w-full h-80 bg-yellow-50 rounded-lg flex items-center justify-center border border-yellow-200">
+        <div className="text-center max-w-md px-4">
+          <MapPin className="h-8 w-8 text-yellow-600 mx-auto mb-2" />
+          <p className="text-sm text-yellow-800 font-medium mb-1">
+            API Key de Geoapify no configurada
+          </p>
+          <p className="text-xs text-yellow-700">
+            Por favor, asegúrate de tener la variable VITE_GEOAPIFY_KEY en tu archivo .env
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="w-full h-80 bg-gray-100 rounded-lg flex items-center justify-center">

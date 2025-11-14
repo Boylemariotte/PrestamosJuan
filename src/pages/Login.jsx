@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, User, Lock, AlertCircle } from 'lucide-react';
+import { User, Lock, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import CowIcon from '../Icon/Cow.png';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -44,16 +45,18 @@ const Login = () => {
     <div className="min-h-screen bg-gradient-to-br from-sky-500 via-blue-500 to-purple-600 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
         {/* Logo y título */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-sky-100 rounded-full mb-4">
-            <TrendingUp className="h-8 w-8 text-sky-600" />
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-24 h-24 mb-4 flex items-center justify-center">
+            <img src={CowIcon} alt="Servi Carnes" className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Prestamos Juan
-          </h1>
-          <p className="text-gray-600">
-            Sistema de Gestión de Créditos
-          </p>
+          <div className="text-center">
+            <h1 className="text-3xl font-extrabold text-gray-900 mb-1 tracking-tight">
+              Servi Carnes
+            </h1>
+            <p className="text-gray-600">
+              Sistema de Gestión de Créditos
+            </p>
+          </div>
         </div>
 
         {/* Formulario */}

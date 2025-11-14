@@ -14,10 +14,10 @@ import CreditosFinalizados from './pages/CreditosFinalizados';
 import Estadisticas from './pages/Estadisticas';
 import Configuracion from './pages/Configuracion';
 import DiaDeCobro from './pages/DiaDeCobro';
-import Caja from './pages/Caja';
 import RutasDeCobro from './pages/RutasDeCobro';
 import FlujoCajas from './pages/FlujoCajas';
 import Alertas from './pages/Alertas';
+import Papeleria from './pages/Papeleria';
 
 function App() {
   return (
@@ -67,7 +67,7 @@ function App() {
               element={
                 <ProtectedRoute requiredPermission="verCaja">
                   <Layout>
-                    <Caja />
+                    <FlujoCajas />
                   </Layout>
                 </ProtectedRoute>
               }
@@ -145,6 +145,17 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <Alertas />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            
+            <Route
+              path="/papeleria"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Papeleria />
                   </Layout>
                 </ProtectedRoute>
               }
