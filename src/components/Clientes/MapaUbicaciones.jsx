@@ -201,6 +201,22 @@ const MapaUbicaciones = ({
     );
   }
 
+  // Verificar si hay API key
+  if (!GEOAPIFY_API_KEY) {
+    return (
+      <div className="w-full h-80 bg-yellow-50 rounded-lg flex items-center justify-center border border-yellow-200">
+        <div className="text-center max-w-md px-4">
+          <MapPin className="h-8 w-8 text-yellow-600 mx-auto mb-2" />
+          <p className="text-sm text-yellow-800 font-medium mb-1">
+            API Key de Geoapify no configurada
+          </p>
+          <p className="text-xs text-yellow-700">
+            Por favor, asegúrate de tener la variable VITE_GEOAPIFY_KEY en tu archivo .env
+          </p>
+        </div>
+      </div>
+    );
+  }
   if (loading) {
     return (
       <div className="w-full h-80 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -242,10 +258,11 @@ const MapaUbicaciones = ({
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom={true}
       >
-        {/* TileLayer de Geoapify */}
+        {/* TileLayer de OpenStreetMap - Gratuito, no consume créditos */}
         <TileLayer
-          url={`https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}.png?apiKey=${GEOAPIFY_API_KEY}`}
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://geoapify.com/">Geoapify</a>'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          maxZoom={19}
         />
 
         {/* Ajustar bounds si hay múltiples marcadores */}

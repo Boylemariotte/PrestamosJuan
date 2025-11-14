@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Edit, Trash2, Plus, User, Phone, MapPin, Mail, UserCheck } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -8,6 +8,7 @@ import CreditoForm from '../components/Creditos/CreditoForm';
 import CreditoDetalle from '../components/Creditos/CreditoDetalle';
 import MapaUbicaciones from '../components/Clientes/MapaUbicaciones';
 import ActualizarUbicacion from '../components/Clientes/ActualizarUbicacion';
+import { determinarEstadoCredito } from '../utils/creditCalculations';
 
 const ClienteDetalle = () => {
   const { id } = useParams();
@@ -51,6 +52,28 @@ const ClienteDetalle = () => {
       alert(e.message || 'No fue posible crear el crédito.');
     }
   };
+
+  // Determinar el tipo de pago predefinido para el cliente
+  const tipoPagoPredefinido = useMemo(() => {
+    // Si el cliente tiene créditos activos o en mora, usar el tipo del primer crédito activo
+    const creditosActivos = (cliente.creditos || []).filter(c => {
+      const estado = determinarEstadoCredito(c.cuotas, c);
+      return estado === 'activo' || estado === 'mora';
+    });
+    
+    if (creditosActivos.length > 0) {
+      // Si tiene créditos activos, usar el tipo del primer crédito activo
+      return creditosActivos[0].tipo;
+    }
+    
+    // Si no tiene créditos activos pero tiene tipoPagoEsperado, usar ese
+    if (cliente.tipoPagoEsperado) {
+      return cliente.tipoPagoEsperado;
+    }
+    
+    // Si no hay tipo predefinido, retornar null para mostrar todas las opciones
+    return null;
+  }, [cliente]);
 
   return (
     <div>
@@ -299,6 +322,7 @@ const ClienteDetalle = () => {
           onSubmit={handleAgregarCredito}
           onClose={() => setShowCreditoForm(false)}
           carteraCliente={cliente.cartera || 'K1'}
+          tipoPagoPredefinido={tipoPagoPredefinido}
         />
       )}
 

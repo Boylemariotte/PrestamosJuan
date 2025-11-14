@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Info, ChevronDown } from 'lucide-react';
-import DireccionAutocomplete from './DireccionAutocomplete';
+import { X, ChevronDown } from 'lucide-react';
 import { BARRIOS_TULUA } from '../../constants/barrios';
 
-const ClienteForm = ({ cliente, onSubmit, onClose }) => {
+const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoPredefinido }) => {
   const [formData, setFormData] = useState({
     nombre: '',
     documento: '',
@@ -12,7 +11,8 @@ const ClienteForm = ({ cliente, onSubmit, onClose }) => {
     barrio: '',
     direccionTrabajo: '',
     correo: '',
-    cartera: 'K1', // Por defecto K1
+    cartera: carteraPredefinida || 'K1', // Por defecto K1 o predefinida
+    tipoPago: tipoPagoPredefinido || '', // Tipo de pago predefinido (solo visual)
     fiador: {
       nombre: '',
       documento: '',
@@ -33,6 +33,7 @@ const ClienteForm = ({ cliente, onSubmit, onClose }) => {
         direccionTrabajo: cliente.direccionTrabajo || '',
         correo: cliente.correo || '',
         cartera: cliente.cartera || 'K1',
+        tipoPago: tipoPagoPredefinido || '',
         fiador: {
           nombre: cliente.fiador?.nombre || '',
           documento: cliente.fiador?.documento || '',
@@ -41,8 +42,15 @@ const ClienteForm = ({ cliente, onSubmit, onClose }) => {
           direccionTrabajo: cliente.fiador?.direccionTrabajo || ''
         }
       });
+    } else if (carteraPredefinida) {
+      // Si es un nuevo cliente con cartera predefinida
+      setFormData(prev => ({
+        ...prev,
+        cartera: carteraPredefinida,
+        tipoPago: tipoPagoPredefinido || ''
+      }));
     }
-  }, [cliente]);
+  }, [cliente, carteraPredefinida, tipoPagoPredefinido]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -65,7 +73,12 @@ const ClienteForm = ({ cliente, onSubmit, onClose }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    // Incluir tipoPagoEsperado si viene predefinido
+    const dataToSubmit = {
+      ...formData,
+      ...(tipoPagoPredefinido && { tipoPagoEsperado: tipoPagoPredefinido })
+    };
+    onSubmit(dataToSubmit);
   };
 
   return (
@@ -144,16 +157,15 @@ const ClienteForm = ({ cliente, onSubmit, onClose }) => {
                     (Formato: Calle 23 Número 45-30)
                   </span>
                 </label>
-                <DireccionAutocomplete
+                <input
+                  type="text"
                   name="direccion"
                   value={formData.direccion}
                   onChange={handleChange}
+                  className="input-field"
                   placeholder="Ej: Calle 23 Número 45-30, Barrio Centro"
+                  required
                 />
-                <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                  <Info className="h-3 w-3" />
-                  Escribe al menos 3 caracteres para ver sugerencias
-                </p>
               </div>
 
               <div className="md:col-span-2">
@@ -186,57 +198,90 @@ const ClienteForm = ({ cliente, onSubmit, onClose }) => {
                     (Formato: Carrera 10 Número 50-30)
                   </span>
                 </label>
-                <DireccionAutocomplete
+                <input
+                  type="text"
                   name="direccionTrabajo"
                   value={formData.direccionTrabajo}
                   onChange={handleChange}
+                  className="input-field"
                   placeholder="Ej: Carrera 10 Número 50-30, Oficina 201"
                 />
-                <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                  <Info className="h-3 w-3" />
-                  Escribe al menos 3 caracteres para ver sugerencias
-                </p>
               </div>
 
               {/* Selección de Cartera */}
               <div className="md:col-span-2">
                 <label className="label">Cartera *</label>
-                <div className="grid grid-cols-2 gap-4">
-                  <label className="flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${
-                    formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
-                  }">
-                    <input
-                      type="radio"
-                      name="cartera"
-                      value="K1"
-                      checked={formData.cartera === 'K1'}
-                      onChange={handleChange}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div className="ml-3">
-                      <span className="font-semibold text-gray-900">Cartera K1</span>
-                      <p className="text-sm text-gray-500">Cartera principal</p>
+                {carteraPredefinida ? (
+                  <div className="p-4 border-2 rounded-lg bg-gray-50 border-gray-300">
+                    <div className="flex items-center">
+                      <div className={`flex items-center p-4 border-2 rounded-lg ${
+                        formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' : 'border-green-500 bg-green-50'
+                      }`}>
+                        <div className="ml-3">
+                          <span className="font-semibold text-gray-900">Cartera {formData.cartera}</span>
+                          <p className="text-sm text-gray-500">
+                            {formData.cartera === 'K1' ? 'Cartera principal' : 'Cartera secundaria'}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </label>
+                    <p className="text-xs text-gray-500 mt-2">La cartera está bloqueada según la card seleccionada</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${
+                      formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="cartera"
+                        value="K1"
+                        checked={formData.cartera === 'K1'}
+                        onChange={handleChange}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="ml-3">
+                        <span className="font-semibold text-gray-900">Cartera K1</span>
+                        <p className="text-sm text-gray-500">Cartera principal</p>
+                      </div>
+                    </label>
 
-                  <label className="flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${
-                    formData.cartera === 'K2' ? 'border-green-500 bg-green-50' : 'border-gray-300'
-                  }">
-                    <input
-                      type="radio"
-                      name="cartera"
-                      value="K2"
-                      checked={formData.cartera === 'K2'}
-                      onChange={handleChange}
-                      className="h-4 w-4 text-green-600 focus:ring-green-500"
-                    />
-                    <div className="ml-3">
-                      <span className="font-semibold text-gray-900">Cartera K2</span>
-                      <p className="text-sm text-gray-500">Cartera secundaria</p>
-                    </div>
-                  </label>
-                </div>
+                    <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${
+                      formData.cartera === 'K2' ? 'border-green-500 bg-green-50' : 'border-gray-300'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="cartera"
+                        value="K2"
+                        checked={formData.cartera === 'K2'}
+                        onChange={handleChange}
+                        className="h-4 w-4 text-green-600 focus:ring-green-500"
+                      />
+                      <div className="ml-3">
+                        <span className="font-semibold text-gray-900">Cartera K2</span>
+                        <p className="text-sm text-gray-500">Cartera secundaria</p>
+                      </div>
+                    </label>
+                  </div>
+                )}
               </div>
+
+              {/* Tipo de Pago (solo visual si viene predefinido) */}
+              {tipoPagoPredefinido && (
+                <div className="md:col-span-2">
+                  <label className="label">Tipo de Pago Asignado</label>
+                  <div className="p-4 border-2 rounded-lg bg-gray-50 border-gray-300">
+                    <div className="flex items-center">
+                      <span className="font-semibold text-gray-900 capitalize">
+                        {tipoPagoPredefinido}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      El tipo de pago está bloqueado según la card seleccionada. Se aplicará al crear el primer crédito.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -289,16 +334,14 @@ const ClienteForm = ({ cliente, onSubmit, onClose }) => {
                     (Formato: Calle 23 Número 45-30)
                   </span>
                 </label>
-                <DireccionAutocomplete
+                <input
+                  type="text"
                   name="fiador.direccion"
                   value={formData.fiador.direccion}
                   onChange={handleChange}
+                  className="input-field"
                   placeholder="Ej: Calle 23 Número 45-30, Barrio Centro"
                 />
-                <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                  <Info className="h-3 w-3" />
-                  Escribe al menos 3 caracteres para ver sugerencias
-                </p>
               </div>
 
               <div className="md:col-span-2">
@@ -308,16 +351,14 @@ const ClienteForm = ({ cliente, onSubmit, onClose }) => {
                     (Formato: Carrera 10 Número 50-30)
                   </span>
                 </label>
-                <DireccionAutocomplete
+                <input
+                  type="text"
                   name="fiador.direccionTrabajo"
                   value={formData.fiador.direccionTrabajo}
                   onChange={handleChange}
+                  className="input-field"
                   placeholder="Ej: Carrera 10 Número 50-30, Oficina 201"
                 />
-                <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                  <Info className="h-3 w-3" />
-                  Escribe al menos 3 caracteres para ver sugerencias
-                </p>
               </div>
             </div>
           </div>
