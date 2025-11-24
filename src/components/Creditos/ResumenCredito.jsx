@@ -16,11 +16,13 @@ const ResumenCredito = ({
   mostrarFormularioAbono,
   valorAbono,
   descripcionAbono,
+  fechaAbono,
   puedeRenovar,
   onMostrarSelectorEtiqueta,
   onMostrarFormularioAbono,
   onValorAbonoChange,
   onDescripcionAbonoChange,
+  onFechaAbonoChange,
   onAgregarAbono,
   onCancelarAbono,
   onMostrarFormularioRenovacion
@@ -181,8 +183,10 @@ const ResumenCredito = ({
               <FormularioAbono
                 valorAbono={valorAbono}
                 descripcionAbono={descripcionAbono}
+                fechaAbono={fechaAbono}
                 onValorChange={onValorAbonoChange}
                 onDescripcionChange={onDescripcionAbonoChange}
+                onFechaChange={onFechaAbonoChange}
                 onSubmit={onAgregarAbono}
                 onCancel={onCancelarAbono}
               />

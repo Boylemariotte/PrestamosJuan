@@ -22,14 +22,20 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
     }
   });
 
+  const [otroBarrio, setOtroBarrio] = useState('');
+  const [usarOtroBarrio, setUsarOtroBarrio] = useState(false);
+
   useEffect(() => {
     if (cliente) {
+      const barrioCliente = cliente.barrio || '';
+      const esOtroBarrio = !BARRIOS_TULUA.includes(barrioCliente);
+      
       setFormData({
         nombre: cliente.nombre || '',
         documento: cliente.documento || '',
         telefono: cliente.telefono || '',
         direccion: cliente.direccion || '',
-        barrio: cliente.barrio || '',
+        barrio: esOtroBarrio ? 'Otro' : barrioCliente,
         direccionTrabajo: cliente.direccionTrabajo || '',
         correo: cliente.correo || '',
         cartera: cliente.cartera || 'K1',
@@ -42,6 +48,9 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
           direccionTrabajo: cliente.fiador?.direccionTrabajo || ''
         }
       });
+      
+      setUsarOtroBarrio(esOtroBarrio);
+      setOtroBarrio(esOtroBarrio ? barrioCliente : '');
     } else if (carteraPredefinida) {
       // Si es un nuevo cliente con cartera predefinida
       setFormData(prev => ({
@@ -54,7 +63,19 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name.startsWith('fiador.')) {
+    
+    if (name === 'barrio') {
+      if (value === 'Otro') {
+        setUsarOtroBarrio(true);
+        setFormData(prev => ({ ...prev, barrio: 'Otro' }));
+      } else {
+        setUsarOtroBarrio(false);
+        setOtroBarrio('');
+        setFormData(prev => ({ ...prev, barrio: value }));
+      }
+    } else if (name === 'otroBarrio') {
+      setOtroBarrio(value);
+    } else if (name.startsWith('fiador.')) {
       const fiadorField = name.split('.')[1];
       setFormData(prev => ({
         ...prev,
@@ -73,9 +94,17 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    
+    // Validar que si se seleccionó "Otro", se haya ingresado un nombre de barrio
+    if (usarOtroBarrio && !otroBarrio.trim()) {
+      alert('Por favor ingrese el nombre del barrio');
+      return;
+    }
+    
     // Incluir tipoPagoEsperado si viene predefinido
     const dataToSubmit = {
       ...formData,
+      barrio: usarOtroBarrio ? otroBarrio.trim() : formData.barrio,
       ...(tipoPagoPredefinido && { tipoPagoEsperado: tipoPagoPredefinido })
     };
     onSubmit(dataToSubmit);
@@ -184,11 +213,27 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                         {barrio}
                       </option>
                     ))}
+                    <option value="Otro">Otro (especificar)</option>
                   </select>
                   <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                     <ChevronDown className="h-5 w-5 text-gray-400" />
                   </div>
                 </div>
+                
+                {usarOtroBarrio && (
+                  <div className="mt-3">
+                    <label className="label">Nombre del barrio *</label>
+                    <input
+                      type="text"
+                      name="otroBarrio"
+                      value={otroBarrio}
+                      onChange={handleChange}
+                      className="input-field"
+                      placeholder="Ej: Barrio Nuevo"
+                      required
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="md:col-span-2">

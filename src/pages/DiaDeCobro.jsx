@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Calendar, DollarSign, Users, Wallet, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -9,6 +10,7 @@ import { formatearMoneda, calcularTotalMultasCuota, aplicarAbonosAutomaticamente
 import CreditoDetalle from '../components/Creditos/CreditoDetalle';
 
 const DiaDeCobro = () => {
+  const navigate = useNavigate();
   const { clientes, setClientes, obtenerCliente, obtenerCredito } = useApp();
   const hoy = startOfDay(new Date());
 
@@ -407,36 +409,10 @@ const DiaDeCobro = () => {
               <p className="text-2xl font-bold">{formatearMoneda(cobro.valorCuota)}</p>
             </div>
             
-            <div className="space-y-1 text-sm text-gray-600">
-              <p className="flex items-center gap-2">
-                <span className="font-medium">Teléfono:</span>
-                <span>{cobro.clienteTelefono}</span>
-              </p>
-              {cobro.clienteDireccion && (
-                <p className="flex items-center gap-2">
-                  <span className="font-medium">Dirección:</span>
-                  <span>{cobro.clienteDireccion}</span>
-                </p>
-              )}
-              <p className="flex items-center gap-2">
-                <span className="font-medium">Crédito:</span>
-                <span>{formatearMoneda(cobro.creditoMonto)} - {cobro.creditoTipo}</span>
-              </p>
-              <p className="flex items-center gap-2">
-                <span className="font-medium">Cuota:</span>
-                <span>{cobro.nroCuota} de {cobro.totalCuotas}</span>
-              </p>
-              
-              {/* Versión compacta para casos simples */}
-              {esCasoSimple && (
-                <div className="mt-3 pt-3 border-t border-gray-200">
-                  <p className="text-xs text-gray-500">Cuota completa sin abonos previos</p>
-                </div>
-              )}
-              
-              {/* Versión detallada para casos con abonos o multas */}
-              {!esCasoSimple && (
-                <div className="mt-3 pt-3 border-t-2 border-orange-300">
+            {/* Desglose del pago */}
+            {!esCasoSimple && (
+              <div className="space-y-1 text-sm text-gray-600">
+                <div className="pt-2 border-t-2 border-orange-300">
                   <p className="text-xs font-bold text-gray-700 mb-2">📊 Desglose:</p>
                   
                   {/* Cuota original */}
@@ -490,8 +466,8 @@ const DiaDeCobro = () => {
                     </p>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -499,7 +475,9 @@ const DiaDeCobro = () => {
   };
 
   const ClientePagadoCard = ({ cobrado }) => (
-    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+    <div 
+      onClick={() => navigate(`/cliente/${cobrado.clienteId}`)}
+      className="bg-green-50 border border-green-200 rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2">
@@ -525,7 +503,9 @@ const DiaDeCobro = () => {
     const saldoTotal = abonado.cuotaPendiente + (abonado.multasPendientes || 0);
     
     return (
-      <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4">
+      <div 
+        onClick={() => navigate(`/cliente/${abonado.clienteId}`)}
+        className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow">
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-3">
