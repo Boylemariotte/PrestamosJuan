@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { Save, Printer } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Save, Printer, UserPlus, X, Briefcase } from 'lucide-react';
 
 const Visitas = () => {
+    const navigate = useNavigate();
+    const [showCarteraModal, setShowCarteraModal] = useState(false);
     const [formData, setFormData] = useState({
         fechaAgendamiento: '',
         fechaVisita: '',
@@ -55,6 +58,32 @@ const Visitas = () => {
         alert('Información guardada (Simulación)');
     };
 
+    const handleAddToClients = (cartera) => {
+        const clientData = {
+            nombre: formData.solicitante.nombre,
+            documento: formData.solicitante.cc,
+            telefono: formData.solicitante.telefono,
+            direccion: formData.solicitante.direccionCasa,
+            barrio: formData.solicitante.barrioCasa,
+            direccionTrabajo: formData.solicitante.direccionTrabajo,
+            fiador: {
+                nombre: formData.fiador.nombre,
+                documento: formData.fiador.cc,
+                telefono: formData.fiador.telefono,
+                direccion: formData.fiador.direccionCasa,
+                direccionTrabajo: formData.fiador.direccionTrabajo
+            }
+        };
+
+        navigate('/', {
+            state: {
+                openForm: true,
+                cartera: cartera,
+                clientData: clientData
+            }
+        });
+    };
+
     return (
         <div className="max-w-4xl mx-auto bg-white shadow-lg rounded-lg overflow-hidden">
             <div className="px-8 py-6 border-b border-gray-200 flex justify-between items-center bg-gray-50 no-print">
@@ -67,6 +96,14 @@ const Visitas = () => {
                     >
                         <Printer size={18} />
                         Imprimir
+                    </button>
+                    <button
+                        type="button"
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                        onClick={() => setShowCarteraModal(true)}
+                    >
+                        <UserPlus size={18} />
+                        Añadir a Clientes
                     </button>
                     <button
                         onClick={handleSubmit}
@@ -340,6 +377,55 @@ const Visitas = () => {
                     ></textarea>
                 </div>
             </form>
+
+            {/* Modal de Selección de Cartera */}
+            {showCarteraModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 no-print">
+                    <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden">
+                        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                            <h3 className="text-lg font-bold text-gray-800">Seleccionar Cartera</h3>
+                            <button
+                                onClick={() => setShowCarteraModal(false)}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            <p className="text-gray-600 mb-6">
+                                Selecciona la cartera a la que deseas agregar este cliente:
+                            </p>
+                            <div className="grid grid-cols-1 gap-4">
+                                <button
+                                    onClick={() => handleAddToClients('K1')}
+                                    className="flex items-center p-4 border-2 border-blue-100 bg-blue-50 rounded-lg hover:bg-blue-100 hover:border-blue-300 transition-all group"
+                                >
+                                    <div className="bg-blue-200 p-3 rounded-full group-hover:bg-blue-300 transition-colors">
+                                        <Briefcase className="h-6 w-6 text-blue-700" />
+                                    </div>
+                                    <div className="ml-4 text-left">
+                                        <h4 className="font-bold text-blue-900">Cartera K1</h4>
+                                        <p className="text-sm text-blue-700">Cartera Principal</p>
+                                    </div>
+                                </button>
+
+                                <button
+                                    onClick={() => handleAddToClients('K2')}
+                                    className="flex items-center p-4 border-2 border-green-100 bg-green-50 rounded-lg hover:bg-green-100 hover:border-green-300 transition-all group"
+                                >
+                                    <div className="bg-green-200 p-3 rounded-full group-hover:bg-green-300 transition-colors">
+                                        <Briefcase className="h-6 w-6 text-green-700" />
+                                    </div>
+                                    <div className="ml-4 text-left">
+                                        <h4 className="font-bold text-green-900">Cartera K2</h4>
+                                        <p className="text-sm text-green-700">Cartera Secundaria</p>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

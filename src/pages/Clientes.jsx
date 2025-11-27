@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Plus, Search, Users as UsersIcon, Briefcase, Filter } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -7,12 +8,14 @@ import ClienteForm from '../components/Clientes/ClienteForm';
 import { determinarEstadoCredito } from '../utils/creditCalculations';
 
 const Clientes = () => {
+  const location = useLocation();
   const { clientes, agregarCliente, loading } = useApp();
   const { hasPermission } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [formCartera, setFormCartera] = useState(null);
   const [formTipoPago, setFormTipoPago] = useState(null);
   const [formPosicion, setFormPosicion] = useState(null);
+  const [initialData, setInitialData] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroCartera, setFiltroCartera] = useState('todas'); // 'todas', 'K1', 'K2'
   const [filtroTipoPago, setFiltroTipoPago] = useState('todos'); // 'todos', 'diario', 'semanal', 'quincenal', 'mensual'
@@ -36,6 +39,17 @@ const Clientes = () => {
     }
   }, [filtroCartera, tiposPagoDisponibles, filtroTipoPago]);
 
+  // Manejar datos iniciales desde navegación (ej. desde Visitas)
+  useEffect(() => {
+    if (location.state?.openForm) {
+      setFormCartera(location.state.cartera);
+      setInitialData(location.state.clientData);
+      setShowForm(true);
+      // Limpiar el estado de la navegación para evitar que se reabra al refrescar
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
+
   const handleAgregarCliente = (clienteData) => {
     // Si hay posición predefinida, agregarla
     if (formPosicion) {
@@ -49,7 +63,10 @@ const Clientes = () => {
     setShowForm(false);
     setFormCartera(null);
     setFormTipoPago(null);
+    setFormCartera(null);
+    setFormTipoPago(null);
     setFormPosicion(null);
+    setInitialData(null);
   };
 
   const handleAgregarDesdeCard = (cartera, tipoPago, posicion) => {
@@ -87,10 +104,10 @@ const Clientes = () => {
       const cartera = cliente.cartera || 'K1';
       const tiposActivos = getTiposPagoActivos(cliente);
       // Si tiene créditos activos, usar esos tipos; si no, usar tipoPagoEsperado
-      const tipos = tiposActivos.length > 0 
-        ? tiposActivos 
+      const tipos = tiposActivos.length > 0
+        ? tiposActivos
         : (cliente.tipoPagoEsperado ? [cliente.tipoPagoEsperado] : []);
-      
+
       tipos.forEach((t) => {
         if (base[cartera] && typeof base[cartera][t] === 'number') {
           base[cartera][t] += 1;
@@ -103,7 +120,7 @@ const Clientes = () => {
   // Generar todas las cards posibles según capacidades
   const todasLasCards = useMemo(() => {
     const cards = [];
-    
+
     // Generar cards para K1
     Object.entries(CAPACIDADES.K1).forEach(([tipo, capacidad]) => {
       for (let i = 1; i <= capacidad; i++) {
@@ -115,7 +132,7 @@ const Clientes = () => {
         });
       }
     });
-    
+
     // Generar cards para K2
     Object.entries(CAPACIDADES.K2).forEach(([tipo, capacidad]) => {
       for (let i = 1; i <= capacidad; i++) {
@@ -127,38 +144,38 @@ const Clientes = () => {
         });
       }
     });
-    
+
     // Asignar clientes a las cards correspondientes
     clientes.forEach(cliente => {
       const carteraCliente = cliente.cartera || 'K1';
       const tiposActivos = getTiposPagoActivos(cliente);
-      
+
       // Si el cliente tiene créditos activos, usar esos tipos
       // Si no tiene créditos pero tiene tipoPagoEsperado, usar ese
-      const tiposAAsignar = tiposActivos.length > 0 
-        ? tiposActivos 
+      const tiposAAsignar = tiposActivos.length > 0
+        ? tiposActivos
         : (cliente.tipoPagoEsperado ? [cliente.tipoPagoEsperado] : []);
-      
+
       // Si no hay tipos para asignar, no hacer nada
       if (tiposAAsignar.length === 0) return;
-      
+
       tiposAAsignar.forEach(tipo => {
         // Buscar la card correspondiente
         // Convertir posiciones a número para comparación correcta
         const posicionCliente = Number(cliente.posicion);
         const cardIndex = cards.findIndex(c => {
-          return c.cartera === carteraCliente && 
-            c.tipoPago === tipo && 
+          return c.cartera === carteraCliente &&
+            c.tipoPago === tipo &&
             Number(c.posicion) === posicionCliente &&
             c.cliente === null;
         });
-        
+
         if (cardIndex !== -1) {
           cards[cardIndex].cliente = cliente;
         }
       });
     });
-    
+
     return cards;
   }, [clientes]);
 
@@ -273,22 +290,20 @@ const Clientes = () => {
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setFiltroCartera('todas')}
-            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${
-              filtroCartera === 'todas'
+            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${filtroCartera === 'todas'
                 ? 'bg-purple-100 text-purple-800 border-purple-300 ring-2 ring-purple-400'
                 : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
-            }`}
+              }`}
           >
             Todas ({clientes.length})
           </button>
 
           <button
             onClick={() => setFiltroCartera('K1')}
-            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${
-              filtroCartera === 'K1'
+            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K1'
                 ? 'bg-blue-100 text-blue-800 border-blue-300 ring-2 ring-blue-400'
                 : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-            }`}
+              }`}
           >
             <Briefcase className="h-4 w-4" />
             Cartera K1 ({clientesK1})
@@ -296,11 +311,10 @@ const Clientes = () => {
 
           <button
             onClick={() => setFiltroCartera('K2')}
-            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${
-              filtroCartera === 'K2'
+            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K2'
                 ? 'bg-green-100 text-green-800 border-green-300 ring-2 ring-green-400'
                 : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-            }`}
+              }`}
           >
             <Briefcase className="h-4 w-4" />
             Cartera K2 ({clientesK2})
@@ -319,11 +333,10 @@ const Clientes = () => {
             <button
               key={tipo}
               onClick={() => setFiltroTipoPago(tipo)}
-              className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${
-                filtroTipoPago === tipo
+              className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${filtroTipoPago === tipo
                   ? 'bg-purple-100 text-purple-800 border-purple-300 ring-2 ring-purple-400'
                   : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-              }`}
+                }`}
             >
               {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
             </button>
@@ -377,10 +390,14 @@ const Clientes = () => {
             setShowForm(false);
             setFormCartera(null);
             setFormTipoPago(null);
+            setFormCartera(null);
+            setFormTipoPago(null);
             setFormPosicion(null);
+            setInitialData(null);
           }}
           carteraPredefinida={formCartera}
           tipoPagoPredefinido={formTipoPago}
+          initialData={initialData}
         />
       )}
     </div>

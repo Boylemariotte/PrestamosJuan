@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import { BARRIOS_TULUA } from '../../constants/barrios';
 
-const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoPredefinido }) => {
+const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoPredefinido, initialData }) => {
   const [formData, setFormData] = useState({
     nombre: '',
     documento: '',
@@ -29,7 +29,7 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
     if (cliente) {
       const barrioCliente = cliente.barrio || '';
       const esOtroBarrio = !BARRIOS_TULUA.includes(barrioCliente);
-      
+
       setFormData({
         nombre: cliente.nombre || '',
         documento: cliente.documento || '',
@@ -48,9 +48,17 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
           direccionTrabajo: cliente.fiador?.direccionTrabajo || ''
         }
       });
-      
+
       setUsarOtroBarrio(esOtroBarrio);
       setOtroBarrio(esOtroBarrio ? barrioCliente : '');
+    } else if (initialData) {
+      // Si vienen datos iniciales (ej. desde Visitas)
+      setFormData(prev => ({
+        ...prev,
+        ...initialData,
+        cartera: carteraPredefinida || initialData.cartera || 'K1',
+        tipoPago: tipoPagoPredefinido || ''
+      }));
     } else if (carteraPredefinida) {
       // Si es un nuevo cliente con cartera predefinida
       setFormData(prev => ({
@@ -59,11 +67,11 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
         tipoPago: tipoPagoPredefinido || ''
       }));
     }
-  }, [cliente, carteraPredefinida, tipoPagoPredefinido]);
+  }, [cliente, carteraPredefinida, tipoPagoPredefinido, initialData]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     if (name === 'barrio') {
       if (value === 'Otro') {
         setUsarOtroBarrio(true);
@@ -94,13 +102,13 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     // Validar que si se seleccionó "Otro", se haya ingresado un nombre de barrio
     if (usarOtroBarrio && !otroBarrio.trim()) {
       alert('Por favor ingrese el nombre del barrio');
       return;
     }
-    
+
     // Incluir tipoPagoEsperado si viene predefinido
     const dataToSubmit = {
       ...formData,
@@ -219,7 +227,7 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                     <ChevronDown className="h-5 w-5 text-gray-400" />
                   </div>
                 </div>
-                
+
                 {usarOtroBarrio && (
                   <div className="mt-3">
                     <label className="label">Nombre del barrio *</label>
@@ -259,9 +267,8 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                 {carteraPredefinida ? (
                   <div className="p-4 border-2 rounded-lg bg-gray-50 border-gray-300">
                     <div className="flex items-center">
-                      <div className={`flex items-center p-4 border-2 rounded-lg ${
-                        formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' : 'border-green-500 bg-green-50'
-                      }`}>
+                      <div className={`flex items-center p-4 border-2 rounded-lg ${formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' : 'border-green-500 bg-green-50'
+                        }`}>
                         <div className="ml-3">
                           <span className="font-semibold text-gray-900">Cartera {formData.cartera}</span>
                           <p className="text-sm text-gray-500">
@@ -274,9 +281,8 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-4">
-                    <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${
-                      formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
-                    }`}>
+                    <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
+                      }`}>
                       <input
                         type="radio"
                         name="cartera"
@@ -291,9 +297,8 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                       </div>
                     </label>
 
-                    <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${
-                      formData.cartera === 'K2' ? 'border-green-500 bg-green-50' : 'border-gray-300'
-                    }`}>
+                    <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${formData.cartera === 'K2' ? 'border-green-500 bg-green-50' : 'border-gray-300'
+                      }`}>
                       <input
                         type="radio"
                         name="cartera"
