@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { Calendar, DollarSign, Users, Wallet, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, DollarSign, Users, Wallet, ChevronLeft, ChevronRight, CheckCircle, Clock, MapPin } from 'lucide-react';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { format, parseISO, startOfDay, addDays, subDays, isToday } from 'date-fns';
@@ -17,6 +17,52 @@ const DiaDeCobro = () => {
   // Estado para la fecha seleccionada
   const [fechaSeleccionada, setFechaSeleccionada] = useState(hoy);
   const fechaSeleccionadaStr = format(fechaSeleccionada, 'yyyy-MM-dd');
+
+  // Estado para visitas
+  const [visitas, setVisitas] = useState([]);
+
+  // Cargar visitas desde localStorage
+  useEffect(() => {
+    const cargarVisitas = () => {
+      const savedVisitas = localStorage.getItem('visitas');
+      if (savedVisitas) {
+        setVisitas(JSON.parse(savedVisitas));
+      }
+    };
+
+    cargarVisitas();
+
+    // Escuchar cambios en localStorage (opcional, por si se abre en otra pestaña)
+    window.addEventListener('storage', cargarVisitas);
+    return () => window.removeEventListener('storage', cargarVisitas);
+  }, []);
+
+  // Filtrar visitas para el día seleccionado
+  const visitasDelDia = useMemo(() => {
+    return visitas.filter(visita => {
+      if (visita.completada) return false; // No mostrar completadas
+
+      const fechaVisita = visita.fechaVisita;
+      // Mostrar si es para hoy
+      if (fechaVisita === fechaSeleccionadaStr) return true;
+
+      // Mostrar si es antigua y no se ha completado (reprogramación automática)
+      if (fechaVisita < fechaSeleccionadaStr) return true;
+
+      return false;
+    });
+  }, [visitas, fechaSeleccionadaStr]);
+
+  const handleCompletarVisita = (id) => {
+    if (window.confirm('¿Marcar visita como completada?')) {
+      const nuevasVisitas = visitas.map(v =>
+        v.id === id ? { ...v, completada: true } : v
+      );
+      setVisitas(nuevasVisitas);
+      localStorage.setItem('visitas', JSON.stringify(nuevasVisitas));
+      toast.success('Visita marcada como completada');
+    }
+  };
 
   // Obtener todos los cobros del día agrupados por cartera
   const cobrosDelDia = useMemo(() => {
@@ -37,32 +83,32 @@ const DiaDeCobro = () => {
 
         // Aplicar abonos automáticamente para obtener cuotas actualizadas con abonoAplicado y multasCubiertas
         const { cuotasActualizadas } = aplicarAbonosAutomaticamente(credito);
-        
+
         // Cuotas pendientes programadas para la fecha seleccionada
         // O cuotas con multas pendientes (sin importar la fecha)
         const cuotasDelDia = cuotasActualizadas.filter((cuota, index) => {
           const cuotaOriginal = credito.cuotas[index];
           if (cuotaOriginal.pagado) return false;
-          
+
           // Calcular el valor pendiente de la cuota (ya incluye abonos aplicados)
           const abonoAplicado = cuota.abonoAplicado || 0;
           const valorCuotaPendiente = credito.valorCuota - abonoAplicado;
-          
+
           // Calcular multas pendientes (ya incluye multas cubiertas)
           const totalMultas = calcularTotalMultasCuota(cuota);
           const multasCubiertas = cuota.multasCubiertas || 0;
           const multasPendientes = totalMultas - multasCubiertas;
-          
+
           // Si la cuota tiene saldo pendiente (valor de cuota o multas)
           const tieneSaldoPendiente = valorCuotaPendiente > 0 || multasPendientes > 0;
-          
+
           // Incluir si es la fecha programada
           if (cuotaOriginal.fechaProgramada === fechaSeleccionadaStr) return tieneSaldoPendiente;
-          
+
           // Incluir si tiene saldo pendiente y la fecha programada ya pasó
           const fechaProgramada = new Date(cuotaOriginal.fechaProgramada);
           const fechaSeleccionadaDate = new Date(fechaSeleccionadaStr);
-          
+
           return tieneSaldoPendiente && fechaProgramada <= fechaSeleccionadaDate;
         });
 
@@ -94,48 +140,48 @@ const DiaDeCobro = () => {
         if (!tieneAbonoGeneralHoy) {
           // Ordenar cuotas pendientes por número
           const cuotasOrdenadas = [...cuotasDelDia].sort((a, b) => a.nroCuota - b.nroCuota);
-          
+
           cuotasOrdenadas.forEach((cuota, index) => {
-          // Calcular multas de la cuota
-          const totalMultas = calcularTotalMultasCuota(cuota);
-          const multasCubiertas = cuota.multasCubiertas || 0;
-          const multasPendientes = totalMultas - multasCubiertas;
-          
-          // Calcular abonos aplicados a la cuota (después de cubrir multas)
-          const abonoAplicado = cuota.abonoAplicado || 0;
-          
-          // El valor pendiente de la cuota es: valorCuota - abonoAplicado
-          const valorCuotaPendiente = credito.valorCuota - abonoAplicado;
-          
-          // Calcular el valor real a cobrar: multas pendientes + cuota pendiente
-          const valorACobrar = multasPendientes + valorCuotaPendiente;
+            // Calcular multas de la cuota
+            const totalMultas = calcularTotalMultasCuota(cuota);
+            const multasCubiertas = cuota.multasCubiertas || 0;
+            const multasPendientes = totalMultas - multasCubiertas;
 
-          const cobro = {
-            clienteId: cliente.id,
-            clienteNombre: cliente.nombre,
-            clienteTelefono: cliente.telefono,
-            clienteDireccion: cliente.direccion,
-            creditoId: credito.id,
-            creditoMonto: credito.monto,
-            creditoTipo: credito.tipo,
-            nroCuota: cuota.nroCuota,
-            valorCuota: valorACobrar,
-            valorCuotaOriginal: credito.valorCuota,
-            totalCuotas: credito.numCuotas,
-            cartera: cliente.cartera,
-            tieneSaldoPendiente: valorACobrar > credito.valorCuota,
-            totalMultas: multasPendientes,
-            multasCubiertas: multasCubiertas,
-            abonoAplicado: abonoAplicado,
-            valorCuotaPendiente: valorCuotaPendiente
-          };
+            // Calcular abonos aplicados a la cuota (después de cubrir multas)
+            const abonoAplicado = cuota.abonoAplicado || 0;
 
-          if (cliente.cartera === 'K1') {
-            cobrosK1.push(cobro);
-          } else {
-            cobrosK2.push(cobro);
-          }
-        });
+            // El valor pendiente de la cuota es: valorCuota - abonoAplicado
+            const valorCuotaPendiente = credito.valorCuota - abonoAplicado;
+
+            // Calcular el valor real a cobrar: multas pendientes + cuota pendiente
+            const valorACobrar = multasPendientes + valorCuotaPendiente;
+
+            const cobro = {
+              clienteId: cliente.id,
+              clienteNombre: cliente.nombre,
+              clienteTelefono: cliente.telefono,
+              clienteDireccion: cliente.direccion,
+              creditoId: credito.id,
+              creditoMonto: credito.monto,
+              creditoTipo: credito.tipo,
+              nroCuota: cuota.nroCuota,
+              valorCuota: valorACobrar,
+              valorCuotaOriginal: credito.valorCuota,
+              totalCuotas: credito.numCuotas,
+              cartera: cliente.cartera,
+              tieneSaldoPendiente: valorACobrar > credito.valorCuota,
+              totalMultas: multasPendientes,
+              multasCubiertas: multasCubiertas,
+              abonoAplicado: abonoAplicado,
+              valorCuotaPendiente: valorCuotaPendiente
+            };
+
+            if (cliente.cartera === 'K1') {
+              cobrosK1.push(cobro);
+            } else {
+              cobrosK2.push(cobro);
+            }
+          });
         }
 
         // Agregar cuotas cobradas hoy
@@ -158,26 +204,26 @@ const DiaDeCobro = () => {
         cuotasAbonadas.forEach(cuota => {
           const abonosDelDia = cuota.abonosCuota.filter(a => a.fecha === fechaSeleccionadaStr);
           const totalAbonadoHoy = abonosDelDia.reduce((sum, a) => sum + a.valor, 0);
-          
+
           // Encontrar la cuota actualizada correspondiente
           const indexCuota = credito.cuotas.findIndex(c => c.nroCuota === cuota.nroCuota);
           const cuotaActualizada = cuotasActualizadas[indexCuota];
-          
+
           // Usar los valores de la cuota actualizada
           const abonoAplicado = cuotaActualizada.abonoAplicado || 0;
           const totalMultas = calcularTotalMultasCuota(cuotaActualizada);
           const multasCubiertas = cuotaActualizada.multasCubiertas || 0;
           const multasPendientes = totalMultas - multasCubiertas;
-          
+
           // El saldo pendiente de la cuota
           const cuotaPendiente = credito.valorCuota - abonoAplicado;
           const saldoPendiente = cuotaPendiente + multasPendientes;
-          
+
           // Calcular la distribución del abono de hoy (similar a abonos generales)
           // Calcular el estado ANTES del abono de hoy
           const abonosCuotaAntesDeHoy = cuota.abonosCuota.filter(a => a.fecha !== fechaSeleccionadaStr);
           const totalAbonadoAntesDeHoy = abonosCuotaAntesDeHoy.reduce((sum, a) => sum + a.valor, 0);
-          
+
           // Simular aplicar abonos sin el abono de hoy
           const creditoSinAbonoHoy = {
             ...credito,
@@ -191,17 +237,17 @@ const DiaDeCobro = () => {
               return c;
             })
           };
-          
+
           // Nota: Los abonos a cuotas específicas no se procesan por aplicarAbonosAutomaticamente
           // Se aplican directamente a la cuota, así que calculamos manualmente
           let abonoHoyAMultas = 0;
           let abonoHoyACuota = 0;
-          
+
           // Calcular multas antes del abono de hoy
           const multasAntesDeHoy = totalMultas; // Las multas no cambian con abonos
           const multasCubiertasAntesDeHoy = Math.max(0, multasCubiertas - totalAbonadoHoy);
           const multasPendientesAntesDeHoy = multasAntesDeHoy - multasCubiertasAntesDeHoy;
-          
+
           if (multasPendientesAntesDeHoy > 0) {
             abonoHoyAMultas = Math.min(totalAbonadoHoy, multasPendientesAntesDeHoy);
             abonoHoyACuota = totalAbonadoHoy - abonoHoyAMultas;
@@ -240,36 +286,36 @@ const DiaDeCobro = () => {
         if (abonosGeneralesDelDia.length > 0) {
           const totalAbonadoHoy = abonosGeneralesDelDia.reduce((sum, a) => sum + a.valor, 0);
           const totalAbonosCredito = (credito.abonos || []).reduce((sum, a) => sum + a.valor, 0);
-          
+
           // Encontrar la primera cuota pendiente (usando cuotas actualizadas)
           const indexPrimeraCuotaPendiente = credito.cuotas.findIndex(c => !c.pagado);
-          
+
           let multasPendientes = 0;
           let multasCubiertasTotal = 0;
           let nroCuotaPendiente = 'General';
           let abonoHoyAMultas = 0;
           let abonoHoyACuota = 0;
           let cuotaPendiente = credito.valorCuota;
-          
+
           if (indexPrimeraCuotaPendiente !== -1) {
             const cuotaActualizada = cuotasActualizadas[indexPrimeraCuotaPendiente];
             const cuotaOriginal = credito.cuotas[indexPrimeraCuotaPendiente];
-            
+
             // Usar los valores calculados por aplicarAbonosAutomaticamente
             const totalMultas = calcularTotalMultasCuota(cuotaActualizada);
             multasCubiertasTotal = cuotaActualizada.multasCubiertas || 0;
             multasPendientes = totalMultas - multasCubiertasTotal;
             nroCuotaPendiente = cuotaOriginal.nroCuota;
-            
+
             // Calcular el valor pendiente de la cuota usando abonoAplicado
             const abonoAplicado = cuotaActualizada.abonoAplicado || 0;
             cuotaPendiente = credito.valorCuota - abonoAplicado;
-            
+
             // Calcular cuánto del abono de HOY se aplicó a multas y cuánto a la cuota
             // Necesitamos calcular esto basándonos en el estado ANTES del abono de hoy
             // Para simplificar, asumimos que el abono de hoy sigue la misma lógica:
             // primero multas, luego cuota
-            
+
             // Calcular multas y abonos ANTES del abono de hoy
             const totalAbonosAntesDeHoy = totalAbonosCredito - totalAbonadoHoy;
             const { cuotasActualizadas: cuotasAntesDeHoy } = aplicarAbonosAutomaticamente({
@@ -279,12 +325,12 @@ const DiaDeCobro = () => {
                 return fechaAbono !== fechaSeleccionadaStr;
               })
             });
-            
+
             const cuotaAntesDeHoy = cuotasAntesDeHoy[indexPrimeraCuotaPendiente];
             const multasAntesDeHoy = calcularTotalMultasCuota(cuotaAntesDeHoy);
             const multasCubiertasAntesDeHoy = cuotaAntesDeHoy.multasCubiertas || 0;
             const multasPendientesAntesDeHoy = multasAntesDeHoy - multasCubiertasAntesDeHoy;
-            
+
             // El abono de hoy primero cubre multas pendientes
             if (multasPendientesAntesDeHoy > 0) {
               abonoHoyAMultas = Math.min(totalAbonadoHoy, multasPendientesAntesDeHoy);
@@ -367,7 +413,7 @@ const DiaDeCobro = () => {
     const tieneMultas = cobro.totalMultas && cobro.totalMultas > 0;
     const tieneAbonos = cobro.abonoAplicado > 0 || cobro.multasCubiertas > 0;
     const tieneSaldoOMultas = cobro.tieneSaldoPendiente || tieneMultas;
-    
+
     // Determinar si es un caso simple (sin abonos previos ni multas)
     const esCasoSimple = !tieneAbonos && !tieneMultas;
 
@@ -379,13 +425,12 @@ const DiaDeCobro = () => {
         setCreditoSeleccionado(credito);
       }
     };
-    
+
     return (
-      <div 
+      <div
         onClick={handleClick}
-        className={`border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer ${
-          tieneSaldoOMultas ? 'bg-orange-50 border-orange-300' : 'bg-white border-gray-200'
-        }`}
+        className={`border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer ${tieneSaldoOMultas ? 'bg-orange-50 border-orange-300' : 'bg-white border-gray-200'
+          }`}
       >
         <div className="flex items-start justify-between">
           <div className="flex-1">
@@ -402,26 +447,26 @@ const DiaDeCobro = () => {
                 </span>
               )}
             </div>
-            
+
             {/* TOTAL A PAGAR - Destacado al inicio */}
             <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg px-4 py-3 mb-3 shadow-md">
               <p className="text-xs font-medium opacity-90">DEBE PAGAR</p>
               <p className="text-2xl font-bold">{formatearMoneda(cobro.valorCuota)}</p>
             </div>
-            
+
             {/* Desglose del pago */}
             {!esCasoSimple && (
               <div className="space-y-1 text-sm text-gray-600">
                 <div className="pt-2 border-t-2 border-orange-300">
                   <p className="text-xs font-bold text-gray-700 mb-2">📊 Desglose:</p>
-                  
+
                   {/* Cuota original */}
                   <div className="bg-blue-50 border-l-4 border-blue-400 px-3 py-2 mb-1">
                     <p className="text-sm font-semibold text-blue-900">
                       Cuota #{cobro.nroCuota}: {formatearMoneda(cobro.valorCuotaOriginal)}
                     </p>
                   </div>
-                  
+
                   {/* Multas (si existen) */}
                   {(cobro.totalMultas > 0 || cobro.multasCubiertas > 0) && (
                     <div className="bg-red-50 border-l-4 border-red-400 px-3 py-2 mb-1">
@@ -430,7 +475,7 @@ const DiaDeCobro = () => {
                       </p>
                     </div>
                   )}
-                  
+
                   {/* Total a pagar */}
                   {(cobro.totalMultas > 0 || cobro.multasCubiertas > 0) && (
                     <div className="bg-purple-50 border-l-4 border-purple-400 px-3 py-2 mb-2">
@@ -439,7 +484,7 @@ const DiaDeCobro = () => {
                       </p>
                     </div>
                   )}
-                  
+
                   {/* Abonos aplicados (si existen) */}
                   {tieneAbonos && (
                     <div className="bg-green-50 border-l-4 border-green-400 px-3 py-2 mb-1">
@@ -458,7 +503,7 @@ const DiaDeCobro = () => {
                       )}
                     </div>
                   )}
-                  
+
                   {/* Total pendiente */}
                   <div className="bg-orange-100 border-l-4 border-orange-500 px-3 py-2 mt-2">
                     <p className="text-sm font-bold text-orange-900">
@@ -475,7 +520,7 @@ const DiaDeCobro = () => {
   };
 
   const ClientePagadoCard = ({ cobrado }) => (
-    <div 
+    <div
       onClick={() => navigate(`/cliente/${cobrado.clienteId}`)}
       className="bg-green-50 border border-green-200 rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between">
@@ -501,9 +546,9 @@ const DiaDeCobro = () => {
     const tieneMultas = abonado.multasPendientes && abonado.multasPendientes > 0;
     const multasPagadasCompleto = abonado.abonoHoyAMultas > 0 && abonado.multasPendientes === 0;
     const saldoTotal = abonado.cuotaPendiente + (abonado.multasPendientes || 0);
-    
+
     return (
-      <div 
+      <div
         onClick={() => navigate(`/cliente/${abonado.clienteId}`)}
         className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow">
         <div className="flex items-start justify-between">
@@ -519,12 +564,12 @@ const DiaDeCobro = () => {
                 </span>
               )}
             </div>
-            
+
             {/* SECCIÓN 1: Lo que abonó HOY */}
             <div className="bg-blue-100 border-2 border-blue-400 rounded-lg p-3 mb-3">
               <p className="text-xs font-bold text-blue-900 mb-2">💰 ABONÓ HOY:</p>
               <p className="text-2xl font-bold text-blue-900 mb-2">{formatearMoneda(abonado.totalAbonadoHoy)}</p>
-              
+
               <div className="space-y-1">
                 {abonado.abonoHoyAMultas > 0 && (
                   <div className="flex items-center gap-2">
@@ -552,7 +597,7 @@ const DiaDeCobro = () => {
                 )}
               </div>
             </div>
-            
+
             {/* SECCIÓN 2: Saldo después del abono */}
             <div className="bg-white border border-gray-200 rounded-lg p-3">
               <div className="flex items-center gap-2">
@@ -563,7 +608,7 @@ const DiaDeCobro = () => {
                 <p className="text-xs font-medium text-gray-600">Cuota:</p>
                 <p className="text-sm text-gray-900">#{abonado.nroCuota}</p>
               </div>
-              
+
               <div className="mt-3 pt-3 border-t border-gray-200">
                 <p className="text-xs font-bold text-gray-700 mb-2">⚠️ AÚN DEBE:</p>
                 <div className="bg-orange-100 border-2 border-orange-400 rounded-lg px-4 py-3">
@@ -597,7 +642,7 @@ const DiaDeCobro = () => {
           <p className="text-2xl font-bold text-white">{formatearMoneda(total)}</p>
         </div>
       </div>
-      
+
       <div className="p-6">
         {cobros.length === 0 ? (
           <div className="text-center py-12">
@@ -677,7 +722,7 @@ const DiaDeCobro = () => {
               <Calendar className="h-8 w-8" />
               <h1 className="text-3xl font-bold">Día de Cobro</h1>
             </div>
-            
+
             {/* Selector de Fecha */}
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -687,19 +732,18 @@ const DiaDeCobro = () => {
                 <ChevronLeft className="h-4 w-4" />
                 <span className="text-sm font-medium">Ayer</span>
               </button>
-              
+
               <button
                 onClick={irHoy}
                 disabled={esHoy}
-                className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
-                  esHoy 
-                    ? 'bg-blue-500 text-white cursor-default' 
-                    : 'bg-white/10 hover:bg-white/20'
-                }`}
+                className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${esHoy
+                  ? 'bg-blue-500 text-white cursor-default'
+                  : 'bg-white/10 hover:bg-white/20'
+                  }`}
               >
                 Hoy
               </button>
-              
+
               <button
                 onClick={irMañana}
                 className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
@@ -707,7 +751,7 @@ const DiaDeCobro = () => {
                 <span className="text-sm font-medium">Mañana</span>
                 <ChevronRight className="h-4 w-4" />
               </button>
-              
+
               <div className="flex items-center gap-2 bg-white/10 rounded-lg px-4 py-2">
                 <Calendar className="h-4 w-4" />
                 <input
@@ -718,12 +762,12 @@ const DiaDeCobro = () => {
                 />
               </div>
             </div>
-            
+
             <p className="text-slate-200 text-lg mt-3">
               {format(fechaSeleccionada, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
             </p>
           </div>
-          
+
           <div className="flex items-center gap-2">
             <Users className="h-6 w-6 text-slate-300" />
             <div className="text-right">
@@ -732,7 +776,7 @@ const DiaDeCobro = () => {
             </div>
           </div>
         </div>
-        
+
         {/* Totales */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
@@ -742,7 +786,7 @@ const DiaDeCobro = () => {
               Para el día de {esHoy ? 'hoy' : 'cobro'}
             </p>
           </div>
-          
+
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
             <p className="text-sm text-slate-300 mb-1">✅ Total Recogido</p>
             <p className="text-3xl font-bold text-green-300">{formatearMoneda(totalCobradoGeneral + totalAbonadoGeneral)}</p>
@@ -750,7 +794,7 @@ const DiaDeCobro = () => {
               {cobrosDelDia.cobradosK1.length + cobrosDelDia.cobradosK2.length} cuotas + {cobrosDelDia.abonadosK1.length + cobrosDelDia.abonadosK2.length} abonos
             </p>
           </div>
-          
+
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
             <p className="text-sm text-slate-300 mb-1">⏳ Faltante por Cobrar</p>
             <p className="text-3xl font-bold text-orange-300">{formatearMoneda(totalPendienteGeneral)}</p>
@@ -761,6 +805,59 @@ const DiaDeCobro = () => {
         </div>
 
       </div>
+
+      {/* Sección de Visitas Programadas */}
+      {visitasDelDia.length > 0 && (
+        <div className="bg-white rounded-xl shadow-md overflow-hidden border border-purple-100">
+          <div className="bg-purple-600 px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Clock className="h-6 w-6 text-white" />
+              <h2 className="text-xl font-bold text-white">Visitas Programadas</h2>
+            </div>
+            <span className="bg-white/20 text-white px-3 py-1 rounded-full text-sm font-semibold">
+              {visitasDelDia.length} pendientes
+            </span>
+          </div>
+
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {visitasDelDia.map((visita, index) => (
+              <div key={visita.id} className="border border-purple-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-purple-50">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h3 className="font-bold text-gray-800">{visita.solicitante.nombre}</h3>
+                    <p className="text-xs text-purple-600 font-semibold">
+                      {visita.fechaVisita < fechaSeleccionadaStr ? '⚠️ Atrasada desde ' + visita.fechaVisita : '📅 Programada para hoy'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleCompletarVisita(visita.id)}
+                    className="p-2 bg-green-100 text-green-600 rounded-full hover:bg-green-200 transition-colors"
+                    title="Marcar como completada"
+                  >
+                    <CheckCircle size={20} />
+                  </button>
+                </div>
+
+                <div className="space-y-2 text-sm text-gray-600">
+                  <div className="flex items-start gap-2">
+                    <MapPin size={16} className="mt-0.5 text-gray-400" />
+                    <p>{visita.solicitante.direccionCasa} ({visita.solicitante.barrioCasa})</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <DollarSign size={16} className="text-gray-400" />
+                    <p>Solicita: <span className="font-semibold text-gray-900">${visita.valorPrestamo}</span></p>
+                  </div>
+                  {visita.observaciones && (
+                    <div className="mt-2 pt-2 border-t border-purple-200 text-xs italic">
+                      "{visita.observaciones}"
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Resumen por Cartera */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -778,7 +875,7 @@ const DiaDeCobro = () => {
               <Wallet className="h-8 w-8 text-blue-600" />
             </div>
           </div>
-          
+
           <div className="space-y-2 border-t border-blue-200 pt-3">
             <div className="flex justify-between items-center">
               <span className="text-sm text-blue-700">📊 Total esperado:</span>
@@ -813,7 +910,7 @@ const DiaDeCobro = () => {
               <Wallet className="h-8 w-8 text-green-600" />
             </div>
           </div>
-          
+
           <div className="space-y-2 border-t border-green-200 pt-3">
             <div className="flex justify-between items-center">
               <span className="text-sm text-green-700">📊 Total esperado:</span>
