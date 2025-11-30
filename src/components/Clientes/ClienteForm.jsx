@@ -24,6 +24,8 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
 
   const [showBarrios, setShowBarrios] = useState(false);
   const [barrioSearch, setBarrioSearch] = useState('');
+  const [usarOtroBarrio, setUsarOtroBarrio] = useState(false);
+  const [otroBarrio, setOtroBarrio] = useState('');
   const barriosRef = useRef(null);
 
   // Cerrar dropdown al hacer clic fuera
