@@ -6,10 +6,10 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import ClienteCard from '../components/Clientes/ClienteCard';
 import ClienteForm from '../components/Clientes/ClienteForm';
-import { 
-  determinarEstadoCredito, 
-  formatearMoneda, 
-  aplicarAbonosAutomaticamente, 
+import {
+  determinarEstadoCredito,
+  formatearMoneda,
+  aplicarAbonosAutomaticamente,
   calcularValorPendienteCuota,
   formatearFechaCorta
 } from '../utils/creditCalculations';
@@ -264,10 +264,14 @@ const Clientes = () => {
     if (!cliente || !cliente.creditos) return null;
     // Find credit matching the payment type of the card
     const credito = cliente.creditos.find(c => {
-        const estado = determinarEstadoCredito(c.cuotas, c);
-        return c.tipo === tipoPago && (estado === 'activo' || estado === 'mora');
+      const estado = determinarEstadoCredito(c.cuotas, c);
+      // Si el tipo de pago de la card es 'general', buscar cualquier crédito activo
+      if (tipoPago === 'general') {
+        return estado === 'activo' || estado === 'mora';
+      }
+      return c.tipo === tipoPago && (estado === 'activo' || estado === 'mora');
     });
-    
+
     if (!credito) return null;
 
     // Calculate additional fields
@@ -279,35 +283,35 @@ const Clientes = () => {
     let cuotasVencidasCount = 0;
 
     cuotasActualizadas.forEach(cuota => {
-        const valorPendiente = calcularValorPendienteCuota(credito.valorCuota, cuota);
-        saldoPendiente += valorPendiente;
+      const valorPendiente = calcularValorPendienteCuota(credito.valorCuota, cuota);
+      saldoPendiente += valorPendiente;
 
-        if (valorPendiente > 0) {
-             const fechaProgramada = startOfDay(parseISO(cuota.fechaProgramada));
-             if (isBefore(fechaProgramada, hoy)) {
-                 estaVencido = true;
-                 cuotasVencidasCount++;
-                 if (!primerCuotaVencidaFecha || isBefore(fechaProgramada, startOfDay(parseISO(primerCuotaVencidaFecha)))) {
-                     primerCuotaVencidaFecha = cuota.fechaProgramada;
-                 }
-             }
+      if (valorPendiente > 0) {
+        const fechaProgramada = startOfDay(parseISO(cuota.fechaProgramada));
+        if (isBefore(fechaProgramada, hoy)) {
+          estaVencido = true;
+          cuotasVencidasCount++;
+          if (!primerCuotaVencidaFecha || isBefore(fechaProgramada, startOfDay(parseISO(primerCuotaVencidaFecha)))) {
+            primerCuotaVencidaFecha = cuota.fechaProgramada;
+          }
         }
+      }
     });
 
     return {
-        ...credito,
-        saldoPendiente,
-        estaVencido,
-        fechaVencimiento: primerCuotaVencidaFecha,
-        cuotasVencidasCount
+      ...credito,
+      saldoPendiente,
+      estaVencido,
+      fechaVencimiento: primerCuotaVencidaFecha,
+      cuotasVencidasCount
     };
   };
 
   const generarRefCredito = (cliente, credito) => {
-      if (!credito) return '-';
-      // Si el crédito tiene ID, usarlo, sino generar uno basado en el cliente
-      const idBase = credito.id || cliente.id?.slice(0, 8) || '000000';
-      return `PRD${idBase.toString().padStart(10, '0')}`;
+    if (!credito) return '-';
+    // Si el crédito tiene ID, usarlo, sino generar uno basado en el cliente
+    const idBase = credito.id || cliente.id?.slice(0, 8) || '000000';
+    return `PRD${idBase.toString().padStart(10, '0')}`;
   };
 
   if (loading) {
@@ -510,13 +514,13 @@ const Clientes = () => {
               {cardsFiltradas.map((card, index) => {
                 const creditoInfo = getCreditoInfo(card.cliente, card.tipoPago);
                 const esVacia = !card.cliente;
-                
+
                 return (
                   <tr key={`${card.cartera}-${card.tipoPago}-${card.posicion}-${index}`} className={esVacia ? "bg-gray-50" : "hover:bg-gray-50"}>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                       <span className="font-black text-base text-black">
-                           #{card.posicion}
-                       </span>
+                      <span className="font-black text-base text-black">
+                        #{card.posicion}
+                      </span>
                     </td>
                     <td className="px-4 py-4 text-sm text-gray-500">
                       {esVacia ? (
@@ -526,43 +530,43 @@ const Clientes = () => {
                           <span className="font-bold text-gray-900">{card.cliente.nombre}</span>
                           <span className="text-xs text-gray-500">CC: {card.cliente.documento}</span>
                           <span className="flex items-center gap-1 text-gray-500 text-sm">
-                             <Phone className="h-3 w-3" /> {card.cliente.telefono}
+                            <Phone className="h-3 w-3" /> {card.cliente.telefono}
                           </span>
                           {card.cliente.barrio && (
                             <span className="text-xs flex items-center gap-1 text-gray-600 font-medium">
-                               <MapPin className="h-3 w-3" /> {card.cliente.barrio}
+                              <MapPin className="h-3 w-3" /> {card.cliente.barrio}
                             </span>
                           )}
                         </div>
                       )}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                       {creditoInfo ? formatearMoneda(creditoInfo.monto) : '-'}
+                      {creditoInfo ? formatearMoneda(creditoInfo.monto) : '-'}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-green-600">
                       {creditoInfo ? formatearMoneda(creditoInfo.valorCuota) : '-'}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                       {creditoInfo ? formatearMoneda(creditoInfo.saldoPendiente) : '-'}
+                      {creditoInfo ? formatearMoneda(creditoInfo.saldoPendiente) : '-'}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
                       {esVacia || !creditoInfo ? (
-                          '-'
+                        '-'
                       ) : creditoInfo.estaVencido ? (
                         <div className="text-red-600 font-bold">
-                            (SI) - <span className="text-xs">{formatearFechaCorta(creditoInfo.fechaVencimiento)}</span>
-                            {creditoInfo.cuotasVencidasCount > 1 && (
-                                <div className="text-xs text-red-500 mt-0.5 font-normal">
-                                    ({creditoInfo.cuotasVencidasCount} cuotas)
-                                </div>
-                            )}
+                          (SI) - <span className="text-xs">{formatearFechaCorta(creditoInfo.fechaVencimiento)}</span>
+                          {creditoInfo.cuotasVencidasCount > 1 && (
+                            <div className="text-xs text-red-500 mt-0.5 font-normal">
+                              ({creditoInfo.cuotasVencidasCount} cuotas)
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <span className="text-green-600 font-medium">Al día</span>
                       )}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
-                      {card.tipoPago}
+                      {creditoInfo?.tipo ? (creditoInfo.tipo.charAt(0).toUpperCase() + creditoInfo.tipo.slice(1)) : card.tipoPago}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                       {esVacia ? (

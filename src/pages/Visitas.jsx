@@ -1,17 +1,139 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Save, Printer, UserPlus, X, Briefcase, Trash2, PlusCircle } from 'lucide-react';
+import { Save, Printer, UserPlus, X, Briefcase, Trash2, PlusCircle, Search } from 'lucide-react';
+import { BARRIOS_TULUA } from '../constants/barrios';
 
 const Visitas = () => {
     const navigate = useNavigate();
     const [showCarteraModal, setShowCarteraModal] = useState(false);
     const [selectedVisit, setSelectedVisit] = useState(null);
+    
+    // Estados para manejar la selección de barrios
+    const [showBarriosSolicitanteCasa, setShowBarriosSolicitanteCasa] = useState(false);
+    const [barrioSearchSolicitanteCasa, setBarrioSearchSolicitanteCasa] = useState('');
+    const [showBarriosSolicitanteTrabajo, setShowBarriosSolicitanteTrabajo] = useState(false);
+    const [barrioSearchSolicitanteTrabajo, setBarrioSearchSolicitanteTrabajo] = useState('');
+    const [showBarriosFiadorCasa, setShowBarriosFiadorCasa] = useState(false);
+    const [barrioSearchFiadorCasa, setBarrioSearchFiadorCasa] = useState('');
+    const [showBarriosFiadorTrabajo, setShowBarriosFiadorTrabajo] = useState(false);
+    const [barrioSearchFiadorTrabajo, setBarrioSearchFiadorTrabajo] = useState('');
+    
+    const barriosRefSolicitanteCasa = useRef(null);
+    const barriosRefSolicitanteTrabajo = useRef(null);
+    const barriosRefFiadorCasa = useRef(null);
+    const barriosRefFiadorTrabajo = useRef(null);
 
     // Inicializar estado desde localStorage
     const [visitas, setVisitas] = useState(() => {
         const saved = localStorage.getItem('visitas');
         return saved ? JSON.parse(saved) : [];
     });
+    
+    // Cerrar dropdowns al hacer clic fuera
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (barriosRefSolicitanteCasa.current && !barriosRefSolicitanteCasa.current.contains(event.target)) {
+                setShowBarriosSolicitanteCasa(false);
+            }
+            if (barriosRefSolicitanteTrabajo.current && !barriosRefSolicitanteTrabajo.current.contains(event.target)) {
+                setShowBarriosSolicitanteTrabajo(false);
+            }
+            if (barriosRefFiadorCasa.current && !barriosRefFiadorCasa.current.contains(event.target)) {
+                setShowBarriosFiadorCasa(false);
+            }
+            if (barriosRefFiadorTrabajo.current && !barriosRefFiadorTrabajo.current.contains(event.target)) {
+                setShowBarriosFiadorTrabajo(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
+
+    // Inicializar búsquedas de barrios con los valores existentes
+    useEffect(() => {
+        if (formData.solicitante.barrioCasa) {
+            setBarrioSearchSolicitanteCasa(formData.solicitante.barrioCasa);
+        }
+        if (formData.solicitante.barrioTrabajo) {
+            setBarrioSearchSolicitanteTrabajo(formData.solicitante.barrioTrabajo);
+        }
+        if (formData.fiador.barrioCasa) {
+            setBarrioSearchFiadorCasa(formData.fiador.barrioCasa);
+        }
+        if (formData.fiador.barrioTrabajo) {
+            setBarrioSearchFiadorTrabajo(formData.fiador.barrioTrabajo);
+        }
+    }, []);
+
+    // Función auxiliar para normalizar texto (quitar tildes y convertir a minúsculas)
+    const normalizeText = (text) => {
+        return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    };
+
+    // Filtrar barrios según el término de búsqueda
+    const filterBarrios = (searchTerm) => {
+        if (!searchTerm) return [];
+        return BARRIOS_TULUA.filter(barrio => 
+            normalizeText(barrio).includes(normalizeText(searchTerm))
+        );
+    };
+
+    // Manejador para cambios en la búsqueda de barrios
+    const handleBarrioSearchChange = (e, section, field) => {
+        const value = e.target.value;
+        
+        // Actualizar el estado de búsqueda correspondiente
+        if (section === 'solicitante' && field === 'barrioCasa') {
+            setBarrioSearchSolicitanteCasa(value);
+            setShowBarriosSolicitanteCasa(true);
+        } else if (section === 'solicitante' && field === 'barrioTrabajo') {
+            setBarrioSearchSolicitanteTrabajo(value);
+            setShowBarriosSolicitanteTrabajo(true);
+        } else if (section === 'fiador' && field === 'barrioCasa') {
+            setBarrioSearchFiadorCasa(value);
+            setShowBarriosFiadorCasa(true);
+        } else if (section === 'fiador' && field === 'barrioTrabajo') {
+            setBarrioSearchFiadorTrabajo(value);
+            setShowBarriosFiadorTrabajo(true);
+        }
+        
+        // Actualizar el formulario
+        handleChange({
+            target: {
+                name: field,
+                value: value
+            }
+        }, section);
+    };
+
+    // Manejador para seleccionar un barrio
+    const handleBarrioSelect = (barrio, section, field) => {
+        // Actualizar el formulario con el barrio seleccionado
+        handleChange({
+            target: {
+                name: field,
+                value: barrio
+            }
+        }, section);
+
+        // Actualizar el estado de búsqueda correspondiente
+        if (section === 'solicitante' && field === 'barrioCasa') {
+            setBarrioSearchSolicitanteCasa(barrio);
+            setShowBarriosSolicitanteCasa(false);
+        } else if (section === 'solicitante' && field === 'barrioTrabajo') {
+            setBarrioSearchSolicitanteTrabajo(barrio);
+            setShowBarriosSolicitanteTrabajo(false);
+        } else if (section === 'fiador' && field === 'barrioCasa') {
+            setBarrioSearchFiadorCasa(barrio);
+            setShowBarriosFiadorCasa(false);
+        } else if (section === 'fiador' && field === 'barrioTrabajo') {
+            setBarrioSearchFiadorTrabajo(barrio);
+            setShowBarriosFiadorTrabajo(false);
+        }
+    };
 
     // Guardar en localStorage cuando cambia
     useEffect(() => {
@@ -75,6 +197,11 @@ const Visitas = () => {
         };
         setVisitas([...visitas, newVisit]);
         setFormData(initialFormState);
+        // Limpiar las búsquedas de barrios
+        setBarrioSearchSolicitanteCasa('');
+        setBarrioSearchSolicitanteTrabajo('');
+        setBarrioSearchFiadorCasa('');
+        setBarrioSearchFiadorTrabajo('');
     };
 
     const handleDeleteVisit = (id) => {
@@ -257,14 +384,37 @@ const Visitas = () => {
                                 onChange={(e) => handleChange(e, 'solicitante')}
                                 className="border-b-2 border-gray-300 focus:border-blue-500 outline-none py-2 bg-transparent"
                             />
-                            <input
-                                type="text"
-                                name="barrioCasa"
-                                placeholder="Barrio Casa"
-                                value={formData.solicitante.barrioCasa}
-                                onChange={(e) => handleChange(e, 'solicitante')}
-                                className="border-b-2 border-gray-300 focus:border-blue-500 outline-none py-2 bg-transparent"
-                            />
+                            <div className="relative" ref={barriosRefSolicitanteCasa}>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        name="barrioCasa"
+                                        placeholder="Barrio Casa"
+                                        value={barrioSearchSolicitanteCasa}
+                                        onChange={(e) => handleBarrioSearchChange(e, 'solicitante', 'barrioCasa')}
+                                        onFocus={() => setShowBarriosSolicitanteCasa(true)}
+                                        className="w-full border-b-2 border-gray-300 focus:border-blue-500 outline-none py-2 bg-transparent pr-8"
+                                    />
+                                    <Search className="absolute right-2 top-2.5 h-4 w-4 text-gray-400" />
+                                </div>
+                                {showBarriosSolicitanteCasa && (
+                                    <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                                        {filterBarrios(barrioSearchSolicitanteCasa).length > 0 ? (
+                                            filterBarrios(barrioSearchSolicitanteCasa).map((barrio) => (
+                                                <div
+                                                    key={barrio}
+                                                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                                    onClick={() => handleBarrioSelect(barrio, 'solicitante', 'barrioCasa')}
+                                                >
+                                                    {barrio}
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="px-4 py-2 text-gray-500">No se encontraron barrios</div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                             <input
                                 type="text"
                                 name="direccionTrabajo"
@@ -273,14 +423,37 @@ const Visitas = () => {
                                 onChange={(e) => handleChange(e, 'solicitante')}
                                 className="border-b-2 border-gray-300 focus:border-blue-500 outline-none py-2 bg-transparent"
                             />
-                            <input
-                                type="text"
-                                name="barrioTrabajo"
-                                placeholder="Barrio Trabajo"
-                                value={formData.solicitante.barrioTrabajo}
-                                onChange={(e) => handleChange(e, 'solicitante')}
-                                className="border-b-2 border-gray-300 focus:border-blue-500 outline-none py-2 bg-transparent"
-                            />
+                            <div className="relative" ref={barriosRefSolicitanteTrabajo}>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        name="barrioTrabajo"
+                                        placeholder="Barrio Trabajo"
+                                        value={barrioSearchSolicitanteTrabajo}
+                                        onChange={(e) => handleBarrioSearchChange(e, 'solicitante', 'barrioTrabajo')}
+                                        onFocus={() => setShowBarriosSolicitanteTrabajo(true)}
+                                        className="w-full border-b-2 border-gray-300 focus:border-blue-500 outline-none py-2 bg-transparent pr-8"
+                                    />
+                                    <Search className="absolute right-2 top-2.5 h-4 w-4 text-gray-400" />
+                                </div>
+                                {showBarriosSolicitanteTrabajo && (
+                                    <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                                        {filterBarrios(barrioSearchSolicitanteTrabajo).length > 0 ? (
+                                            filterBarrios(barrioSearchSolicitanteTrabajo).map((barrio) => (
+                                                <div
+                                                    key={barrio}
+                                                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                                    onClick={() => handleBarrioSelect(barrio, 'solicitante', 'barrioTrabajo')}
+                                                >
+                                                    {barrio}
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="px-4 py-2 text-gray-500">No se encontraron barrios</div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -320,14 +493,37 @@ const Visitas = () => {
                                 onChange={(e) => handleChange(e, 'fiador')}
                                 className="border-b-2 border-gray-300 focus:border-blue-500 outline-none py-2 bg-transparent"
                             />
-                            <input
-                                type="text"
-                                name="barrioCasa"
-                                placeholder="Barrio Casa"
-                                value={formData.fiador.barrioCasa}
-                                onChange={(e) => handleChange(e, 'fiador')}
-                                className="border-b-2 border-gray-300 focus:border-blue-500 outline-none py-2 bg-transparent"
-                            />
+                            <div className="relative" ref={barriosRefFiadorCasa}>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        name="barrioCasa"
+                                        placeholder="Barrio Casa"
+                                        value={barrioSearchFiadorCasa}
+                                        onChange={(e) => handleBarrioSearchChange(e, 'fiador', 'barrioCasa')}
+                                        onFocus={() => setShowBarriosFiadorCasa(true)}
+                                        className="w-full border-b-2 border-gray-300 focus:border-blue-500 outline-none py-2 bg-transparent pr-8"
+                                    />
+                                    <Search className="absolute right-2 top-2.5 h-4 w-4 text-gray-400" />
+                                </div>
+                                {showBarriosFiadorCasa && (
+                                    <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                                        {filterBarrios(barrioSearchFiadorCasa).length > 0 ? (
+                                            filterBarrios(barrioSearchFiadorCasa).map((barrio) => (
+                                                <div
+                                                    key={barrio}
+                                                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                                    onClick={() => handleBarrioSelect(barrio, 'fiador', 'barrioCasa')}
+                                                >
+                                                    {barrio}
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="px-4 py-2 text-gray-500">No se encontraron barrios</div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                             <input
                                 type="text"
                                 name="direccionTrabajo"
@@ -336,14 +532,37 @@ const Visitas = () => {
                                 onChange={(e) => handleChange(e, 'fiador')}
                                 className="border-b-2 border-gray-300 focus:border-blue-500 outline-none py-2 bg-transparent"
                             />
-                            <input
-                                type="text"
-                                name="barrioTrabajo"
-                                placeholder="Barrio Trabajo"
-                                value={formData.fiador.barrioTrabajo}
-                                onChange={(e) => handleChange(e, 'fiador')}
-                                className="border-b-2 border-gray-300 focus:border-blue-500 outline-none py-2 bg-transparent"
-                            />
+                            <div className="relative" ref={barriosRefFiadorTrabajo}>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        name="barrioTrabajo"
+                                        placeholder="Barrio Trabajo"
+                                        value={barrioSearchFiadorTrabajo}
+                                        onChange={(e) => handleBarrioSearchChange(e, 'fiador', 'barrioTrabajo')}
+                                        onFocus={() => setShowBarriosFiadorTrabajo(true)}
+                                        className="w-full border-b-2 border-gray-300 focus:border-blue-500 outline-none py-2 bg-transparent pr-8"
+                                    />
+                                    <Search className="absolute right-2 top-2.5 h-4 w-4 text-gray-400" />
+                                </div>
+                                {showBarriosFiadorTrabajo && (
+                                    <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                                        {filterBarrios(barrioSearchFiadorTrabajo).length > 0 ? (
+                                            filterBarrios(barrioSearchFiadorTrabajo).map((barrio) => (
+                                                <div
+                                                    key={barrio}
+                                                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                                    onClick={() => handleBarrioSelect(barrio, 'fiador', 'barrioTrabajo')}
+                                                >
+                                                    {barrio}
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="px-4 py-2 text-gray-500">No se encontraron barrios</div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
