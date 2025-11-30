@@ -62,6 +62,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
   const [mostrarFormularioAbono, setMostrarFormularioAbono] = useState(false);
   const [valorAbono, setValorAbono] = useState('');
   const [descripcionAbono, setDescripcionAbono] = useState('');
+  const [fechaAbono, setFechaAbono] = useState(new Date().toISOString().split('T')[0]);
   const [mostrarFormularioDescuento, setMostrarFormularioDescuento] = useState(false);
   const [valorDescuento, setValorDescuento] = useState('');
   const [tipoDescuento, setTipoDescuento] = useState('dias');
@@ -147,11 +148,11 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
     }));
   };
 
-  const handlePago = (nroCuota, pagado) => {
+  const handlePago = (nroCuota, pagado, fechaPago = null) => {
     if (pagado) {
       cancelarPago(clienteId, credito.id, nroCuota);
     } else {
-      registrarPago(clienteId, credito.id, nroCuota);
+      registrarPago(clienteId, credito.id, nroCuota, fechaPago);
     }
   };
 
@@ -228,13 +229,19 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
       return;
     }
     
-    // Simplemente agregar el abono
+    if (!fechaAbono) {
+      alert('Por favor selecciona una fecha para el abono');
+      return;
+    }
+    
+    // Simplemente agregar el abono con la fecha especificada
     // aplicarAbonosAutomaticamente se encargará de calcular cómo se distribuye
-    agregarAbono(clienteId, credito.id, parseFloat(valorAbono), descripcionAbono);
+    agregarAbono(clienteId, credito.id, parseFloat(valorAbono), descripcionAbono, fechaAbono);
     
     setMostrarFormularioAbono(false);
     setValorAbono('');
     setDescripcionAbono('');
+    setFechaAbono(new Date().toISOString().split('T')[0]);
   };
 
   const handleEliminarAbono = (abonoId) => {
@@ -510,16 +517,19 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
               mostrarFormularioAbono={mostrarFormularioAbono}
               valorAbono={valorAbono}
               descripcionAbono={descripcionAbono}
+              fechaAbono={fechaAbono}
               puedeRenovar={puedeRenovar}
               onMostrarSelectorEtiqueta={() => setMostrarSelectorEtiqueta(!mostrarSelectorEtiqueta)}
               onMostrarFormularioAbono={() => setMostrarFormularioAbono(true)}
               onValorAbonoChange={(value) => setValorAbono(value)}
               onDescripcionAbonoChange={(value) => setDescripcionAbono(value)}
+              onFechaAbonoChange={(value) => setFechaAbono(value)}
               onAgregarAbono={handleAgregarAbono}
               onCancelarAbono={() => {
                               setMostrarFormularioAbono(false);
                               setValorAbono('');
                               setDescripcionAbono('');
+                              setFechaAbono(new Date().toISOString().split('T')[0]);
                             }}
               onMostrarFormularioRenovacion={() => setMostrarFormularioRenovacion(true)}
             />

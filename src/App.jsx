@@ -18,6 +18,7 @@ import RutasDeCobro from './pages/RutasDeCobro';
 import FlujoCajas from './pages/FlujoCajas';
 import Alertas from './pages/Alertas';
 import Papeleria from './pages/Papeleria';
+import Visitas from './pages/Visitas';
 
 function App() {
   return (
@@ -27,7 +28,7 @@ function App() {
           <Routes>
             {/* Login - No requiere autenticación */}
             <Route path="/login" element={<Login />} />
-            
+
             {/* Rutas protegidas */}
             <Route
               path="/"
@@ -39,7 +40,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            
+
             <Route
               path="/cliente/:id"
               element={
@@ -50,7 +51,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            
+
             <Route
               path="/dia-de-cobro"
               element={
@@ -61,7 +62,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            
+
             <Route
               path="/caja"
               element={
@@ -72,7 +73,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            
+
             <Route
               path="/creditos-activos"
               element={
@@ -83,7 +84,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            
+
             <Route
               path="/creditos-finalizados"
               element={
@@ -94,7 +95,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            
+
             <Route
               path="/estadisticas"
               element={
@@ -105,7 +106,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            
+
             <Route
               path="/configuracion"
               element={
@@ -116,7 +117,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            
+
             <Route
               path="/rutas-de-cobro"
               element={
@@ -127,7 +128,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            
+
             <Route
               path="/flujo-cajas"
               element={
@@ -138,7 +139,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            
+
             <Route
               path="/alertas"
               element={
@@ -149,7 +150,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            
+
             <Route
               path="/papeleria"
               element={
@@ -160,7 +161,18 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            
+
+            <Route
+              path="/visitas"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Visitas />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+
             {/* Redirigir cualquier ruta no encontrada a la página principal */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

@@ -3,8 +3,10 @@ import React from 'react';
 const FormularioAbono = ({ 
   valorAbono, 
   descripcionAbono, 
+  fechaAbono,
   onValorChange, 
   onDescripcionChange, 
+  onFechaChange,
   onSubmit, 
   onCancel 
 }) => {
@@ -12,7 +14,17 @@ const FormularioAbono = ({
     <div className="mt-4">
       <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
         <h4 className="font-semibold text-gray-900 mb-3">Agregar Abono al Crédito</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="label">Fecha del abono *</label>
+            <input
+              type="date"
+              value={fechaAbono}
+              onChange={(e) => onFechaChange(e.target.value)}
+              className="input-field"
+              max={new Date().toISOString().split('T')[0]}
+            />
+          </div>
           <div>
             <label className="label">Valor del abono *</label>
             <input

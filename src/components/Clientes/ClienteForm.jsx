@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, ChevronDown, Search } from 'lucide-react';
 import { BARRIOS_TULUA } from '../../constants/barrios';
 
-const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoPredefinido }) => {
+const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoPredefinido, initialData }) => {
   const [formData, setFormData] = useState({
     nombre: '',
     documento: '',
@@ -52,12 +52,15 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
 
   useEffect(() => {
     if (cliente) {
+      const barrioCliente = cliente.barrio || '';
+      const esOtroBarrio = !BARRIOS_TULUA.includes(barrioCliente);
+
       setFormData({
         nombre: cliente.nombre || '',
         documento: cliente.documento || '',
         telefono: cliente.telefono || '',
         direccion: cliente.direccion || '',
-        barrio: cliente.barrio || '',
+        barrio: esOtroBarrio ? 'Otro' : barrioCliente,
         direccionTrabajo: cliente.direccionTrabajo || '',
         correo: cliente.correo || '',
         cartera: cliente.cartera || 'K1',
@@ -70,6 +73,17 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
           direccionTrabajo: cliente.fiador?.direccionTrabajo || ''
         }
       });
+
+      setUsarOtroBarrio(esOtroBarrio);
+      setOtroBarrio(esOtroBarrio ? barrioCliente : '');
+    } else if (initialData) {
+      // Si vienen datos iniciales (ej. desde Visitas)
+      setFormData(prev => ({
+        ...prev,
+        ...initialData,
+        cartera: carteraPredefinida || initialData.cartera || 'K1',
+        tipoPago: tipoPagoPredefinido || ''
+      }));
       // Inicializar búsqueda con el barrio actual si existe
       if (cliente.barrio) {
         setBarrioSearch(cliente.barrio);
@@ -82,11 +96,23 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
         tipoPago: tipoPagoPredefinido || ''
       }));
     }
-  }, [cliente, carteraPredefinida, tipoPagoPredefinido]);
+  }, [cliente, carteraPredefinida, tipoPagoPredefinido, initialData]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name.startsWith('fiador.')) {
+
+    if (name === 'barrio') {
+      if (value === 'Otro') {
+        setUsarOtroBarrio(true);
+        setFormData(prev => ({ ...prev, barrio: 'Otro' }));
+      } else {
+        setUsarOtroBarrio(false);
+        setOtroBarrio('');
+        setFormData(prev => ({ ...prev, barrio: value }));
+      }
+    } else if (name === 'otroBarrio') {
+      setOtroBarrio(value);
+    } else if (name.startsWith('fiador.')) {
       const fiadorField = name.split('.')[1];
       setFormData(prev => ({
         ...prev,
@@ -117,9 +143,17 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
 
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    // Validar que si se seleccionó "Otro", se haya ingresado un nombre de barrio
+    if (usarOtroBarrio && !otroBarrio.trim()) {
+      alert('Por favor ingrese el nombre del barrio');
+      return;
+    }
+
     // Incluir tipoPagoEsperado si viene predefinido
     const dataToSubmit = {
       ...formData,
+      barrio: usarOtroBarrio ? otroBarrio.trim() : formData.barrio,
       ...(tipoPagoPredefinido && { tipoPagoEsperado: tipoPagoPredefinido })
     };
     onSubmit(dataToSubmit);
@@ -259,6 +293,21 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                     </div>
                   )}
                 </div>
+
+                {usarOtroBarrio && (
+                  <div className="mt-3">
+                    <label className="label">Nombre del barrio *</label>
+                    <input
+                      type="text"
+                      name="otroBarrio"
+                      value={otroBarrio}
+                      onChange={handleChange}
+                      className="input-field"
+                      placeholder="Ej: Barrio Nuevo"
+                      required
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="md:col-span-2">
@@ -284,9 +333,8 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                 {carteraPredefinida ? (
                   <div className="p-4 border-2 rounded-lg bg-gray-50 border-gray-300">
                     <div className="flex items-center">
-                      <div className={`flex items-center p-4 border-2 rounded-lg ${
-                        formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' : 'border-green-500 bg-green-50'
-                      }`}>
+                      <div className={`flex items-center p-4 border-2 rounded-lg ${formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' : 'border-green-500 bg-green-50'
+                        }`}>
                         <div className="ml-3">
                           <span className="font-semibold text-gray-900">Cartera {formData.cartera}</span>
                           <p className="text-sm text-gray-500">
@@ -299,9 +347,8 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-4">
-                    <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${
-                      formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
-                    }`}>
+                    <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
+                      }`}>
                       <input
                         type="radio"
                         name="cartera"
@@ -316,9 +363,8 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                       </div>
                     </label>
 
-                    <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${
-                      formData.cartera === 'K2' ? 'border-green-500 bg-green-50' : 'border-gray-300'
-                    }`}>
+                    <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${formData.cartera === 'K2' ? 'border-green-500 bg-green-50' : 'border-gray-300'
+                      }`}>
                       <input
                         type="radio"
                         name="cartera"

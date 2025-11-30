@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Check, Calendar, AlertCircle, Edit2, Plus, DollarSign, Trash2 } from 'lucide-react';
 import { 
   formatearMoneda, 
@@ -9,6 +9,7 @@ import {
 } from '../../utils/creditCalculations';
 import FormularioMulta from './FormularioMulta';
 import EditorFecha from './EditorFecha';
+import SelectorFechaPago from './SelectorFechaPago';
 
 const ListaCuotas = ({
   cuotasActualizadas,
@@ -30,6 +31,26 @@ const ListaCuotas = ({
   onEliminarMulta,
   onPago
 }) => {
+  const [mostrarSelectorFecha, setMostrarSelectorFecha] = useState(null);
+
+  const handlePago = (nroCuota, pagado) => {
+    if (pagado) {
+      // Si ya está pagado, cancelar directamente
+      onPago(nroCuota, pagado);
+    } else {
+      // Si no está pagado, mostrar el selector de fecha
+      setMostrarSelectorFecha(nroCuota);
+    }
+  };
+
+  const handleConfirmarPago = (nroCuota, fechaPago) => {
+    onPago(nroCuota, false, fechaPago);
+    setMostrarSelectorFecha(null);
+  };
+
+  const handleCancelarSelectorFecha = () => {
+    setMostrarSelectorFecha(null);
+  };
   return (
     <div>
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Detalle de Cuotas</h3>
@@ -201,7 +222,7 @@ const ListaCuotas = ({
                     </div>
                   ) : (
                     <button
-                      onClick={() => onPago(cuota.nroCuota, cuota.pagado)}
+                      onClick={() => handlePago(cuota.nroCuota, cuota.pagado)}
                       className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                         isPaid
                           ? 'bg-gray-200 hover:bg-gray-300 text-gray-700'
@@ -275,6 +296,17 @@ const ListaCuotas = ({
           );
         })}
       </div>
+
+      {/* Selector de fecha de pago */}
+      {mostrarSelectorFecha && (
+        <SelectorFechaPago
+          cuota={cuotasActualizadas.find(c => c.nroCuota === mostrarSelectorFecha)}
+          credito={credito}
+          isOpen={true}
+          onConfirmar={handleConfirmarPago}
+          onCancelar={handleCancelarSelectorFecha}
+        />
+      )}
     </div>
   );
 };

@@ -40,6 +40,7 @@ const Navbar = () => {
     { path: '/dia-de-cobro', label: 'Día de Cobro', icon: Calendar },
     { path: '/rutas-de-cobro', label: 'Rutas de Cobro', icon: Route },
     { path: '/caja', label: 'Caja', icon: Wallet },
+    { path: '/visitas', label: 'Visitas', icon: ClipboardList },
     { path: '/papeleria', label: 'Papelería', icon: ClipboardList },
     { path: '/creditos-activos', label: 'Créditos Activos', icon: TrendingUp },
     { path: '/creditos-finalizados', label: 'Finalizados', icon: CheckCircle },
@@ -69,7 +70,7 @@ const Navbar = () => {
               </span>
             </div>
           </div>
-          
+
           {/* Dropdown del perfil de usuario */}
           <div className="relative" ref={dropdownRef}>
             <button
@@ -83,10 +84,9 @@ const Navbar = () => {
                 <p className="font-semibold text-gray-900">{user?.nombre}</p>
                 <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
               </div>
-              <ChevronDown 
-                className={`h-4 w-4 text-gray-500 transition-transform ${
-                  isDropdownOpen ? 'rotate-180' : ''
-                }`}
+              <ChevronDown
+                className={`h-4 w-4 text-gray-500 transition-transform ${isDropdownOpen ? 'rotate-180' : ''
+                  }`}
               />
             </button>
 
@@ -98,16 +98,15 @@ const Navbar = () => {
                   {getFilteredNavItems().map((item) => {
                     const Icon = item.icon;
                     const isActive = location.pathname === item.path;
-                    
+
                     return (
                       <Link
                         key={item.path}
                         to={item.path}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                          isActive
+                        className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${isActive
                             ? 'bg-slate-700 text-white shadow-md'
                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
-                        }`}
+                          }`}
                       >
                         <Icon className="h-4 w-4" />
                         <span>{item.label}</span>

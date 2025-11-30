@@ -560,7 +560,7 @@ export const AppProvider = ({ children }) => {
   };
 
   // Gestión de Abonos
-  const agregarAbono = (clienteId, creditoId, valorAbono, descripcion = '') => {
+  const agregarAbono = (clienteId, creditoId, valorAbono, descripcion = '', fechaAbono = null) => {
     setClientes(prev => prev.map(cliente => {
       if (cliente.id === clienteId) {
         return {
@@ -571,7 +571,7 @@ export const AppProvider = ({ children }) => {
                 id: Date.now().toString(),
                 valor: valorAbono,
                 descripcion: descripcion || 'Abono al crédito',
-                fecha: obtenerFechaHoraLocal()
+                fecha: fechaAbono || obtenerFechaHoraLocal()
               };
               return {
                 ...credito,
