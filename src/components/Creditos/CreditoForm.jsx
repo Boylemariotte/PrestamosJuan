@@ -1,34 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { 
-  MONTOS_DISPONIBLES, 
-  calcularTotalAPagar, 
+import {
+  MONTOS_DISPONIBLES,
+  calcularTotalAPagar,
   calcularValorCuota,
   obtenerNumCuotas,
   calcularPapeleria,
   calcularMontoEntregado,
-  formatearMoneda 
+  formatearMoneda
 } from '../../utils/creditCalculations';
 import { obtenerFechaLocal } from '../../utils/dateUtils';
 
-const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefinido = null }) => {
+const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefinido = null, tipoPagoPreferido = null }) => {
   // Si hay tipo de pago predefinido, solo usar ese; si no, usar los permitidos según la cartera
-  const tiposPermitidos = tipoPagoPredefinido 
+  const tiposPermitidos = tipoPagoPredefinido
     ? [tipoPagoPredefinido]
-    : (carteraCliente === 'K1' 
+    : (carteraCliente === 'K1'
       ? ['diario', 'semanal', 'quincenal']
       : ['quincenal', 'mensual']);
-  
-  // Tipo por defecto: predefinido si existe, sino según la cartera
-  const tipoPorDefecto = tipoPagoPredefinido || (carteraCliente === 'K1' ? 'semanal' : 'quincenal');
-  
+
+  // Tipo por defecto: predefinido > preferido > default cartera
+  const tipoPorDefecto = tipoPagoPredefinido ||
+    (tiposPermitidos.includes(tipoPagoPreferido) ? tipoPagoPreferido : null) ||
+    (carteraCliente === 'K1' ? 'semanal' : 'quincenal');
+
   const [formData, setFormData] = useState({
     monto: MONTOS_DISPONIBLES[0],
     tipo: tipoPorDefecto,
     tipoQuincenal: '1-16',
     fechaInicio: obtenerFechaLocal(),
     papeleriaManual: '',
-    usarPapeleriaManual: false
+    usarPapeleriaManual: false,
+    usarMontoManual: false,
+    montoManual: '',
+    valorCuotaManual: '',
+    numCuotasManual: ''
   });
 
   // Ajustar tipo automáticamente si hay tipo predefinido o si no está permitido para la cartera
@@ -47,26 +53,60 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carteraCliente, tipoPagoPredefinido]);
 
-  const papeleriaAutomatica = calcularPapeleria(formData.monto);
-  const papeleria = formData.usarPapeleriaManual && formData.papeleriaManual 
-    ? parseFloat(formData.papeleriaManual) 
+  // Cálculos dinámicos
+  const montoReal = formData.usarMontoManual && formData.montoManual
+    ? parseFloat(formData.montoManual)
+    : formData.monto;
+
+  const papeleriaAutomatica = calcularPapeleria(montoReal);
+  const papeleria = formData.usarPapeleriaManual && formData.papeleriaManual
+    ? parseFloat(formData.papeleriaManual)
     : papeleriaAutomatica;
-  const montoEntregado = formData.monto - papeleria;
-  const totalAPagar = calcularTotalAPagar(formData.monto, formData.tipo);
-  const numCuotas = obtenerNumCuotas(formData.monto, formData.tipo);
-  const valorCuota = calcularValorCuota(formData.monto, formData.tipo);
+
+  const montoEntregado = montoReal - papeleria;
+
+  // Si es manual, usar valores manuales para cálculos
+  const valorCuota = formData.usarMontoManual && formData.valorCuotaManual
+    ? parseFloat(formData.valorCuotaManual)
+    : calcularValorCuota(montoReal, formData.tipo);
+
+  const numCuotas = formData.usarMontoManual && formData.numCuotasManual
+    ? parseInt(formData.numCuotasManual)
+    : obtenerNumCuotas(montoReal, formData.tipo);
+
+  const totalAPagar = formData.usarMontoManual
+    ? (valorCuota * numCuotas)
+    : calcularTotalAPagar(montoReal, formData.tipo);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'monto' ? parseInt(value) : value
+      [name]: type === 'checkbox' ? checked : (name === 'monto' ? parseInt(value) : value)
     }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    // Si es manual, validar que los campos estén llenos
+    if (formData.usarMontoManual) {
+      if (!formData.montoManual || !formData.valorCuotaManual || !formData.numCuotasManual) {
+        alert('Por favor complete todos los campos manuales');
+        return;
+      }
+    }
+
+    // Preparar datos para enviar
+    const dataToSubmit = {
+      ...formData,
+      monto: montoReal, // Enviar el monto real (sea manual o de lista)
+      valorCuota: valorCuota, // Enviar valor cuota calculado o manual
+      numCuotas: numCuotas, // Enviar num cuotas calculado o manual
+      totalAPagar: totalAPagar, // Enviar total calculado
+      esManual: formData.usarMontoManual
+    };
+
+    onSubmit(dataToSubmit);
   };
 
   return (
@@ -84,262 +124,328 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           <div className="p-6 space-y-6 overflow-y-auto flex-1">
-          {/* Monto del préstamo */}
-          <div>
-            <label className="label">Monto del Préstamo *</label>
-            <select
-              name="monto"
-              value={formData.monto}
-              onChange={handleChange}
-              className="input-field"
-              required
-            >
-              {MONTOS_DISPONIBLES.map(monto => (
-                <option key={monto} value={monto}>
-                  {formatearMoneda(monto)}
-                </option>
-              ))}
-            </select>
-          </div>
 
-          {/* Tipo de pago */}
-          <div>
-            <label className="label">
-              Tipo de Pago * 
-              <span className="text-xs text-gray-500 ml-2 font-normal">
-                (Cartera {carteraCliente})
-              </span>
-            </label>
-            {tipoPagoPredefinido ? (
-              // Si hay tipo predefinido, mostrar solo ese tipo bloqueado
-              <div className="p-4 border-2 rounded-lg bg-gray-50 border-gray-300">
-                <div className="flex items-center">
-                  <div className="flex items-center">
+            {/* Opción Manual (Solo K2) */}
+            {carteraCliente === 'K2' && (
+              <div className="flex items-center mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <input
+                  type="checkbox"
+                  id="usarMontoManual"
+                  name="usarMontoManual"
+                  checked={formData.usarMontoManual}
+                  onChange={handleChange}
+                  className="h-5 w-5 text-yellow-600 focus:ring-yellow-500 rounded"
+                />
+                <label htmlFor="usarMontoManual" className="ml-3 text-sm font-medium text-yellow-800 cursor-pointer">
+                  Ingresar valores manualmente (Monto y Cuota)
+                </label>
+              </div>
+            )}
+
+            {/* Monto del préstamo */}
+            <div>
+              <label className="label">Monto del Préstamo *</label>
+              {formData.usarMontoManual ? (
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                  <input
+                    type="number"
+                    name="montoManual"
+                    value={formData.montoManual}
+                    onChange={handleChange}
+                    className="input-field pl-8"
+                    placeholder="Ej: 1000000"
+                    required={formData.usarMontoManual}
+                  />
+                </div>
+              ) : (
+                <select
+                  name="monto"
+                  value={formData.monto}
+                  onChange={handleChange}
+                  className="input-field"
+                  required
+                >
+                  {MONTOS_DISPONIBLES.map(monto => (
+                    <option key={monto} value={monto}>
+                      {formatearMoneda(monto)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Campos adicionales si es manual */}
+            {formData.usarMontoManual && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Valor de Cuota *</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
                     <input
-                      type="radio"
-                      checked={true}
-                      disabled
-                      className="h-4 w-4 text-sky-600 focus:ring-sky-500 cursor-not-allowed"
+                      type="number"
+                      name="valorCuotaManual"
+                      value={formData.valorCuotaManual}
+                      onChange={handleChange}
+                      className="input-field pl-8"
+                      placeholder="Ej: 50000"
+                      required={formData.usarMontoManual}
                     />
-                    <div className="ml-3">
-                      <span className="font-medium text-gray-900 capitalize">
-                        {tipoPagoPredefinido}
-                      </span>
-                      <p className="text-sm text-gray-500">
-                        {tipoPagoPredefinido === 'diario' && '60 cuotas - Cada día'}
-                        {tipoPagoPredefinido === 'semanal' && '10 cuotas - Cada sábado'}
-                        {tipoPagoPredefinido === 'quincenal' && '5 cuotas'}
-                        {tipoPagoPredefinido === 'mensual' && '3 cuotas - Cada mes'}
-                      </p>
-                    </div>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  El tipo de pago está bloqueado según la card desde la cual se creó el cliente
-                </p>
-              </div>
-            ) : (
-              // Si no hay tipo predefinido, mostrar todas las opciones permitidas
-              <div className="space-y-3">
-                {tiposPermitidos.includes('diario') && (
-                  <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                    <input
-                      type="radio"
-                      name="tipo"
-                      value="diario"
-                      checked={formData.tipo === 'diario'}
-                      onChange={handleChange}
-                      className="h-4 w-4 text-sky-600 focus:ring-sky-500"
-                    />
-                    <div className="ml-3">
-                      <span className="font-medium text-gray-900">Diario</span>
-                      <p className="text-sm text-gray-500">60 cuotas - Cada día</p>
-                    </div>
-                  </label>
-                )}
-
-                {tiposPermitidos.includes('semanal') && (
-                  <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                    <input
-                      type="radio"
-                      name="tipo"
-                      value="semanal"
-                      checked={formData.tipo === 'semanal'}
-                      onChange={handleChange}
-                      className="h-4 w-4 text-sky-600 focus:ring-sky-500"
-                    />
-                    <div className="ml-3">
-                      <span className="font-medium text-gray-900">Semanal</span>
-                      <p className="text-sm text-gray-500">10 cuotas - Cada sábado</p>
-                    </div>
-                  </label>
-                )}
-
-                {tiposPermitidos.includes('quincenal') && (
-                  <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                    <input
-                      type="radio"
-                      name="tipo"
-                      value="quincenal"
-                      checked={formData.tipo === 'quincenal'}
-                      onChange={handleChange}
-                      className="h-4 w-4 text-sky-600 focus:ring-sky-500"
-                    />
-                    <div className="ml-3">
-                      <span className="font-medium text-gray-900">Quincenal</span>
-                      <p className="text-sm text-gray-500">5 cuotas</p>
-                    </div>
-                  </label>
-                )}
-
-                {tiposPermitidos.includes('mensual') && (
-                  <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                    <input
-                      type="radio"
-                      name="tipo"
-                      value="mensual"
-                      checked={formData.tipo === 'mensual'}
-                      onChange={handleChange}
-                      className="h-4 w-4 text-sky-600 focus:ring-sky-500"
-                    />
-                    <div className="ml-3">
-                      <span className="font-medium text-gray-900">Mensual</span>
-                      <p className="text-sm text-gray-500">3 cuotas - Cada mes</p>
-                    </div>
-                  </label>
-                )}
+                <div>
+                  <label className="label">Número de Cuotas *</label>
+                  <input
+                    type="number"
+                    name="numCuotasManual"
+                    value={formData.numCuotasManual}
+                    onChange={handleChange}
+                    className="input-field"
+                    placeholder="Ej: 10"
+                    required={formData.usarMontoManual}
+                  />
+                </div>
               </div>
             )}
-            {tiposPermitidos.length === 0 && !tipoPagoPredefinido && (
-              <p className="text-sm text-red-600 mt-2">
-                ⚠️ No hay tipos de pago disponibles para esta cartera
-              </p>
-            )}
-          </div>
 
-          {/* Opciones quincenales */}
-          {formData.tipo === 'quincenal' && (
+            {/* Tipo de pago */}
             <div>
-              <label className="label">Días de Cobro Quincenal *</label>
-              <select
-                name="tipoQuincenal"
-                value={formData.tipoQuincenal}
+              <label className="label">
+                Tipo de Pago *
+                <span className="text-xs text-gray-500 ml-2 font-normal">
+                  (Cartera {carteraCliente})
+                </span>
+              </label>
+              {tipoPagoPredefinido ? (
+                // Si hay tipo predefinido, mostrar solo ese tipo bloqueado
+                <div className="p-4 border-2 rounded-lg bg-gray-50 border-gray-300">
+                  <div className="flex items-center">
+                    <div className="flex items-center">
+                      <input
+                        type="radio"
+                        checked={true}
+                        disabled
+                        className="h-4 w-4 text-sky-600 focus:ring-sky-500 cursor-not-allowed"
+                      />
+                      <div className="ml-3">
+                        <span className="font-medium text-gray-900 capitalize">
+                          {tipoPagoPredefinido}
+                        </span>
+                        <p className="text-sm text-gray-500">
+                          {tipoPagoPredefinido === 'diario' && '60 cuotas - Cada día'}
+                          {tipoPagoPredefinido === 'semanal' && '10 cuotas - Cada sábado'}
+                          {tipoPagoPredefinido === 'quincenal' && '5 cuotas'}
+                          {tipoPagoPredefinido === 'mensual' && '3 cuotas - Cada mes'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    El tipo de pago está bloqueado según la card desde la cual se creó el cliente
+                  </p>
+                </div>
+              ) : (
+                // Si no hay tipo predefinido, mostrar todas las opciones permitidas
+                <div className="space-y-3">
+                  {tiposPermitidos.includes('diario') && (
+                    <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                      <input
+                        type="radio"
+                        name="tipo"
+                        value="diario"
+                        checked={formData.tipo === 'diario'}
+                        onChange={handleChange}
+                        className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                      />
+                      <div className="ml-3">
+                        <span className="font-medium text-gray-900">Diario</span>
+                        <p className="text-sm text-gray-500">60 cuotas - Cada día</p>
+                      </div>
+                    </label>
+                  )}
+
+                  {tiposPermitidos.includes('semanal') && (
+                    <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                      <input
+                        type="radio"
+                        name="tipo"
+                        value="semanal"
+                        checked={formData.tipo === 'semanal'}
+                        onChange={handleChange}
+                        className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                      />
+                      <div className="ml-3">
+                        <span className="font-medium text-gray-900">Semanal</span>
+                        <p className="text-sm text-gray-500">10 cuotas - Cada sábado</p>
+                      </div>
+                    </label>
+                  )}
+
+                  {tiposPermitidos.includes('quincenal') && (
+                    <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                      <input
+                        type="radio"
+                        name="tipo"
+                        value="quincenal"
+                        checked={formData.tipo === 'quincenal'}
+                        onChange={handleChange}
+                        className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                      />
+                      <div className="ml-3">
+                        <span className="font-medium text-gray-900">Quincenal</span>
+                        <p className="text-sm text-gray-500">5 cuotas</p>
+                      </div>
+                    </label>
+                  )}
+
+                  {tiposPermitidos.includes('mensual') && (
+                    <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                      <input
+                        type="radio"
+                        name="tipo"
+                        value="mensual"
+                        checked={formData.tipo === 'mensual'}
+                        onChange={handleChange}
+                        className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                      />
+                      <div className="ml-3">
+                        <span className="font-medium text-gray-900">Mensual</span>
+                        <p className="text-sm text-gray-500">3 cuotas - Cada mes</p>
+                      </div>
+                    </label>
+                  )}
+                </div>
+              )}
+              {tiposPermitidos.length === 0 && !tipoPagoPredefinido && (
+                <p className="text-sm text-red-600 mt-2">
+                  ⚠️ No hay tipos de pago disponibles para esta cartera
+                </p>
+              )}
+            </div>
+
+            {/* Opciones quincenales */}
+            {formData.tipo === 'quincenal' && (
+              <div>
+                <label className="label">Días de Cobro Quincenal *</label>
+                <select
+                  name="tipoQuincenal"
+                  value={formData.tipoQuincenal}
+                  onChange={handleChange}
+                  className="input-field"
+                  required
+                >
+                  <option value="1-16">Días 1 y 16 de cada mes</option>
+                  <option value="5-20">Días 5 y 20 de cada mes</option>
+                </select>
+              </div>
+            )}
+
+            {/* Fecha de inicio */}
+            <div>
+              <label className="label">Fecha de Inicio *</label>
+              <input
+                type="date"
+                name="fechaInicio"
+                value={formData.fechaInicio}
                 onChange={handleChange}
                 className="input-field"
                 required
-              >
-                <option value="1-16">Días 1 y 16 de cada mes</option>
-                <option value="5-20">Días 5 y 20 de cada mes</option>
-              </select>
-            </div>
-          )}
-
-          {/* Fecha de inicio */}
-          <div>
-            <label className="label">Fecha de Inicio *</label>
-            <input
-              type="date"
-              name="fechaInicio"
-              value={formData.fechaInicio}
-              onChange={handleChange}
-              className="input-field"
-              required
-            />
-          </div>
-
-          {/* Papelería/Ajuste Manual */}
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-            <div className="flex items-center mb-3">
-              <input
-                type="checkbox"
-                id="usarPapeleriaManual"
-                checked={formData.usarPapeleriaManual}
-                onChange={(e) => setFormData(prev => ({
-                  ...prev,
-                  usarPapeleriaManual: e.target.checked,
-                  papeleriaManual: e.target.checked ? prev.papeleriaManual : ''
-                }))}
-                className="h-4 w-4 text-sky-600 focus:ring-sky-500 rounded"
               />
-              <label htmlFor="usarPapeleriaManual" className="ml-2 text-sm font-medium text-gray-700">
-                Usar valor manual de papelería/ajuste
-              </label>
             </div>
-            
-            {formData.usarPapeleriaManual && (
-              <div>
-                <label className="label">Valor Manual (Papelería/Ajuste)</label>
+
+            {/* Papelería/Ajuste Manual */}
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+              <div className="flex items-center mb-3">
                 <input
-                  type="number"
-                  name="papeleriaManual"
-                  value={formData.papeleriaManual}
-                  onChange={handleChange}
-                  placeholder={`Automático: ${formatearMoneda(papeleriaAutomatica)}`}
-                  className="input-field"
-                  min="0"
+                  type="checkbox"
+                  id="usarPapeleriaManual"
+                  checked={formData.usarPapeleriaManual}
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
+                    usarPapeleriaManual: e.target.checked,
+                    papeleriaManual: e.target.checked ? prev.papeleriaManual : ''
+                  }))}
+                  className="h-4 w-4 text-sky-600 focus:ring-sky-500 rounded"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  💡 Ejemplo: Si el cliente paga más tarde, puedes cobrar más. Si paga antes, puedes cobrar menos.
-                </p>
+                <label htmlFor="usarPapeleriaManual" className="ml-2 text-sm font-medium text-gray-700">
+                  Usar valor manual de papelería/ajuste
+                </label>
               </div>
-            )}
-          </div>
 
-          {/* Resumen del crédito */}
-          <div className="bg-sky-50 p-4 rounded-lg space-y-2">
-            <h3 className="font-semibold text-gray-900 mb-3">Resumen del Crédito</h3>
-            
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Monto del crédito:</span>
-              <span className="font-semibold text-gray-900">
-                {formatearMoneda(formData.monto)}
-              </span>
+              {formData.usarPapeleriaManual && (
+                <div>
+                  <label className="label">Valor Manual (Papelería/Ajuste)</label>
+                  <input
+                    type="number"
+                    name="papeleriaManual"
+                    value={formData.papeleriaManual}
+                    onChange={handleChange}
+                    placeholder={`Automático: ${formatearMoneda(papeleriaAutomatica)}`}
+                    className="input-field"
+                    min="0"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    💡 Ejemplo: Si el cliente paga más tarde, puedes cobrar más. Si paga antes, puedes cobrar menos.
+                  </p>
+                </div>
+              )}
             </div>
 
-            <div className="flex justify-between text-sm text-orange-700 bg-orange-100 -mx-4 px-4 py-2">
-              <span className="font-medium">
-                - Papelería {formData.usarPapeleriaManual ? '(Manual)' : '($5,000 c/100k)'}:
-              </span>
-              <span className="font-semibold">
-                - {formatearMoneda(papeleria)}
-              </span>
-            </div>
+            {/* Resumen del crédito */}
+            <div className="bg-sky-50 p-4 rounded-lg space-y-2">
+              <h3 className="font-semibold text-gray-900 mb-3">Resumen del Crédito</h3>
 
-            <div className="flex justify-between text-sm pt-2 border-t border-sky-200">
-              <span className="text-green-700 font-bold">Monto a entregar:</span>
-              <span className="font-bold text-green-700 text-lg">
-                {formatearMoneda(montoEntregado)}
-              </span>
-            </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Monto del crédito:</span>
+                <span className="font-semibold text-gray-900">
+                  {formatearMoneda(montoReal)}
+                </span>
+              </div>
 
-            <div className="h-px bg-sky-300 my-3"></div>
+              <div className="flex justify-between text-sm text-orange-700 bg-orange-100 -mx-4 px-4 py-2">
+                <span className="font-medium">
+                  - Papelería {formData.usarPapeleriaManual ? '(Manual)' : '($5,000 c/100k)'}:
+                </span>
+                <span className="font-semibold">
+                  - {formatearMoneda(papeleria)}
+                </span>
+              </div>
 
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Interés (20% mensual):</span>
-              <span className="font-semibold text-gray-900">
-                {formatearMoneda(totalAPagar - formData.monto)}
-              </span>
-            </div>
+              <div className="flex justify-between text-sm pt-2 border-t border-sky-200">
+                <span className="text-green-700 font-bold">Monto a entregar:</span>
+                <span className="font-bold text-green-700 text-lg">
+                  {formatearMoneda(montoEntregado)}
+                </span>
+              </div>
 
-            <div className="flex justify-between text-sm pt-2 border-t border-sky-200">
-              <span className="text-gray-900 font-medium">Total a pagar:</span>
-              <span className="font-bold text-gray-900">
-                {formatearMoneda(totalAPagar)}
-              </span>
-            </div>
+              <div className="h-px bg-sky-300 my-3"></div>
 
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Número de cuotas:</span>
-              <span className="font-semibold text-gray-900">{numCuotas}</span>
-            </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Interés {formData.usarMontoManual ? '(Manual)' : '(20% mensual)'}:</span>
+                <span className="font-semibold text-gray-900">
+                  {formatearMoneda(totalAPagar - montoReal)}
+                </span>
+              </div>
 
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Valor por cuota:</span>
-              <span className="font-semibold text-gray-900">
-                {formatearMoneda(valorCuota)}
-              </span>
+              <div className="flex justify-between text-sm pt-2 border-t border-sky-200">
+                <span className="text-gray-900 font-medium">Total a pagar:</span>
+                <span className="font-bold text-gray-900">
+                  {formatearMoneda(totalAPagar)}
+                </span>
+              </div>
+
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Número de cuotas:</span>
+                <span className="font-semibold text-gray-900">{numCuotas}</span>
+              </div>
+
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Valor por cuota:</span>
+                <span className="font-semibold text-gray-900">
+                  {formatearMoneda(valorCuota)}
+                </span>
+              </div>
             </div>
-          </div>
           </div>
 
           {/* Botones */}

@@ -19,7 +19,7 @@ export const CONFIGURACION_CUOTAS = {
     diario: { numCuotas: 60, valorCuota: 7500 },
     semanal: { numCuotas: 10, valorCuota: 45000 },
     quincenal: { numCuotas: 5, valorCuota: 90000 },
-    mensual: { numCuotas: 3, valorCuota: 150000 }
+    mensual: { numCuotas: 3, valorCuota: 160000 }
   },
   400000: {
     diario: { numCuotas: 60, valorCuota: 10000 },
@@ -78,7 +78,7 @@ export const obtenerNumCuotas = (monto, tipo) => {
 export const generarFechasPagoDiarias = (fechaInicio, numCuotas) => {
   const fechas = [];
   let fecha = parseISO(fechaInicio);
-  
+
   for (let i = 0; i < numCuotas; i++) {
     fechas.push({
       nroCuota: i + 1,
@@ -88,7 +88,7 @@ export const generarFechasPagoDiarias = (fechaInicio, numCuotas) => {
     });
     fecha = addDays(fecha, 1);
   }
-  
+
   return fechas;
 };
 
@@ -96,14 +96,14 @@ export const generarFechasPagoDiarias = (fechaInicio, numCuotas) => {
 export const generarFechasPagoSemanales = (fechaInicio, numCuotas) => {
   const fechas = [];
   let fecha = parseISO(fechaInicio);
-  
+
   // Ajustar al próximo sábado si no es sábado
   const diaSemana = fecha.getDay();
   if (diaSemana !== 6) { // 6 = sábado
     const diasHastaSabado = (6 - diaSemana + 7) % 7;
     fecha = addDays(fecha, diasHastaSabado === 0 ? 7 : diasHastaSabado);
   }
-  
+
   // Generar sábados consecutivos
   for (let i = 0; i < numCuotas; i++) {
     fechas.push({
@@ -114,7 +114,7 @@ export const generarFechasPagoSemanales = (fechaInicio, numCuotas) => {
     });
     fecha = addWeeks(fecha, 1);
   }
-  
+
   return fechas;
 };
 
@@ -122,17 +122,17 @@ export const generarFechasPagoSemanales = (fechaInicio, numCuotas) => {
 export const generarFechasPagoQuincenales = (fechaInicio, numCuotas, tipo = '1-16') => {
   const fechas = [];
   let fecha = parseISO(fechaInicio);
-  
+
   const dias = tipo === '1-16' ? [1, 16] : [5, 20];
-  
+
   for (let i = 0; i < numCuotas; i++) {
     let mes = fecha.getMonth();
     let año = fecha.getFullYear();
     const diaDelMes = fecha.getDate();
-    
+
     // Determinar cuál día usar (1 o 16, o 5 o 20)
     let diaAPagar;
-    
+
     if (diaDelMes <= dias[0]) {
       diaAPagar = dias[0];
     } else if (diaDelMes <= dias[1]) {
@@ -142,18 +142,18 @@ export const generarFechasPagoQuincenales = (fechaInicio, numCuotas, tipo = '1-1
       mes = mes + 1;
       diaAPagar = dias[0];
     }
-    
+
     // Crear la fecha de pago para esta cuota
     const fechaPago = new Date(año, mes, diaAPagar);
     fechaPago.setHours(12, 0, 0, 0); // Establecer al mediodía para evitar problemas de zona horaria
-    
+
     fechas.push({
       nroCuota: i + 1,
       fechaProgramada: format(fechaPago, 'yyyy-MM-dd'),
       pagado: false,
       fechaPago: null
     });
-    
+
     // Avanzar a la siguiente quincena para la próxima iteración
     if (diaAPagar === dias[0]) {
       // Si estamos en el primer día, la siguiente cuota es en el segundo día del mismo mes
@@ -164,7 +164,7 @@ export const generarFechasPagoQuincenales = (fechaInicio, numCuotas, tipo = '1-1
     }
     fecha.setHours(12, 0, 0, 0);
   }
-  
+
   return fechas;
 };
 
@@ -172,7 +172,7 @@ export const generarFechasPagoQuincenales = (fechaInicio, numCuotas, tipo = '1-1
 export const generarFechasPagoMensuales = (fechaInicio, numCuotas) => {
   const fechas = [];
   let fecha = parseISO(fechaInicio);
-  
+
   for (let i = 0; i < numCuotas; i++) {
     fechas.push({
       nroCuota: i + 1,
@@ -184,7 +184,7 @@ export const generarFechasPagoMensuales = (fechaInicio, numCuotas) => {
     fecha = new Date(fecha.getFullYear(), fecha.getMonth() + 1, fecha.getDate());
     fecha.setHours(12, 0, 0, 0); // Establecer al mediodía para evitar problemas de zona horaria
   }
-  
+
   return fechas;
 };
 
@@ -192,12 +192,12 @@ export const generarFechasPagoMensuales = (fechaInicio, numCuotas) => {
 export const calcularProgreso = (cuotas, credito = null) => {
   const totalCuotas = cuotas.length;
   let cuotasPagadas = cuotas.filter(c => c.pagado).length;
-  
+
   // Si se proporciona el crédito completo, verificar cuotas cubiertas por abonos
   if (credito && credito.abonos && credito.abonos.length > 0) {
     const resultado = aplicarAbonosAutomaticamente(credito);
     const cuotasActualizadas = resultado.cuotasActualizadas;
-    
+
     // Contar cuotas no pagadas manualmente pero cubiertas por abonos
     cuotasActualizadas.forEach((cuota, index) => {
       const cuotaOriginal = cuotas[index];
@@ -209,7 +209,7 @@ export const calcularProgreso = (cuotas, credito = null) => {
         const multasCubiertas = cuota.multasCubiertas || 0;
         const multasPendientes = totalMultasCuota - multasCubiertas;
         const valorPendiente = (credito.valorCuota - (cuota.abonoAplicado || 0)) + multasPendientes;
-        
+
         // Si el valor pendiente es 0 o menos, la cuota está cubierta
         if (valorPendiente <= 0) {
           cuotasPagadas++;
@@ -217,7 +217,7 @@ export const calcularProgreso = (cuotas, credito = null) => {
       }
     });
   }
-  
+
   return {
     cuotasPagadas,
     totalCuotas,
@@ -229,19 +229,19 @@ export const calcularProgreso = (cuotas, credito = null) => {
 export const determinarEstadoCredito = (cuotas, credito = null) => {
   const hoy = startOfDay(new Date());
   const progreso = calcularProgreso(cuotas, credito);
-  
+
   // Si todas las cuotas están pagadas
   if (progreso.cuotasPagadas === progreso.totalCuotas) {
     return 'finalizado';
   }
-  
+
   // Si se proporciona el crédito completo, verificar abonos
   let cuotasActualizadas = cuotas;
   if (credito && credito.abonos && credito.abonos.length > 0) {
     const resultado = aplicarAbonosAutomaticamente(credito);
     cuotasActualizadas = resultado.cuotasActualizadas;
   }
-  
+
   // Verificar si hay cuotas vencidas (considerando abonos)
   const tieneCuotasVencidas = cuotasActualizadas.some((cuota, index) => {
     const cuotaOriginal = cuotas[index];
@@ -256,7 +256,7 @@ export const determinarEstadoCredito = (cuotas, credito = null) => {
           const multasCubiertas = cuota.multasCubiertas || 0;
           const multasPendientes = totalMultasCuota - multasCubiertas;
           const valorPendiente = (credito.valorCuota - (cuota.abonoAplicado || 0)) + multasPendientes;
-          
+
           // Si el valor pendiente es 0 o menos, la cuota está cubierta
           return valorPendiente > 0;
         }
@@ -265,11 +265,11 @@ export const determinarEstadoCredito = (cuotas, credito = null) => {
     }
     return false;
   });
-  
+
   if (tieneCuotasVencidas) {
     return 'mora';
   }
-  
+
   return 'activo';
 };
 
@@ -291,13 +291,13 @@ export const getColorEstado = (estado) => {
 export const calcularDiasMora = (fechaProgramada) => {
   const hoy = startOfDay(new Date());
   const fecha = startOfDay(parseISO(fechaProgramada));
-  
+
   if (isBefore(fecha, hoy)) {
     const diffTime = Math.abs(hoy - fecha);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
   }
-  
+
   return 0;
 };
 
@@ -305,7 +305,7 @@ export const calcularDiasMora = (fechaProgramada) => {
 export const aplicarAbonosAutomaticamente = (credito) => {
   const totalAbonos = (credito.abonos || []).reduce((total, abono) => total + abono.valor, 0);
   let saldoAbono = totalAbonos;
-  
+
   // Copiar las cuotas para modificarlas
   const cuotasActualizadas = credito.cuotas.map(cuota => ({
     ...cuota,
@@ -313,16 +313,16 @@ export const aplicarAbonosAutomaticamente = (credito) => {
     abonoAplicado: 0,
     multasCubiertas: 0
   }));
-  
+
   // Aplicar abonos a cada cuota en orden (primero multas, luego valor de cuota)
   for (let cuota of cuotasActualizadas) {
     if (saldoAbono <= 0) break;
     if (cuota.pagado) continue; // Saltar cuotas ya pagadas manualmente
-    
+
     // Primero cubrir las multas de esta cuota (si las tiene)
     if (cuota.multas && cuota.multas.length > 0) {
       const totalMultasCuota = cuota.multas.reduce((sum, m) => sum + m.valor, 0);
-      
+
       if (saldoAbono >= totalMultasCuota) {
         // El abono cubre todas las multas de esta cuota
         saldoAbono -= totalMultasCuota;
@@ -334,10 +334,10 @@ export const aplicarAbonosAutomaticamente = (credito) => {
         continue; // Si no alcanzó para las multas, no puede cubrir la cuota
       }
     }
-    
+
     // Después cubrir el valor de la cuota
     const valorCuota = credito.valorCuota;
-    
+
     if (saldoAbono >= valorCuota) {
       // El abono cubre toda la cuota
       cuota.abonoAplicado = valorCuota;
@@ -348,7 +348,7 @@ export const aplicarAbonosAutomaticamente = (credito) => {
       saldoAbono = 0;
     }
   }
-  
+
   return {
     cuotasActualizadas,
     saldoAbonoRestante: saldoAbono
@@ -411,14 +411,14 @@ export const isFechaPasada = (fecha) => {
 // Esta es la función que se usa para mostrar "Pendiente: $X" en el detalle
 export const calcularValorPendienteCuota = (valorCuota, cuota) => {
   if (cuota.pagado) return 0;
-  
+
   // Valor de la cuota menos abonos aplicados
   const valorPendiente = valorCuota - (cuota.abonoAplicado || 0);
-  
+
   // Multas totales menos multas cubiertas
   const totalMultas = calcularTotalMultasCuota(cuota);
   const multasPendientes = totalMultas - (cuota.multasCubiertas || 0);
-  
+
   // Retornar valor pendiente + multas pendientes
   return valorPendiente + multasPendientes;
 };

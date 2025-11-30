@@ -27,7 +27,7 @@ const Clientes = () => {
     } else if (filtroCartera === 'K1') {
       return ['todos', 'diario', 'semanal', 'quincenal'];
     } else if (filtroCartera === 'K2') {
-      return ['todos', 'quincenal', 'mensual'];
+      return ['todos'];
     }
     return ['todos', 'diario', 'semanal', 'quincenal', 'mensual'];
   }, [filtroCartera]);
@@ -71,7 +71,8 @@ const Clientes = () => {
 
   const handleAgregarDesdeCard = (cartera, tipoPago, posicion) => {
     setFormCartera(cartera);
-    setFormTipoPago(tipoPago);
+    // Si el tipo de pago es 'general' (K2), no predefinir tipo de pago
+    setFormTipoPago(tipoPago === 'general' ? null : tipoPago);
     setFormPosicion(posicion);
     setShowForm(true);
   };
@@ -91,14 +92,14 @@ const Clientes = () => {
   // Capacidades por cartera/tipo de pago
   const CAPACIDADES = {
     K1: { diario: 75, semanal: 150, quincenal: 150 },
-    K2: { quincenal: 150, mensual: 75 }
+    K2: { general: 225 }
   };
 
   // Ocupación actual por cartera/tipo (considera clientes con créditos activos/en mora o tipoPagoEsperado)
   const ocupacion = useMemo(() => {
     const base = {
       K1: { diario: 0, semanal: 0, quincenal: 0 },
-      K2: { quincenal: 0, mensual: 0 }
+      K2: { general: 0 }
     };
     clientes.forEach((cliente) => {
       const cartera = cliente.cartera || 'K1';
@@ -108,8 +109,17 @@ const Clientes = () => {
         ? tiposActivos
         : (cliente.tipoPagoEsperado ? [cliente.tipoPagoEsperado] : []);
 
+      if (tipos.length === 0) {
+        // Si no tiene tipo definido pero está en una cartera, contar como ocupación general si aplica
+        if (cartera === 'K2') base.K2.general += 1;
+        return;
+      }
+
       tipos.forEach((t) => {
-        if (base[cartera] && typeof base[cartera][t] === 'number') {
+        if (cartera === 'K2') {
+          // Para K2, todo cuenta para general
+          base.K2.general += 1;
+        } else if (base[cartera] && typeof base[cartera][t] === 'number') {
           base[cartera][t] += 1;
         }
       });
@@ -138,7 +148,7 @@ const Clientes = () => {
       for (let i = 1; i <= capacidad; i++) {
         cards.push({
           cartera: 'K2',
-          tipoPago: tipo,
+          tipoPago: tipo, // 'general'
           posicion: i,
           cliente: null
         });
@@ -148,6 +158,21 @@ const Clientes = () => {
     // Asignar clientes a las cards correspondientes
     clientes.forEach(cliente => {
       const carteraCliente = cliente.cartera || 'K1';
+
+      // Lógica especial para K2 (tipo 'general')
+      if (carteraCliente === 'K2') {
+        const cardIndex = cards.findIndex(c =>
+          c.cartera === 'K2' &&
+          c.tipoPago === 'general' &&
+          Number(c.posicion) === Number(cliente.posicion)
+        );
+
+        if (cardIndex !== -1) {
+          cards[cardIndex].cliente = cliente;
+        }
+        return;
+      }
+
       const tiposActivos = getTiposPagoActivos(cliente);
 
       // Si el cliente tiene créditos activos, usar esos tipos
@@ -183,6 +208,12 @@ const Clientes = () => {
   const cardsFiltradas = todasLasCards.filter(card => {
     // Si hay búsqueda, solo mostrar cards con cliente que coincida
     if (searchTerm) {
+      // Verificar si el término es un número (búsqueda por posición)
+      const isNumber = !isNaN(searchTerm) && searchTerm.trim() !== '';
+      if (isNumber && Number(card.posicion) === Number(searchTerm)) {
+        return true;
+      }
+
       if (!card.cliente) return false;
       const coincideBusqueda = card.cliente.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
         card.cliente.documento.includes(searchTerm) ||
@@ -191,7 +222,27 @@ const Clientes = () => {
     }
 
     const coincideCartera = filtroCartera === 'todas' || card.cartera === filtroCartera;
-    const coincideTipo = filtroTipoPago === 'todos' || card.tipoPago === filtroTipoPago;
+
+    let coincideTipo = filtroTipoPago === 'todos' || card.tipoPago === filtroTipoPago;
+
+    // Lógica especial para filtrar tipos en K2 (donde card.tipoPago es 'general')
+    if (card.cartera === 'K2') {
+      if (filtroTipoPago === 'todos') {
+        coincideTipo = true;
+      } else {
+        // Si la card tiene cliente, verificar el tipo del cliente
+        if (card.cliente) {
+          const tipos = getTiposPagoActivos(card.cliente);
+          const tipoCliente = tipos.length > 0 ? tipos[0] : card.cliente.tipoPagoEsperado;
+          // Si el cliente es mensual y filtro es mensual -> match
+          // Si el cliente es quincenal y filtro es quincenal -> match
+          coincideTipo = tipoCliente === filtroTipoPago;
+        } else {
+          // Si la card está vacía, mostrarla para quincenal y mensual (ya que es 'general')
+          coincideTipo = filtroTipoPago === 'quincenal' || filtroTipoPago === 'mensual';
+        }
+      }
+    }
 
     return coincideCartera && coincideTipo;
   });
@@ -247,8 +298,7 @@ const Clientes = () => {
               <p className="text-3xl font-bold mt-1">{clientesK2}</p>
               <p className="text-green-100 text-xs mt-1">clientes</p>
               <div className="mt-3 space-y-1 text-[11px]">
-                <p className="text-green-100">Quincenal: {ocupacion.K2.quincenal}/{CAPACIDADES.K2.quincenal}</p>
-                <p className="text-green-100">Mensual: {ocupacion.K2.mensual}/{CAPACIDADES.K2.mensual}</p>
+                <p className="text-green-100">General: {ocupacion.K2.general || (ocupacion.K2.quincenal + ocupacion.K2.mensual)}/{CAPACIDADES.K2.general}</p>
               </div>
             </div>
             <Briefcase className="h-12 w-12 text-green-200" />
@@ -291,8 +341,8 @@ const Clientes = () => {
           <button
             onClick={() => setFiltroCartera('todas')}
             className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${filtroCartera === 'todas'
-                ? 'bg-purple-100 text-purple-800 border-purple-300 ring-2 ring-purple-400'
-                : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+              ? 'bg-purple-100 text-purple-800 border-purple-300 ring-2 ring-purple-400'
+              : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
               }`}
           >
             Todas ({clientes.length})
@@ -301,8 +351,8 @@ const Clientes = () => {
           <button
             onClick={() => setFiltroCartera('K1')}
             className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K1'
-                ? 'bg-blue-100 text-blue-800 border-blue-300 ring-2 ring-blue-400'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              ? 'bg-blue-100 text-blue-800 border-blue-300 ring-2 ring-blue-400'
+              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
               }`}
           >
             <Briefcase className="h-4 w-4" />
@@ -312,8 +362,8 @@ const Clientes = () => {
           <button
             onClick={() => setFiltroCartera('K2')}
             className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K2'
-                ? 'bg-green-100 text-green-800 border-green-300 ring-2 ring-green-400'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              ? 'bg-green-100 text-green-800 border-green-300 ring-2 ring-green-400'
+              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
               }`}
           >
             <Briefcase className="h-4 w-4" />
@@ -334,8 +384,8 @@ const Clientes = () => {
               key={tipo}
               onClick={() => setFiltroTipoPago(tipo)}
               className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${filtroTipoPago === tipo
-                  ? 'bg-purple-100 text-purple-800 border-purple-300 ring-2 ring-purple-400'
-                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                ? 'bg-purple-100 text-purple-800 border-purple-300 ring-2 ring-purple-400'
+                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                 }`}
             >
               {tipo.charAt(0).toUpperCase() + tipo.slice(1)}

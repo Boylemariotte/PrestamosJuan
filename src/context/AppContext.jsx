@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { storage } from '../services/storage';
 import { obtenerFechaHoraLocal, obtenerFechaLocal } from '../utils/dateUtils';
-import { 
-  calcularTotalAPagar, 
+import {
+  calcularTotalAPagar,
   calcularValorCuota,
   obtenerNumCuotas,
   generarFechasPagoDiarias,
@@ -34,7 +34,33 @@ export const AppProvider = ({ children }) => {
   // Cargar datos al iniciar
   useEffect(() => {
     const data = storage.getData();
-    setClientes(data.clientes || []);
+    let clientesData = data.clientes || [];
+
+    // MIGRACIÓN: Unificar carteras K2 (Restaurar posiciones originales)
+    // Mover clientes que fueron migrados a > 150 de vuelta a su posición original (restar 150)
+    let dataChanged = false;
+    const clientesMigrados = clientesData.map(c => {
+      if (c.cartera === 'K2' && c.posicion > 150) {
+        // Verificar si la posición original (pos - 150) está libre
+        const posicionOriginal = c.posicion - 150;
+        const posicionOcupada = clientesData.some(other =>
+          other.id !== c.id &&
+          other.cartera === 'K2' &&
+          other.posicion === posicionOriginal
+        );
+
+        if (!posicionOcupada) {
+          console.log(`Restaurando cliente K2 ${c.nombre} de pos ${c.posicion} a ${posicionOriginal}`);
+          dataChanged = true;
+          return { ...c, posicion: posicionOriginal };
+        } else {
+          console.warn(`No se pudo restaurar cliente K2 ${c.nombre} a pos ${posicionOriginal} porque está ocupada.`);
+        }
+      }
+      return c;
+    });
+
+    setClientes(dataChanged ? clientesMigrados : clientesData);
     setMovimientosCaja(data.movimientosCaja || []);
     setAlertas(data.alertas || []);
     setLoading(false);
@@ -46,44 +72,56 @@ export const AppProvider = ({ children }) => {
       storage.saveData({ clientes, movimientosCaja, alertas });
     }
   }, [clientes, movimientosCaja, alertas, loading]);
-
   // CRUD de Clientes
   const agregarCliente = (clienteData) => {
     let posicion = clienteData.posicion; // Usar posición predefinida si existe
     const cartera = clienteData.cartera || 'K1';
     const tipoPagoEsperado = clienteData.tipoPagoEsperado;
-    
+
     // Si no hay posición predefinida, buscar la siguiente disponible para la cartera y tipo de pago
     if (!posicion) {
-      // Filtrar clientes que tengan la misma cartera y tipo de pago esperado
-      const clientesMismoTipo = clientes.filter(c => {
-        const carteraCliente = c.cartera || 'K1';
-        if (carteraCliente !== cartera) return false;
-        
-        // Si el cliente tiene créditos activos, verificar si alguno coincide con el tipo esperado
-        if (tipoPagoEsperado && c.creditos && c.creditos.length > 0) {
-          const tieneTipo = c.creditos.some(cred => {
-            const estado = determinarEstadoCredito(cred.cuotas, cred);
-            return (estado === 'activo' || estado === 'mora') && cred.tipo === tipoPagoEsperado;
-          });
-          if (tieneTipo) return true;
+      if (cartera === 'K2') {
+        // Para K2, buscar cualquier posición libre entre 1 y 225
+        const clientesK2 = clientes.filter(c => c.cartera === 'K2');
+        const posicionesOcupadas = clientesK2.map(c => c.posicion).filter(Boolean);
+
+        const capacidadMaxima = 225;
+        posicion = 1;
+        while (posicionesOcupadas.includes(posicion) && posicion <= capacidadMaxima) {
+          posicion++;
         }
-        
-        // Si no tiene créditos activos, verificar tipoPagoEsperado
-        return c.tipoPagoEsperado === tipoPagoEsperado;
-      });
-      
-      const posicionesOcupadas = clientesMismoTipo.map(c => c.posicion).filter(Boolean);
-      
-      // Encontrar la próxima posición disponible (1-150 o 1-75 según el tipo)
-      const capacidadMaxima = tipoPagoEsperado === 'diario' || tipoPagoEsperado === 'mensual' ? 75 : 150;
-      posicion = 1;
-      while (posicionesOcupadas.includes(posicion) && posicion <= capacidadMaxima) {
-        posicion++;
-      }
-      
-      if (posicion > capacidadMaxima) {
-        throw new Error(`No hay cupos disponibles para la cartera ${cartera} con tipo de pago ${tipoPagoEsperado || 'sin tipo'}. Límite alcanzado.`);
+
+        if (posicion > capacidadMaxima) {
+          throw new Error(`No hay cupos disponibles para la cartera K2. Límite alcanzado.`);
+        }
+      } else {
+        // Lógica existente para K1 (por tipo de pago)
+        const clientesMismoTipo = clientes.filter(c => {
+          const carteraCliente = c.cartera || 'K1';
+          if (carteraCliente !== cartera) return false;
+
+          if (tipoPagoEsperado && c.creditos && c.creditos.length > 0) {
+            const tieneTipo = c.creditos.some(cred => {
+              const estado = determinarEstadoCredito(cred.cuotas, cred);
+              return (estado === 'activo' || estado === 'mora') && cred.tipo === tipoPagoEsperado;
+            });
+            if (tieneTipo) return true;
+          }
+
+          return c.tipoPagoEsperado === tipoPagoEsperado;
+        });
+
+        const posicionesOcupadas = clientesMismoTipo.map(c => c.posicion).filter(Boolean);
+        const capacidadMaxima = tipoPagoEsperado === 'diario' ? 75 : 150;
+
+        posicion = 1;
+        while (posicionesOcupadas.includes(posicion) && posicion <= capacidadMaxima) {
+          posicion++;
+        }
+
+        if (posicion > capacidadMaxima) {
+          throw new Error(`No hay cupos disponibles para la cartera ${cartera} con tipo de pago ${tipoPagoEsperado || 'sin tipo'}. Límite alcanzado.`);
+        }
       }
     } else {
       // Verificar que la posición no esté ocupada por otro cliente con la misma cartera + tipo de pago
@@ -91,11 +129,12 @@ export const AppProvider = ({ children }) => {
         const carteraCliente = c.cartera || 'K1';
         if (carteraCliente !== cartera) return false;
         if (c.posicion !== posicion) return false;
-        
-        // Verificar si comparten el mismo tipo de pago
-        // Si el cliente nuevo tiene tipoPagoEsperado, verificar contra créditos activos o tipoPagoEsperado del existente
+
+        // Para K2, la posición es única en toda la cartera
+        if (cartera === 'K2') return true;
+
+        // Para K1, verificar si comparten el mismo tipo de pago
         if (tipoPagoEsperado) {
-          // Si el cliente existente tiene créditos activos del mismo tipo
           if (c.creditos && c.creditos.length > 0) {
             const tieneTipo = c.creditos.some(cred => {
               const estado = determinarEstadoCredito(cred.cuotas, cred);
@@ -103,18 +142,17 @@ export const AppProvider = ({ children }) => {
             });
             if (tieneTipo) return true;
           }
-          // Si el cliente existente tiene el mismo tipoPagoEsperado
           if (c.tipoPagoEsperado === tipoPagoEsperado) return true;
         }
-        
+
         return false;
       });
-      
+
       if (posicionOcupada) {
         throw new Error(`La posición ${posicion} ya está ocupada en la cartera ${cartera} para el tipo de pago ${tipoPagoEsperado || 'sin tipo'}.`);
       }
     }
-    
+
     const nuevoCliente = {
       id: Date.now().toString(),
       ...clienteData,
@@ -122,7 +160,7 @@ export const AppProvider = ({ children }) => {
       creditos: [],
       fechaCreacion: obtenerFechaHoraLocal()
     };
-    
+
     setClientes(prev => [...prev, nuevoCliente]);
     return nuevoCliente;
   };
@@ -131,9 +169,9 @@ export const AppProvider = ({ children }) => {
     setClientes(prev => prev.map(cliente => {
       if (cliente.id === id) {
         const clienteActualizado = { ...cliente, ...clienteData };
-        
+
         // Limpiar coordenadas GPS si las direcciones cambiaron o fueron eliminadas
-        
+
         // Para el cliente - Residencia
         const direccionResidenciaCambio = cliente.direccion !== clienteActualizado.direccion;
         const direccionResidenciaEliminada = !clienteActualizado.direccion || clienteActualizado.direccion.trim() === '';
@@ -141,7 +179,7 @@ export const AppProvider = ({ children }) => {
           delete clienteActualizado.coordenadasResidencia;
           delete clienteActualizado.coordenadasResidenciaActualizada;
         }
-        
+
         // Para el cliente - Trabajo
         const direccionTrabajoCambio = cliente.direccionTrabajo !== clienteActualizado.direccionTrabajo;
         const direccionTrabajoEliminada = !clienteActualizado.direccionTrabajo || clienteActualizado.direccionTrabajo.trim() === '';
@@ -149,7 +187,7 @@ export const AppProvider = ({ children }) => {
           delete clienteActualizado.coordenadasTrabajo;
           delete clienteActualizado.coordenadasTrabajoActualizada;
         }
-        
+
         // Para el fiador - Residencia
         const fiadorResidenciaCambio = cliente.fiador?.direccion !== clienteActualizado.fiador?.direccion;
         const fiadorResidenciaEliminada = !clienteActualizado.fiador?.direccion || clienteActualizado.fiador.direccion.trim() === '';
@@ -158,7 +196,7 @@ export const AppProvider = ({ children }) => {
           delete clienteActualizado.fiador.coordenadasResidencia;
           delete clienteActualizado.fiador.coordenadasResidenciaActualizada;
         }
-        
+
         // Para el fiador - Trabajo
         const fiadorTrabajoCambio = cliente.fiador?.direccionTrabajo !== clienteActualizado.fiador?.direccionTrabajo;
         const fiadorTrabajoEliminada = !clienteActualizado.fiador?.direccionTrabajo || clienteActualizado.fiador.direccionTrabajo.trim() === '';
@@ -167,7 +205,7 @@ export const AppProvider = ({ children }) => {
           delete clienteActualizado.fiador.coordenadasTrabajo;
           delete clienteActualizado.fiador.coordenadasTrabajoActualizada;
         }
-        
+
         return clienteActualizado;
       }
       return cliente;
@@ -228,45 +266,76 @@ export const AppProvider = ({ children }) => {
     // Validación de cupos por cartera/tipo de pago y asignación de cartera
     const CAPACIDADES = {
       K1: { diario: 75, semanal: 150, quincenal: 150 },
-      K2: { quincenal: 150, mensual: 75 }
+      K2: { general: 225 }
     };
 
     const clienteActual = obtenerCliente(clienteId);
     let carteraObjetivo = clienteActual?.cartera || 'K1';
+
+    // Ajustar cartera según tipo de pago (solo para K1/K2 lógica base)
     if (tipo === 'mensual') {
       carteraObjetivo = 'K2';
     } else if (tipo === 'diario' || tipo === 'semanal') {
       carteraObjetivo = 'K1';
     } else if (tipo === 'quincenal') {
+      // Quincenal puede ser K1 o K2, mantener la actual si es válida
       carteraObjetivo = carteraObjetivo === 'K2' ? 'K2' : 'K1';
     }
 
-    if (!CAPACIDADES[carteraObjetivo] || CAPACIDADES[carteraObjetivo][tipo] == null) {
-      throw new Error(`El tipo de pago "${tipo}" no está permitido en la cartera ${carteraObjetivo}.`);
+    // Validar si el tipo está permitido en la cartera
+    if (carteraObjetivo === 'K1' && !CAPACIDADES.K1[tipo]) {
+      throw new Error(`El tipo de pago "${tipo}" no está permitido en la cartera K1.`);
+    }
+    // Para K2, permitimos quincenal y mensual (ya validado en CreditoForm, pero doble check aquí)
+    if (carteraObjetivo === 'K2' && tipo !== 'quincenal' && tipo !== 'mensual') {
+      throw new Error(`El tipo de pago "${tipo}" no está permitido en la cartera K2.`);
     }
 
-    // Ocupación actual: clientes con créditos activos o en mora de ese tipo en la cartera objetivo
-    const ocupacionActual = new Set();
-    clientes.forEach((c) => {
-      const carteraCliente = c.cartera || 'K1';
-      if (carteraCliente !== carteraObjetivo) return;
-      const tieneTipo = (c.creditos || []).some((cred) => {
+    // Verificar cupos
+    if (carteraObjetivo === 'K2') {
+      const capacidad = CAPACIDADES.K2.general;
+      // Contar total de clientes en K2 (independientemente del tipo de pago)
+      // Nota: Al agregar un crédito a un cliente existente, no aumentamos el número de clientes.
+      // Pero si estuviéramos moviendo de cartera, sí. 
+      // Asumimos que el cliente ya está en la cartera correcta o se moverá.
+      // Si el cliente ya está en K2, no cuenta como nuevo.
+      const clientesK2 = clientes.filter(c => c.cartera === 'K2');
+      const yaEnK2 = clienteActual?.cartera === 'K2';
+
+      if (!yaEnK2 && clientesK2.length >= capacidad) {
+        throw new Error(`Cupo lleno en cartera K2. (${clientesK2.length}/${capacidad})`);
+      }
+    } else {
+      // Lógica existente para K1
+      const ocupacionActual = new Set();
+      clientes.forEach((c) => {
+        const carteraCliente = c.cartera || 'K1';
+        if (carteraCliente !== carteraObjetivo) return;
+        const tieneTipo = (c.creditos || []).some((cred) => {
+          const estado = determinarEstadoCredito(cred.cuotas, cred);
+          return (estado === 'activo' || estado === 'mora') && cred.tipo === tipo;
+        });
+        if (tieneTipo) ocupacionActual.add(c.id);
+      });
+
+      const capacidad = CAPACIDADES[carteraObjetivo][tipo];
+      // Si el cliente ya tiene un crédito activo de este tipo, no cuenta como nuevo cupo
+      const yaTieneTipo = (clienteActual?.creditos || []).some(cred => {
         const estado = determinarEstadoCredito(cred.cuotas, cred);
         return (estado === 'activo' || estado === 'mora') && cred.tipo === tipo;
       });
-      if (tieneTipo) ocupacionActual.add(c.id);
-    });
 
-    const capacidad = CAPACIDADES[carteraObjetivo][tipo];
-    if (ocupacionActual.size >= capacidad) {
-      throw new Error(`Cupo lleno en cartera ${carteraObjetivo} para pagos ${tipo}. (${ocupacionActual.size}/${capacidad})`);
+      if (!yaTieneTipo && ocupacionActual.size >= capacidad) {
+        throw new Error(`Cupo lleno en cartera ${carteraObjetivo} para pagos ${tipo}. (${ocupacionActual.size}/${capacidad})`);
+      }
     }
-    
-    // Obtener configuración de cuotas según monto y tipo
-    const totalAPagar = calcularTotalAPagar(monto, tipo);
-    const numCuotas = obtenerNumCuotas(monto, tipo);
-    const valorCuota = calcularValorCuota(monto, tipo);
-    
+
+    // Obtener configuración de cuotas según monto y tipo (o usar manuales)
+    const esManual = creditoData.esManual;
+    const totalAPagar = esManual ? creditoData.totalAPagar : calcularTotalAPagar(monto, tipo);
+    const numCuotas = esManual ? creditoData.numCuotas : obtenerNumCuotas(monto, tipo);
+    const valorCuota = esManual ? creditoData.valorCuota : calcularValorCuota(monto, tipo);
+
     // Generar fechas según el tipo de pago
     let cuotas;
     switch (tipo) {
@@ -285,12 +354,12 @@ export const AppProvider = ({ children }) => {
       default:
         cuotas = generarFechasPagoSemanales(fechaInicio, numCuotas);
     }
-    
+
     // Usar papelería manual si está habilitada, sino usar automática
     const papeleriaAutomatica = calcularPapeleria(monto);
     const papeleria = usarPapeleriaManual && papeleriaManual ? parseFloat(papeleriaManual) : papeleriaAutomatica;
     const montoEntregado = monto - papeleria;
-    
+
     const nuevoCredito = {
       id: `CRED-${Date.now()}`,
       monto,
@@ -542,8 +611,8 @@ export const AppProvider = ({ children }) => {
                     fechaOriginal.setDate(fechaOriginal.getDate() + diferenciaDias);
                     return {
                       ...cuota,
-                      fechaProgramada: fechaOriginal.getFullYear() + '-' + 
-                        String(fechaOriginal.getMonth() + 1).padStart(2, '0') + '-' + 
+                      fechaProgramada: fechaOriginal.getFullYear() + '-' +
+                        String(fechaOriginal.getMonth() + 1).padStart(2, '0') + '-' +
                         String(fechaOriginal.getDate()).padStart(2, '0')
                     };
                   }
@@ -775,16 +844,16 @@ export const AppProvider = ({ children }) => {
         montoEntregado: movimientoData.valor - (movimientoData.papeleria || 0)
       };
     }
-    
+
     const nuevoMovimiento = {
       id: `MOV-${Date.now()}`,
       ...movimientoData,
       fecha: movimientoData.fecha || obtenerFechaLocal().split('T')[0],
       fechaCreacion: obtenerFechaHoraLocal()
     };
-    
+
     console.log('Nuevo movimiento de caja:', nuevoMovimiento); // Para depuración
-    
+
     setMovimientosCaja(prev => [...prev, nuevoMovimiento]);
     return nuevoMovimiento;
   };

@@ -14,7 +14,7 @@ const ClienteDetalle = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { obtenerCliente, actualizarCliente, eliminarCliente, agregarCredito, actualizarCoordenadasGPS } = useApp();
-  
+
   const [showEditForm, setShowEditForm] = useState(false);
   const [showCreditoForm, setShowCreditoForm] = useState(false);
   const [creditoSeleccionado, setCreditoSeleccionado] = useState(null);
@@ -53,25 +53,18 @@ const ClienteDetalle = () => {
     }
   };
 
-  // Determinar el tipo de pago predefinido para el cliente
+  // Determinar el tipo de pago predefinido (OBLIGATORIO) para el cliente
+  // Solo se fuerza si tiene créditos activos o en mora
   const tipoPagoPredefinido = useMemo(() => {
-    // Si el cliente tiene créditos activos o en mora, usar el tipo del primer crédito activo
     const creditosActivos = (cliente.creditos || []).filter(c => {
       const estado = determinarEstadoCredito(c.cuotas, c);
       return estado === 'activo' || estado === 'mora';
     });
-    
+
     if (creditosActivos.length > 0) {
-      // Si tiene créditos activos, usar el tipo del primer crédito activo
       return creditosActivos[0].tipo;
     }
-    
-    // Si no tiene créditos activos pero tiene tipoPagoEsperado, usar ese
-    if (cliente.tipoPagoEsperado) {
-      return cliente.tipoPagoEsperado;
-    }
-    
-    // Si no hay tipo predefinido, retornar null para mostrar todas las opciones
+
     return null;
   }, [cliente]);
 
@@ -129,7 +122,7 @@ const ClienteDetalle = () => {
               <Phone className="h-5 w-5 mr-3 text-gray-400" />
               <span>{cliente.telefono}</span>
             </div>
-            
+
             {cliente.direccion && (
               <div className="flex items-start text-gray-700">
                 <MapPin className="h-5 w-5 mr-3 text-gray-400 mt-0.5" />
@@ -149,7 +142,7 @@ const ClienteDetalle = () => {
                 </div>
               </div>
             )}
-            
+
             {cliente.correo && (
               <div className="flex items-center text-gray-700">
                 <Mail className="h-5 w-5 mr-3 text-gray-400" />
@@ -241,30 +234,30 @@ const ClienteDetalle = () => {
       </div>
 
       {/* Mapa de Ubicaciones - Ocupa todo el ancho */}
-      {((cliente.direccion || cliente.direccionTrabajo) || 
-        (cliente.fiador && (cliente.fiador.direccion || cliente.fiador.direccionTrabajo))) && 
+      {((cliente.direccion || cliente.direccionTrabajo) ||
+        (cliente.fiador && (cliente.fiador.direccion || cliente.fiador.direccionTrabajo))) &&
         !showEditForm && !showCreditoForm && !creditoSeleccionado && (
-        <div className="mb-8">
-          <div className="card">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-              <MapPin className="h-5 w-5 mr-2 text-blue-600" />
-              Ubicaciones en el Mapa
-            </h2>
-            <MapaUbicaciones
-              clienteDireccion={cliente.direccion}
-              clienteDireccionTrabajo={cliente.direccionTrabajo}
-              clienteNombre={cliente.nombre}
-              fiadorDireccion={cliente.fiador?.direccion}
-              fiadorDireccionTrabajo={cliente.fiador?.direccionTrabajo}
-              fiadorNombre={cliente.fiador?.nombre}
-              clienteCoordenadasResidencia={cliente.coordenadasResidencia}
-              clienteCoordenadasTrabajo={cliente.coordenadasTrabajo}
-              fiadorCoordenadasResidencia={cliente.fiador?.coordenadasResidencia}
-              fiadorCoordenadasTrabajo={cliente.fiador?.coordenadasTrabajo}
-            />
+          <div className="mb-8">
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                <MapPin className="h-5 w-5 mr-2 text-blue-600" />
+                Ubicaciones en el Mapa
+              </h2>
+              <MapaUbicaciones
+                clienteDireccion={cliente.direccion}
+                clienteDireccionTrabajo={cliente.direccionTrabajo}
+                clienteNombre={cliente.nombre}
+                fiadorDireccion={cliente.fiador?.direccion}
+                fiadorDireccionTrabajo={cliente.fiador?.direccionTrabajo}
+                fiadorNombre={cliente.fiador?.nombre}
+                clienteCoordenadasResidencia={cliente.coordenadasResidencia}
+                clienteCoordenadasTrabajo={cliente.coordenadasTrabajo}
+                fiadorCoordenadasResidencia={cliente.fiador?.coordenadasResidencia}
+                fiadorCoordenadasTrabajo={cliente.fiador?.coordenadasTrabajo}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Créditos */}
       <div>
@@ -323,6 +316,7 @@ const ClienteDetalle = () => {
           onClose={() => setShowCreditoForm(false)}
           carteraCliente={cliente.cartera || 'K1'}
           tipoPagoPredefinido={tipoPagoPredefinido}
+          tipoPagoPreferido={cliente.tipoPagoEsperado}
         />
       )}
 

@@ -13,6 +13,7 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
     correo: '',
     cartera: carteraPredefinida || 'K1', // Por defecto K1 o predefinida
     tipoPago: tipoPagoPredefinido || '', // Tipo de pago predefinido (solo visual)
+    tipoPagoEsperado: '', // Nuevo campo para preferencia
     fiador: {
       nombre: '',
       documento: '',
@@ -40,6 +41,7 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
         correo: cliente.correo || '',
         cartera: cliente.cartera || 'K1',
         tipoPago: tipoPagoPredefinido || '',
+        tipoPagoEsperado: cliente.tipoPagoEsperado || '',
         fiador: {
           nombre: cliente.fiador?.nombre || '',
           documento: cliente.fiador?.documento || '',
@@ -57,14 +59,16 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
         ...prev,
         ...initialData,
         cartera: carteraPredefinida || initialData.cartera || 'K1',
-        tipoPago: tipoPagoPredefinido || ''
+        tipoPago: tipoPagoPredefinido || '',
+        tipoPagoEsperado: initialData.tipoPagoEsperado || ''
       }));
     } else if (carteraPredefinida) {
       // Si es un nuevo cliente con cartera predefinida
       setFormData(prev => ({
         ...prev,
         cartera: carteraPredefinida,
-        tipoPago: tipoPagoPredefinido || ''
+        tipoPago: tipoPagoPredefinido || '',
+        tipoPagoEsperado: tipoPagoPredefinido || ''
       }));
     }
   }, [cliente, carteraPredefinida, tipoPagoPredefinido, initialData]);
@@ -109,11 +113,11 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
       return;
     }
 
-    // Incluir tipoPagoEsperado si viene predefinido
+    // Incluir tipoPagoEsperado
     const dataToSubmit = {
       ...formData,
       barrio: usarOtroBarrio ? otroBarrio.trim() : formData.barrio,
-      ...(tipoPagoPredefinido && { tipoPagoEsperado: tipoPagoPredefinido })
+      tipoPagoEsperado: formData.tipoPagoEsperado || tipoPagoPredefinido || null
     };
     onSubmit(dataToSubmit);
   };
@@ -316,10 +320,10 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                 )}
               </div>
 
-              {/* Tipo de Pago (solo visual si viene predefinido) */}
-              {tipoPagoPredefinido && (
-                <div className="md:col-span-2">
-                  <label className="label">Tipo de Pago Asignado</label>
+              {/* Tipo de Pago Preferido */}
+              <div className="md:col-span-2">
+                <label className="label">Frecuencia de Pago Preferida</label>
+                {tipoPagoPredefinido ? (
                   <div className="p-4 border-2 rounded-lg bg-gray-50 border-gray-300">
                     <div className="flex items-center">
                       <span className="font-semibold text-gray-900 capitalize">
@@ -327,11 +331,40 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                       </span>
                     </div>
                     <p className="text-xs text-gray-500 mt-2">
-                      El tipo de pago está bloqueado según la card seleccionada. Se aplicará al crear el primer crédito.
+                      El tipo de pago está bloqueado según la card seleccionada.
                     </p>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="relative">
+                    <select
+                      name="tipoPagoEsperado"
+                      value={formData.tipoPagoEsperado}
+                      onChange={handleChange}
+                      className="input-field appearance-none pr-10 cursor-pointer"
+                    >
+                      <option value="">Sin preferencia (Elegir al crear crédito)</option>
+                      {formData.cartera === 'K1' ? (
+                        <>
+                          <option value="diario">Diario</option>
+                          <option value="semanal">Semanal</option>
+                          <option value="quincenal">Quincenal</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="quincenal">Quincenal</option>
+                          <option value="mensual">Mensual</option>
+                        </>
+                      )}
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                      <ChevronDown className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Opcional. Si seleccionas uno, los créditos de este cliente estarán restringidos a este tipo de pago.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

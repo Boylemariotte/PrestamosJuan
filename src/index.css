@@ -38,46 +38,6 @@
   font-family: inherit;
 }
 
-@import 'tailwindcss';
-@import 'leaflet/dist/leaflet.css';
-
-@layer base {
-  body {
-    @apply bg-gray-50 text-gray-900;
-  }
-}
-
-@layer components {
-  .btn-primary {
-    @apply bg-sky-600 hover:bg-sky-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
-  }
-
-  .btn-secondary {
-    @apply bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200;
-  }
-
-  .btn-danger {
-    @apply bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
-  }
-
-  .card {
-    @apply bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200 p-6;
-  }
-
-  .input-field {
-    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-all;
-  }
-
-  .label {
-    @apply block text-sm font-medium text-gray-700 mb-2;
-  }
-}
-
-/* Estilos para Leaflet */
-.leaflet-container {
-  font-family: inherit;
-}
-
 .custom-marker {
   background: transparent !important;
   border: none !important;
@@ -120,6 +80,8 @@
   h2,
   h3,
   h4,
+  h5,
+  h6,
   span,
   div {
     color: #000 !important;
