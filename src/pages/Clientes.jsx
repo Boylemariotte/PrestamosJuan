@@ -1,12 +1,21 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Search, Users as UsersIcon, Briefcase, Filter } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Search, Users as UsersIcon, Briefcase, Filter, User, Phone, CreditCard, AlertCircle, MapPin } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import ClienteCard from '../components/Clientes/ClienteCard';
 import ClienteForm from '../components/Clientes/ClienteForm';
-import { determinarEstadoCredito } from '../utils/creditCalculations';
+import { 
+  determinarEstadoCredito, 
+  formatearMoneda, 
+  aplicarAbonosAutomaticamente, 
+  calcularValorPendienteCuota,
+  formatearFechaCorta
+} from '../utils/creditCalculations';
+import { format, parseISO, isBefore, startOfDay } from 'date-fns';
 
 const Clientes = () => {
+  const navigate = useNavigate();
   const { clientes, agregarCliente, loading } = useApp();
   const { hasPermission } = useAuth();
   const [showForm, setShowForm] = useState(false);
@@ -183,6 +192,56 @@ const Clientes = () => {
   const clientesK1 = clientes.filter(c => (c.cartera || 'K1') === 'K1').length;
   const clientesK2 = clientes.filter(c => c.cartera === 'K2').length;
 
+  const getCreditoInfo = (cliente, tipoPago) => {
+    if (!cliente || !cliente.creditos) return null;
+    // Find credit matching the payment type of the card
+    const credito = cliente.creditos.find(c => {
+        const estado = determinarEstadoCredito(c.cuotas, c);
+        return c.tipo === tipoPago && (estado === 'activo' || estado === 'mora');
+    });
+    
+    if (!credito) return null;
+
+    // Calculate additional fields
+    const { cuotasActualizadas } = aplicarAbonosAutomaticamente(credito);
+    let saldoPendiente = 0;
+    let primerCuotaVencidaFecha = null;
+    const hoy = startOfDay(new Date());
+    let estaVencido = false;
+    let cuotasVencidasCount = 0;
+
+    cuotasActualizadas.forEach(cuota => {
+        const valorPendiente = calcularValorPendienteCuota(credito.valorCuota, cuota);
+        saldoPendiente += valorPendiente;
+
+        if (valorPendiente > 0) {
+             const fechaProgramada = startOfDay(parseISO(cuota.fechaProgramada));
+             if (isBefore(fechaProgramada, hoy)) {
+                 estaVencido = true;
+                 cuotasVencidasCount++;
+                 if (!primerCuotaVencidaFecha || isBefore(fechaProgramada, startOfDay(parseISO(primerCuotaVencidaFecha)))) {
+                     primerCuotaVencidaFecha = cuota.fechaProgramada;
+                 }
+             }
+        }
+    });
+
+    return {
+        ...credito,
+        saldoPendiente,
+        estaVencido,
+        fechaVencimiento: primerCuotaVencidaFecha,
+        cuotasVencidasCount
+    };
+  };
+
+  const generarRefCredito = (cliente, credito) => {
+      if (!credito) return '-';
+      // Si el crédito tiene ID, usarlo, sino generar uno basado en el cliente
+      const idBase = credito.id || cliente.id?.slice(0, 8) || '000000';
+      return `PRD${idBase.toString().padStart(10, '0')}`;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -331,12 +390,12 @@ const Clientes = () => {
         </div>
       </div>
 
-      {/* Lista de cards */}
+      {/* Lista de cards/tabla */}
       {cardsFiltradas.length === 0 ? (
         <div className="text-center py-12">
           <UsersIcon className="h-16 w-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm ? 'No se encontraron clientes' : 'No hay cards disponibles'}
+            {searchTerm ? 'No se encontraron clientes' : 'No hay registros disponibles'}
           </h3>
           <p className="text-gray-600 mb-6">
             {searchTerm
@@ -354,18 +413,116 @@ const Clientes = () => {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {cardsFiltradas.map((card, index) => (
-            <ClienteCard
-              key={`${card.cartera}-${card.tipoPago}-${card.posicion}-${index}`}
-              cliente={card.cliente}
-              cardVacia={!card.cliente}
-              numeroCard={card.posicion}
-              cartera={card.cartera}
-              tipoPago={card.tipoPago}
-              onAgregarCliente={handleAgregarDesdeCard}
-            />
-          ))}
+        <div className="overflow-x-auto bg-white rounded-lg shadow">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-800 text-white">
+              <tr>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                  Ref. Crédito
+                </th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                  Cliente
+                </th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                  Crédito
+                </th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                  Valor Cuota
+                </th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                  Saldo Pendiente
+                </th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                  Vencido
+                </th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                  Modalidad
+                </th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                  Acciones
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {cardsFiltradas.map((card, index) => {
+                const creditoInfo = getCreditoInfo(card.cliente, card.tipoPago);
+                const esVacia = !card.cliente;
+                
+                return (
+                  <tr key={`${card.cartera}-${card.tipoPago}-${card.posicion}-${index}`} className={esVacia ? "bg-gray-50" : "hover:bg-gray-50"}>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                       <span className="font-black text-base text-black">
+                           #{card.posicion}
+                       </span>
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-500">
+                      {esVacia ? (
+                        <span className="text-gray-400 italic">Espacio Disponible ({card.cartera})</span>
+                      ) : (
+                        <div className="flex flex-col">
+                          <span className="font-bold text-gray-900">{card.cliente.nombre}</span>
+                          <span className="text-xs text-gray-500">CC: {card.cliente.documento}</span>
+                          <span className="flex items-center gap-1 text-gray-500 text-sm">
+                             <Phone className="h-3 w-3" /> {card.cliente.telefono}
+                          </span>
+                          {card.cliente.barrio && (
+                            <span className="text-xs flex items-center gap-1 text-gray-600 font-medium">
+                               <MapPin className="h-3 w-3" /> {card.cliente.barrio}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                       {creditoInfo ? formatearMoneda(creditoInfo.monto) : '-'}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-green-600">
+                      {creditoInfo ? formatearMoneda(creditoInfo.valorCuota) : '-'}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                       {creditoInfo ? formatearMoneda(creditoInfo.saldoPendiente) : '-'}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm">
+                      {esVacia || !creditoInfo ? (
+                          '-'
+                      ) : creditoInfo.estaVencido ? (
+                        <div className="text-red-600 font-bold">
+                            (SI) - <span className="text-xs">{formatearFechaCorta(creditoInfo.fechaVencimiento)}</span>
+                            {creditoInfo.cuotasVencidasCount > 1 && (
+                                <div className="text-xs text-red-500 mt-0.5 font-normal">
+                                    ({creditoInfo.cuotasVencidasCount} cuotas)
+                                </div>
+                            )}
+                        </div>
+                      ) : (
+                        <span className="text-green-600 font-medium">Al día</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
+                      {card.tipoPago}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                      {esVacia ? (
+                        <button
+                          onClick={() => handleAgregarDesdeCard(card.cartera, card.tipoPago, card.posicion)}
+                          className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
+                        >
+                          <Plus className="h-4 w-4" /> Agregar
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => navigate(`/cliente/${card.cliente.id}`)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                        >
+                          Ver Detalle
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
