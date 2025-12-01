@@ -72,6 +72,10 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
   const [mostrarEditorFecha, setMostrarEditorFecha] = useState(null);
   const [nuevaFecha, setNuevaFecha] = useState('');
   
+  // Estados para el refactor de pagos/multas en grilla
+  const [cuotaParaPagar, setCuotaParaPagar] = useState(null);
+  const [mostrarModalNuevaMulta, setMostrarModalNuevaMulta] = useState(false);
+  
   // Ref para el contenedor que se va a imprimir/exportar
   const formularioRef = useRef(null);
   
@@ -273,6 +277,49 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
   const totalDescuentos = (credito.descuentos || []).reduce((total, descuento) => total + descuento.valor, 0);
   // Aplicar abonos automáticamente
   const { cuotasActualizadas } = aplicarAbonosAutomaticamente(credito);
+
+  // Handlers para el nuevo sistema de pagos/multas en grilla
+  const handleAbrirPago = (nroCuota) => {
+    const cuota = cuotasActualizadas.find(c => c.nroCuota === nroCuota);
+    if (!cuota) return;
+    
+    const totalMultasCuota = cuota.multas ? cuota.multas.reduce((sum, m) => sum + m.valor, 0) : 0;
+    const multasCubiertas = cuota.multasCubiertas || 0;
+    const multasPendientes = totalMultasCuota - multasCubiertas;
+    const valorBaseCuota = credito.valorCuota || 0;
+    const abonoYaAplicado = cuota.abonoAplicado || 0;
+    
+    const valorRestante = (valorBaseCuota + multasPendientes) - abonoYaAplicado;
+
+    setCuotaParaPagar({
+      nroCuota,
+      valorPendiente: valorRestante > 0 ? valorRestante : 0
+    });
+  };
+
+  const handleConfirmarPago = async ({ valor, fecha, descripcion }) => {
+    if (!cuotaParaPagar) return;
+    const { nroCuota } = cuotaParaPagar;
+    const valorNumerico = parseFloat(valor);
+    
+    // Aseguramos que la descripción incluya la cuota para el trackeo correcto
+    const descFinal = descripcion 
+      ? (descripcion.includes(`Cuota #${nroCuota}`) ? descripcion : `${descripcion} (Cuota #${nroCuota})`)
+      : `Abono a Cuota #${nroCuota}`;
+
+    // Siempre agregamos como abono para mantener el historial visual y la lógica de asignación específica
+    await agregarAbono(clienteId, credito.id, valorNumerico, descFinal, fecha);
+    
+    setCuotaParaPagar(null);
+  };
+
+  const handleConfirmarMulta = ({ nroCuota, valor, fecha, motivo }) => {
+    // Se agrega la multa. Si el backend soporta fecha, genial. Si no, se agrega con fecha actual.
+    // Concatenamos fecha al motivo si se desea persistencia visual simple
+    const motivoFinal = fecha ? `${motivo} (${fecha})` : motivo;
+    agregarMulta(clienteId, credito.id, parseInt(nroCuota), parseFloat(valor), motivoFinal);
+    setMostrarModalNuevaMulta(false);
+  };
   
   const todasLasMultas = useMemo(() => {
     const lista = [];
@@ -455,11 +502,11 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
       <div className="bg-white rounded-xl shadow-xl max-w-6xl w-full max-h-[95vh] flex flex-col">
         <CreditoDetalleHeader onClose={onClose} onPrint={handlePrint} />
 
-        <div className="px-8 pb-8 space-y-6 overflow-y-auto flex-1">
+        <div className="px-8 pt-10 pb-8 space-y-6 overflow-y-auto flex-1">
           {/* Contenedor para imprimir - incluye header, formulario y grilla */}
           <div ref={formularioRef}>
             {/* Header para el PDF (solo visible al imprimir) */}
-            <div className="hidden print:flex bg-white px-6 py-4 items-center justify-center border-b-2 border-blue-500 mb-6">
+            <div className="hidden print:flex bg-white px-6 py-4 items-center justify-center border-b-2 border-blue-500 mb-16">
               <div className="flex items-center space-x-4">
                 <img 
                   src={CowImage} 
@@ -472,151 +519,115 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
               </div>
             </div>
 
-            {/* Formulario principal */}
-            <div className="bg-white border-2 border-blue-500 rounded-lg p-6">
-            <div className="space-y-8">
-                <EncabezadoFormulario formData={formData} />
+            {/* NUEVA CARD HORIZONTAL: DATOS GENERALES */}
+            <div className="bg-white border-2 border-blue-500 rounded-lg p-4 mb-6">
+              <div className="grid grid-cols-4 gap-4 text-center divide-x-2 divide-blue-200">
+                <div className="flex flex-col items-center justify-center">
+                  <span className="text-xs font-bold text-blue-600 uppercase mb-1">TIPO DE PAGO</span>
+                  <span className="text-lg font-bold text-gray-800 capitalize">{formData.tipoPago}</span>
+                </div>
+                <div className="flex flex-col items-center justify-center">
+                  <span className="text-xs font-bold text-blue-600 uppercase mb-1">FECHA INICIO</span>
+                  <span className="text-lg font-bold text-gray-800">
+                    {formData.fechaInicio ? formData.fechaInicio : '-'}
+                  </span>
+                </div>
+                <div className="flex flex-col items-center justify-center">
+                  <span className="text-xs font-bold text-blue-600 uppercase mb-1">VALOR PRODUCTO</span>
+                  <span className="text-lg font-bold text-gray-800">
+                    {formatearMoneda(formData.valorProducto || 0)}
+                  </span>
+                </div>
+                <div className="flex flex-col items-center justify-center">
+                  <span className="text-xs font-bold text-blue-600 uppercase mb-1">VALOR CUOTA</span>
+                  <span className="text-lg font-bold text-green-600">
+                    {formatearMoneda(formData.valorCuota || 0)}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-              {/* Tercera fila: SOLICITANTE y DATOS CODEUDOR */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* CARD PRINCIPAL: SOLICITANTE/CODEUDOR (Izquierda) y CUOTAS (Derecha) */}
+            <div className="bg-white border-2 border-blue-500 rounded-lg p-6 flex flex-col lg:flex-row gap-6">
+              
+              {/* COLUMNA IZQUIERDA: DATOS PERSONALES */}
+              <div className="lg:w-1/3 flex flex-col gap-8 border-r-2 border-blue-100 pr-6">
+                <div className="space-y-6">
                   <FormularioSolicitante
                     solicitante={formData.solicitante}
                     onChange={(field, value) => handleSolicitanteChange(field, value)}
                   />
-                  <FormularioCodeudor
-                    codeudor={formData.codeudor}
-                    onChange={(field, value) => handleCodeudorChange(field, value)}
-                  />
+                  <div className="border-t-2 border-blue-100 pt-6">
+                    <FormularioCodeudor
+                      codeudor={formData.codeudor}
+                      onChange={(field, value) => handleCodeudorChange(field, value)}
+                    />
+                  </div>
                 </div>
+              </div>
 
-                {/* Grilla de cuotas */}
-                <GrillaCuotas
+              {/* COLUMNA DERECHA: GRILLA DE CUOTAS */}
+              <div className="lg:w-2/3">
+                 <GrillaCuotas
                   formData={formData}
                   credito={credito}
                   cuotasActualizadas={cuotasActualizadas}
                   todasLasMultas={todasLasMultas}
                   obtenerNumeroCuotas={obtenerNumeroCuotas}
-                      />
-                    </div>
+                  onPagar={handleAbrirPago}
+                  onNuevaMulta={() => setMostrarModalNuevaMulta(true)}
+                  sinContenedor={true} 
+                />
+              </div>
+            </div>
           </div>
-          </div>
-          {/* Fin del contenedor para imprimir */}
 
-          {/* Información adicional del crédito */}
-          <div className="bg-gray-50 p-6 rounded-lg space-y-4">
-            <ResumenCredito
-              credito={credito}
-              estado={estado}
-              colorEstado={colorEstado}
-              ETIQUETAS={ETIQUETAS}
-              totalMultasCredito={totalMultasCredito}
-              totalAbonos={totalAbonos}
-              totalDescuentos={totalDescuentos}
-              progreso={progreso}
-              cuotasActualizadas={cuotasActualizadas}
-              mostrarFormularioAbono={mostrarFormularioAbono}
-              valorAbono={valorAbono}
-              descripcionAbono={descripcionAbono}
-              fechaAbono={fechaAbono}
-              puedeRenovar={puedeRenovar}
-              onMostrarSelectorEtiqueta={() => setMostrarSelectorEtiqueta(!mostrarSelectorEtiqueta)}
-              onMostrarFormularioAbono={() => setMostrarFormularioAbono(true)}
-              onValorAbonoChange={(value) => setValorAbono(value)}
-              onDescripcionAbonoChange={(value) => setDescripcionAbono(value)}
-              onFechaAbonoChange={(value) => setFechaAbono(value)}
-              onAgregarAbono={handleAgregarAbono}
-              onCancelarAbono={() => {
-                              setMostrarFormularioAbono(false);
-                              setValorAbono('');
-                              setDescripcionAbono('');
-                              setFechaAbono(new Date().toISOString().split('T')[0]);
-                            }}
-              onMostrarFormularioRenovacion={() => setMostrarFormularioRenovacion(true)}
-            />
-
-            {/* Selector de Etiquetas */}
-            {mostrarSelectorEtiqueta && estado === 'finalizado' && (
-              <SelectorEtiquetas
-                ETIQUETAS={ETIQUETAS}
+            {/* Resumen General del Crédito */}
+            <div className="mt-6">
+              <ResumenCredito
                 credito={credito}
-                onAsignarEtiqueta={handleAsignarEtiqueta}
-                onCancelar={() => setMostrarSelectorEtiqueta(false)}
-              />
-            )}
-
-            {/* Progreso */}
-            <BarraProgreso progreso={progreso} estado={estado} />
-
-            {/* Cuotas */}
-            <ListaCuotas
-              cuotasActualizadas={cuotasActualizadas}
-              credito={credito}
-              mostrarEditorFecha={mostrarEditorFecha}
-              nuevaFecha={nuevaFecha}
-              mostrarFormularioMulta={mostrarFormularioMulta}
-              valorMulta={valorMulta}
-              motivoMulta={motivoMulta}
-              onEditarFecha={handleEditarFecha}
-              onFechaChange={(value) => setNuevaFecha(value)}
-              onGuardarFecha={handleGuardarFecha}
-              onCancelarEdicionFecha={handleCancelarEdicionFecha}
-              onValorMultaChange={(value) => setValorMulta(value)}
-              onMotivoMultaChange={(value) => setMotivoMulta(value)}
-              onMostrarFormularioMulta={(nroCuota) => setMostrarFormularioMulta(nroCuota)}
-              onAgregarMulta={handleAgregarMulta}
-              onCancelarMulta={() => {
-                                setMostrarFormularioMulta(null);
-                                setValorMulta('');
-                                setMotivoMulta('');
+                estado={estado}
+                colorEstado={colorEstado}
+                ETIQUETAS={ETIQUETAS}
+                totalMultasCredito={totalMultasCredito}
+                totalAbonos={totalAbonos}
+                totalDescuentos={totalDescuentos}
+                progreso={progreso}
+                cuotasActualizadas={cuotasActualizadas}
+                mostrarFormularioAbono={mostrarFormularioAbono}
+                valorAbono={valorAbono}
+                descripcionAbono={descripcionAbono}
+                fechaAbono={fechaAbono}
+                puedeRenovar={puedeRenovar}
+                onMostrarSelectorEtiqueta={() => setMostrarSelectorEtiqueta(!mostrarSelectorEtiqueta)}
+                onMostrarFormularioAbono={() => setMostrarFormularioAbono(true)}
+                onValorAbonoChange={(value) => setValorAbono(value)}
+                onDescripcionAbonoChange={(value) => setDescripcionAbono(value)}
+                onFechaAbonoChange={(value) => setFechaAbono(value)}
+                onAgregarAbono={handleAgregarAbono}
+                onCancelarAbono={() => {
+                                setMostrarFormularioAbono(false);
+                                setValorAbono('');
+                                setDescripcionAbono('');
+                                setFechaAbono(new Date().toISOString().split('T')[0]);
                               }}
-              onEliminarMulta={handleEliminarMulta}
-              onPago={handlePago}
-            />
-
-            {/* Formulario de Descuentos */}
-            {mostrarFormularioDescuento && (
-              <FormularioDescuento
-                valorDescuento={valorDescuento}
-                tipoDescuento={tipoDescuento}
-                descripcionDescuento={descripcionDescuento}
-                onValorChange={(value) => setValorDescuento(value)}
-                onTipoChange={(value) => setTipoDescuento(value)}
-                onDescripcionChange={(value) => setDescripcionDescuento(value)}
-                onSubmit={handleAgregarDescuento}
-                onCancel={() => {
-                        setMostrarFormularioDescuento(false);
-                        setValorDescuento('');
-                        setTipoDescuento('dias');
-                        setDescripcionDescuento('');
-                      }}
+                onMostrarFormularioRenovacion={() => setMostrarFormularioRenovacion(true)}
               />
-            )}
-
-            {/* Lista de Descuentos */}
-            <ListaDescuentos
-              descuentos={credito.descuentos}
-              onEliminarDescuento={handleEliminarDescuento}
-            />
-
-            {/* Lista de Abonos */}
-            <ListaAbonos
-              abonos={credito.abonos}
-              credito={credito}
-              cuotas={credito.cuotas}
-              onEliminarAbono={handleEliminarAbono}
-            />
+            </div>
 
             {/* Notas */}
-            <ListaNotas
-              notas={credito.notas}
-              nuevaNota={nuevaNota}
-              onNotaChange={(value) => setNuevaNota(value)}
-              onAgregarNota={handleAgregarNota}
-              onEliminarNota={handleEliminarNota}
-            />
+            <div className="mt-6">
+              <ListaNotas
+                notas={credito.notas}
+                nuevaNota={nuevaNota}
+                onNotaChange={(value) => setNuevaNota(value)}
+                onAgregarNota={handleAgregarNota}
+                onEliminarNota={handleEliminarNota}
+              />
+            </div>
 
-            {/* Botón de eliminar crédito - Al final */}
-            <div className="border-t pt-6">
+            {/* Zona de Peligro */}
+            <div className="border-t pt-6 mt-6">
               <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-red-900 mb-2 flex items-center">
                   <AlertCircle className="h-5 w-5 mr-2" />
@@ -636,7 +647,23 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
             </div>
           </div>
         </div>
-      </div>
+      
+      {/* Modales de Pago y Multa */}
+      {cuotaParaPagar && (
+        <ModalPago 
+          cuota={cuotaParaPagar} 
+          onClose={() => setCuotaParaPagar(null)} 
+          onConfirm={handleConfirmarPago} 
+        />
+      )}
+      
+      {mostrarModalNuevaMulta && (
+        <ModalMulta 
+          onClose={() => setMostrarModalNuevaMulta(false)} 
+          onConfirm={handleConfirmarMulta}
+          maxCuotas={obtenerNumeroCuotas(formData.tipoPago)}
+        />
+      )}
 
       {/* Modal de Renovación */}
       {mostrarFormularioRenovacion && (
@@ -651,3 +678,150 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
 };
 
 export default CreditoDetalle;
+
+const ModalPago = ({ cuota, onClose, onConfirm }) => {
+  const [valor, setValor] = useState(cuota.valorPendiente || '');
+  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  const [descripcion, setDescripcion] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!valor || valor <= 0) return alert('Ingrese un valor válido');
+    onConfirm({ valor, fecha, descripcion });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+      <div className="bg-white rounded-lg p-6 w-96 shadow-2xl">
+        <h3 className="text-lg font-bold text-blue-600 mb-4">Pagar Cuota #{cuota.nroCuota}</h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Pendiente: <span className="font-bold text-red-600">${formatearMoneda(cuota.valorPendiente)}</span>
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Valor a pagar</label>
+            <input
+              type="number"
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              className="w-full border rounded p-2"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Fecha de pago</label>
+            <input
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className="w-full border rounded p-2"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Descripción (Opcional)</label>
+            <input
+              type="text"
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+              className="w-full border rounded p-2"
+              placeholder="Ej: Abono parcial"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold"
+            >
+              Confirmar Pago
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const ModalMulta = ({ onClose, onConfirm, maxCuotas }) => {
+  const [valor, setValor] = useState('');
+  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  const [nroCuota, setNroCuota] = useState(1);
+  const [motivo, setMotivo] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!valor || valor <= 0) return alert('Ingrese un valor válido');
+    onConfirm({ valor, fecha, nroCuota, motivo });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+      <div className="bg-white rounded-lg p-6 w-96 shadow-2xl">
+        <h3 className="text-lg font-bold text-red-600 mb-4">Nueva Multa</h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Valor Multa</label>
+            <input
+              type="number"
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              className="w-full border rounded p-2"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Fecha</label>
+            <input
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className="w-full border rounded p-2"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Aplicar a Cuota #</label>
+            <select
+              value={nroCuota}
+              onChange={(e) => setNroCuota(e.target.value)}
+              className="w-full border rounded p-2"
+            >
+              {Array.from({ length: maxCuotas }, (_, i) => i + 1).map(num => (
+                <option key={num} value={num}>Cuota #{num}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Motivo (Opcional)</label>
+            <input
+              type="text"
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              className="w-full border rounded p-2"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-bold"
+            >
+              Crear Multa
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};

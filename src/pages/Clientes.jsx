@@ -215,7 +215,33 @@ const Clientes = () => {
 
   // Filtrar cards según búsqueda, cartera y tipo de pago
   const cardsFiltradas = todasLasCards.filter(card => {
-    // Si hay búsqueda, solo mostrar cards con cliente que coincida
+    // 1. Primero verificar filtros
+    const coincideCartera = filtroCartera === 'todas' || card.cartera === filtroCartera;
+
+    let coincideTipo = filtroTipoPago === 'todos' || card.tipoPago === filtroTipoPago;
+
+    // Lógica especial para filtrar tipos en K2 (donde card.tipoPago es 'general')
+    if (card.cartera === 'K2') {
+      if (filtroTipoPago === 'todos') {
+        coincideTipo = true;
+      } else {
+        // Si la card tiene cliente, verificar el tipo del cliente
+        if (card.cliente) {
+          const tipos = getTiposPagoActivos(card.cliente);
+          const tipoCliente = tipos.length > 0 ? tipos[0] : card.cliente.tipoPagoEsperado;
+          coincideTipo = tipoCliente === filtroTipoPago;
+        } else {
+          // Si la card está vacía, mostrarla para quincenal y mensual (ya que es 'general')
+          coincideTipo = filtroTipoPago === 'quincenal' || filtroTipoPago === 'mensual';
+        }
+      }
+    }
+
+    if (!coincideCartera || !coincideTipo) {
+      return false;
+    }
+
+    // 2. Luego verificar búsqueda (si aplica)
     if (searchTerm) {
       // Verificar si el término es un número (búsqueda por posición)
       const isNumber = !isNaN(searchTerm) && searchTerm.trim() !== '';
@@ -230,30 +256,7 @@ const Clientes = () => {
       if (!coincideBusqueda) return false;
     }
 
-    const coincideCartera = filtroCartera === 'todas' || card.cartera === filtroCartera;
-
-    let coincideTipo = filtroTipoPago === 'todos' || card.tipoPago === filtroTipoPago;
-
-    // Lógica especial para filtrar tipos en K2 (donde card.tipoPago es 'general')
-    if (card.cartera === 'K2') {
-      if (filtroTipoPago === 'todos') {
-        coincideTipo = true;
-      } else {
-        // Si la card tiene cliente, verificar el tipo del cliente
-        if (card.cliente) {
-          const tipos = getTiposPagoActivos(card.cliente);
-          const tipoCliente = tipos.length > 0 ? tipos[0] : card.cliente.tipoPagoEsperado;
-          // Si el cliente es mensual y filtro es mensual -> match
-          // Si el cliente es quincenal y filtro es quincenal -> match
-          coincideTipo = tipoCliente === filtroTipoPago;
-        } else {
-          // Si la card está vacía, mostrarla para quincenal y mensual (ya que es 'general')
-          coincideTipo = filtroTipoPago === 'quincenal' || filtroTipoPago === 'mensual';
-        }
-      }
-    }
-
-    return coincideCartera && coincideTipo;
+    return true;
   });
 
   // Contar clientes por cartera

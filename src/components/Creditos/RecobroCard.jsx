@@ -1,19 +1,28 @@
 import React from 'react';
-import { Check } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import { formatearMoneda, formatearFechaCorta } from '../../utils/creditCalculations';
 
-const RecobroCard = ({ todasLasMultas }) => {
+const RecobroCard = ({ todasLasMultas, onNuevaMulta }) => {
   return (
-    <div key="recobro" className="border-2 border-blue-600 rounded-lg p-3 flex flex-col min-h-36 col-span-2 sm:col-span-3 md:col-span-4 lg:col-span-5 xl:col-span-6 print-grid-item">
+    <div key="recobro" className="border-2 border-blue-600 rounded-lg p-3 flex flex-col min-h-36 w-full print-grid-item">
       <div className="flex items-center justify-between mb-2">
         <span className="text-blue-600 font-bold text-xs uppercase tracking-wide">Recobro</span>
-        {todasLasMultas.length > 0 && (
-          <span className="text-blue-500 text-xs font-semibold">
-            {todasLasMultas.length} multa{todasLasMultas.length !== 1 ? 's' : ''}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {todasLasMultas.length > 0 && (
+            <span className="text-blue-500 text-xs font-semibold">
+              {todasLasMultas.length} multa{todasLasMultas.length !== 1 ? 's' : ''}
+            </span>
+          )}
+          <button 
+            onClick={onNuevaMulta}
+            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-[10px] px-2 py-1 rounded transition-colors"
+          >
+            <Plus className="h-3 w-3" />
+            Nueva multa
+          </button>
+        </div>
       </div>
-      <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+      <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-48">
         {todasLasMultas.length === 0 ? (
           <p className="text-xs text-gray-500 text-center py-4">Sin multas registradas</p>
         ) : (

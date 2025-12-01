@@ -1,17 +1,17 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { Calendar, DollarSign, Users, Wallet, ChevronLeft, ChevronRight, CheckCircle, Clock, MapPin } from 'lucide-react';
+import { Calendar, Users, ChevronLeft, ChevronRight, CheckCircle, Clock, MapPin, ChevronDown, ChevronUp, Phone } from 'lucide-react';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { format, parseISO, startOfDay, addDays, subDays, isToday } from 'date-fns';
+import { format, parseISO, startOfDay, addDays, subDays, isBefore } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { formatearMoneda, calcularTotalMultasCuota, aplicarAbonosAutomaticamente } from '../utils/creditCalculations';
+import { formatearMoneda, calcularTotalMultasCuota, aplicarAbonosAutomaticamente, determinarEstadoCredito, formatearFechaCorta } from '../utils/creditCalculations';
 import CreditoDetalle from '../components/Creditos/CreditoDetalle';
 
 const DiaDeCobro = () => {
   const navigate = useNavigate();
-  const { clientes, setClientes, obtenerCliente, obtenerCredito } = useApp();
+  const { clientes, obtenerCliente, obtenerCredito } = useApp();
   const hoy = startOfDay(new Date());
 
   // Estado para la fecha seleccionada
@@ -20,6 +20,9 @@ const DiaDeCobro = () => {
 
   // Estado para visitas
   const [visitas, setVisitas] = useState([]);
+  
+  // Estado para acordeones de barrios
+  const [barriosExpandidos, setBarriosExpandidos] = useState({});
 
   // Cargar visitas desde localStorage
   useEffect(() => {
@@ -31,24 +34,25 @@ const DiaDeCobro = () => {
     };
 
     cargarVisitas();
-
-    // Escuchar cambios en localStorage (opcional, por si se abre en otra pestaña)
     window.addEventListener('storage', cargarVisitas);
     return () => window.removeEventListener('storage', cargarVisitas);
   }, []);
 
+  // Toggle barrio accordion
+  const toggleBarrio = (barrio) => {
+    setBarriosExpandidos(prev => ({
+      ...prev,
+      [barrio]: !prev[barrio]
+    }));
+  };
+
   // Filtrar visitas para el día seleccionado
   const visitasDelDia = useMemo(() => {
     return visitas.filter(visita => {
-      if (visita.completada) return false; // No mostrar completadas
-
+      if (visita.completada) return false;
       const fechaVisita = visita.fechaVisita;
-      // Mostrar si es para hoy
       if (fechaVisita === fechaSeleccionadaStr) return true;
-
-      // Mostrar si es antigua y no se ha completado (reprogramación automática)
       if (fechaVisita < fechaSeleccionadaStr) return true;
-
       return false;
     });
   }, [visitas, fechaSeleccionadaStr]);
@@ -64,334 +68,185 @@ const DiaDeCobro = () => {
     }
   };
 
-  // Obtener todos los cobros del día agrupados por cartera
-  const cobrosDelDia = useMemo(() => {
-    const cobrosK1 = [];
-    const cobrosK2 = [];
-    const cobradosK1 = [];
-    const cobradosK2 = [];
-    const abonadosK1 = [];
-    const abonadosK2 = [];
+  // Procesar cobros agrupados por BARRIO
+  const datosCobro = useMemo(() => {
+    const porBarrio = {}; // { "Nombre Barrio": [items...] }
+    const stats = {
+      esperado: 0,
+      recogido: 0,
+      pendiente: 0,
+      clientesTotal: 0
+    };
+    
+    const clientesUnicos = new Set();
+
+    // Helper para agregar item a barrio
+    const agregarItem = (barrioRaw, item) => {
+      const barrio = barrioRaw || 'Sin Barrio';
+      if (!porBarrio[barrio]) porBarrio[barrio] = [];
+      porBarrio[barrio].push(item);
+      clientesUnicos.add(item.clienteId);
+    };
 
     clientes.forEach(cliente => {
-      // Solo procesar clientes con créditos
       if (!cliente.creditos || cliente.creditos.length === 0) return;
 
       cliente.creditos.forEach(credito => {
-        // Solo procesar créditos activos o en mora (no finalizados)
         if (!credito.cuotas) return;
 
-        // Aplicar abonos automáticamente para obtener cuotas actualizadas con abonoAplicado y multasCubiertas
         const { cuotasActualizadas } = aplicarAbonosAutomaticamente(credito);
+        const estadoCredito = determinarEstadoCredito(credito.cuotas, credito);
 
-        // Cuotas pendientes programadas para la fecha seleccionada
-        // O cuotas con multas pendientes (sin importar la fecha)
-        const cuotasDelDia = cuotasActualizadas.filter((cuota, index) => {
+        // Identificar actividad del día
+        let tieneActividadHoy = false;
+        let totalACobrarHoy = 0;
+        let totalCobradoHoy = 0;
+        let totalAbonadoHoy = 0;
+        
+        // 1. Cuotas Pendientes (Programadas hoy o Vencidas)
+        const cuotasPendientesHoy = cuotasActualizadas.filter((cuota, index) => {
           const cuotaOriginal = credito.cuotas[index];
           if (cuotaOriginal.pagado) return false;
 
-          // Calcular el valor pendiente de la cuota (ya incluye abonos aplicados)
           const abonoAplicado = cuota.abonoAplicado || 0;
           const valorCuotaPendiente = credito.valorCuota - abonoAplicado;
-
-          // Calcular multas pendientes (ya incluye multas cubiertas)
           const totalMultas = calcularTotalMultasCuota(cuota);
           const multasCubiertas = cuota.multasCubiertas || 0;
           const multasPendientes = totalMultas - multasCubiertas;
+          const tieneSaldo = valorCuotaPendiente > 0 || multasPendientes > 0;
 
-          // Si la cuota tiene saldo pendiente (valor de cuota o multas)
-          const tieneSaldoPendiente = valorCuotaPendiente > 0 || multasPendientes > 0;
-
-          // Incluir si es la fecha programada
-          if (cuotaOriginal.fechaProgramada === fechaSeleccionadaStr) return tieneSaldoPendiente;
-
-          // Incluir si tiene saldo pendiente y la fecha programada ya pasó
-          const fechaProgramada = new Date(cuotaOriginal.fechaProgramada);
-          const fechaSeleccionadaDate = new Date(fechaSeleccionadaStr);
-
-          return tieneSaldoPendiente && fechaProgramada <= fechaSeleccionadaDate;
+          // Check fecha
+          if (cuotaOriginal.fechaProgramada === fechaSeleccionadaStr) return tieneSaldo;
+          const fProg = new Date(cuotaOriginal.fechaProgramada);
+          const fSel = new Date(fechaSeleccionadaStr);
+          return tieneSaldo && fProg <= fSel;
         });
 
-        // Cuotas cobradas en la fecha seleccionada
-        const cuotasCobradas = credito.cuotas.filter(cuota => {
+        if (cuotasPendientesHoy.length > 0) {
+            tieneActividadHoy = true;
+            cuotasPendientesHoy.forEach(c => {
+                const abono = c.abonoAplicado || 0;
+                const multas = calcularTotalMultasCuota(c) - (c.multasCubiertas || 0);
+                totalACobrarHoy += (credito.valorCuota - abono) + multas;
+            });
+        }
+
+        // 2. Cuotas Cobradas Hoy
+        const cuotasCobradasHoy = credito.cuotas.filter(cuota => {
           return cuota.pagado && cuota.fechaPago === fechaSeleccionadaStr && !cuota.tieneAbono;
         });
-
-        // Verificar si hay abonos generales del crédito en la fecha seleccionada
-        const abonosGeneralesDelDia = (credito.abonos || []).filter(abono => {
-          if (!abono || !abono.fecha) return false;
-          const fechaAbono = abono.fecha?.split('T')[0] || abono.fecha;
-          return fechaAbono === fechaSeleccionadaStr;
-        });
-
-        // Si hay abonos generales hoy, NO agregar a cuotas pendientes
-        const tieneAbonoGeneralHoy = abonosGeneralesDelDia.length > 0;
-
-        // Cuotas con abonos en la fecha seleccionada (abonos a cuotas específicas)
-        const cuotasAbonadas = credito.cuotas.filter(cuota => {
-          if (!cuota.abonosCuota || cuota.abonosCuota.length === 0) return false;
-          return cuota.abonosCuota.some(abono => abono.fecha === fechaSeleccionadaStr);
-        });
-
-        // Ya no necesitamos calcular excedenteAbonos porque ahora usamos
-        // cuota.abonoAplicado que ya tiene el abono aplicado a cada cuota
-
-        // Agregar cuotas pendientes (solo si NO tiene abono general hoy)
-        if (!tieneAbonoGeneralHoy) {
-          // Ordenar cuotas pendientes por número
-          const cuotasOrdenadas = [...cuotasDelDia].sort((a, b) => a.nroCuota - b.nroCuota);
-
-          cuotasOrdenadas.forEach((cuota, index) => {
-            // Calcular multas de la cuota
-            const totalMultas = calcularTotalMultasCuota(cuota);
-            const multasCubiertas = cuota.multasCubiertas || 0;
-            const multasPendientes = totalMultas - multasCubiertas;
-
-            // Calcular abonos aplicados a la cuota (después de cubrir multas)
-            const abonoAplicado = cuota.abonoAplicado || 0;
-
-            // El valor pendiente de la cuota es: valorCuota - abonoAplicado
-            const valorCuotaPendiente = credito.valorCuota - abonoAplicado;
-
-            // Calcular el valor real a cobrar: multas pendientes + cuota pendiente
-            const valorACobrar = multasPendientes + valorCuotaPendiente;
-
-            const cobro = {
-              clienteId: cliente.id,
-              clienteNombre: cliente.nombre,
-              clienteTelefono: cliente.telefono,
-              clienteDireccion: cliente.direccion,
-              creditoId: credito.id,
-              creditoMonto: credito.monto,
-              creditoTipo: credito.tipo,
-              nroCuota: cuota.nroCuota,
-              valorCuota: valorACobrar,
-              valorCuotaOriginal: credito.valorCuota,
-              totalCuotas: credito.numCuotas,
-              cartera: cliente.cartera,
-              tieneSaldoPendiente: valorACobrar > credito.valorCuota,
-              totalMultas: multasPendientes,
-              multasCubiertas: multasCubiertas,
-              abonoAplicado: abonoAplicado,
-              valorCuotaPendiente: valorCuotaPendiente
-            };
-
-            if (cliente.cartera === 'K1') {
-              cobrosK1.push(cobro);
-            } else {
-              cobrosK2.push(cobro);
-            }
-          });
+        if (cuotasCobradasHoy.length > 0) {
+            tieneActividadHoy = true;
+            totalCobradoHoy += (cuotasCobradasHoy.length * credito.valorCuota);
         }
 
-        // Agregar cuotas cobradas hoy
-        cuotasCobradas.forEach(cuota => {
-          const cobrado = {
-            clienteId: cliente.id,
-            clienteNombre: cliente.nombre,
-            valorCuota: credito.valorCuota,
-            cartera: cliente.cartera
-          };
-
-          if (cliente.cartera === 'K1') {
-            cobradosK1.push(cobrado);
-          } else {
-            cobradosK2.push(cobrado);
-          }
+        // 3. Abonos Hoy (Específicos o Generales)
+        // a. Específicos
+        const cuotasAbonadasHoy = credito.cuotas.filter(cuota => 
+             cuota.abonosCuota && cuota.abonosCuota.some(a => a.fecha === fechaSeleccionadaStr)
+        );
+        // b. Generales
+        const abonosGeneralesHoy = (credito.abonos || []).filter(abono => {
+             const f = abono.fecha?.split('T')[0] || abono.fecha;
+             return f === fechaSeleccionadaStr;
         });
 
-        // Agregar cuotas con abonos específicos
-        cuotasAbonadas.forEach(cuota => {
-          const abonosDelDia = cuota.abonosCuota.filter(a => a.fecha === fechaSeleccionadaStr);
-          const totalAbonadoHoy = abonosDelDia.reduce((sum, a) => sum + a.valor, 0);
-
-          // Encontrar la cuota actualizada correspondiente
-          const indexCuota = credito.cuotas.findIndex(c => c.nroCuota === cuota.nroCuota);
-          const cuotaActualizada = cuotasActualizadas[indexCuota];
-
-          // Usar los valores de la cuota actualizada
-          const abonoAplicado = cuotaActualizada.abonoAplicado || 0;
-          const totalMultas = calcularTotalMultasCuota(cuotaActualizada);
-          const multasCubiertas = cuotaActualizada.multasCubiertas || 0;
-          const multasPendientes = totalMultas - multasCubiertas;
-
-          // El saldo pendiente de la cuota
-          const cuotaPendiente = credito.valorCuota - abonoAplicado;
-          const saldoPendiente = cuotaPendiente + multasPendientes;
-
-          // Calcular la distribución del abono de hoy (similar a abonos generales)
-          // Calcular el estado ANTES del abono de hoy
-          const abonosCuotaAntesDeHoy = cuota.abonosCuota.filter(a => a.fecha !== fechaSeleccionadaStr);
-          const totalAbonadoAntesDeHoy = abonosCuotaAntesDeHoy.reduce((sum, a) => sum + a.valor, 0);
-
-          // Simular aplicar abonos sin el abono de hoy
-          const creditoSinAbonoHoy = {
-            ...credito,
-            cuotas: credito.cuotas.map(c => {
-              if (c.nroCuota === cuota.nroCuota) {
-                return {
-                  ...c,
-                  abonosCuota: abonosCuotaAntesDeHoy
-                };
-              }
-              return c;
-            })
-          };
-
-          // Nota: Los abonos a cuotas específicas no se procesan por aplicarAbonosAutomaticamente
-          // Se aplican directamente a la cuota, así que calculamos manualmente
-          let abonoHoyAMultas = 0;
-          let abonoHoyACuota = 0;
-
-          // Calcular multas antes del abono de hoy
-          const multasAntesDeHoy = totalMultas; // Las multas no cambian con abonos
-          const multasCubiertasAntesDeHoy = Math.max(0, multasCubiertas - totalAbonadoHoy);
-          const multasPendientesAntesDeHoy = multasAntesDeHoy - multasCubiertasAntesDeHoy;
-
-          if (multasPendientesAntesDeHoy > 0) {
-            abonoHoyAMultas = Math.min(totalAbonadoHoy, multasPendientesAntesDeHoy);
-            abonoHoyACuota = totalAbonadoHoy - abonoHoyAMultas;
-          } else {
-            abonoHoyACuota = totalAbonadoHoy;
-          }
-
-          const abonado = {
-            clienteId: cliente.id,
-            clienteNombre: cliente.nombre,
-            clienteTelefono: cliente.telefono,
-            creditoId: credito.id,
-            nroCuota: cuota.nroCuota,
-            valorCuota: credito.valorCuota,
-            totalAbonado: abonoAplicado + multasCubiertas,
-            totalAbonadoHoy: totalAbonadoHoy,
-            saldoPendiente: saldoPendiente,
-            cartera: cliente.cartera,
-            esAbonoGeneral: false,
-            totalMultas: totalMultas,
-            multasCubiertas: multasCubiertas,
-            multasPendientes: multasPendientes,
-            cuotaPendiente: cuotaPendiente,
-            abonoHoyAMultas: abonoHoyAMultas,
-            abonoHoyACuota: abonoHoyACuota
-          };
-
-          if (cliente.cartera === 'K1') {
-            abonadosK1.push(abonado);
-          } else {
-            abonadosK2.push(abonado);
-          }
-        });
-
-        // Agregar abonos generales del crédito realizados en la fecha
-        if (abonosGeneralesDelDia.length > 0) {
-          const totalAbonadoHoy = abonosGeneralesDelDia.reduce((sum, a) => sum + a.valor, 0);
-          const totalAbonosCredito = (credito.abonos || []).reduce((sum, a) => sum + a.valor, 0);
-
-          // Encontrar la primera cuota pendiente (usando cuotas actualizadas)
-          const indexPrimeraCuotaPendiente = credito.cuotas.findIndex(c => !c.pagado);
-
-          let multasPendientes = 0;
-          let multasCubiertasTotal = 0;
-          let nroCuotaPendiente = 'General';
-          let abonoHoyAMultas = 0;
-          let abonoHoyACuota = 0;
-          let cuotaPendiente = credito.valorCuota;
-
-          if (indexPrimeraCuotaPendiente !== -1) {
-            const cuotaActualizada = cuotasActualizadas[indexPrimeraCuotaPendiente];
-            const cuotaOriginal = credito.cuotas[indexPrimeraCuotaPendiente];
-
-            // Usar los valores calculados por aplicarAbonosAutomaticamente
-            const totalMultas = calcularTotalMultasCuota(cuotaActualizada);
-            multasCubiertasTotal = cuotaActualizada.multasCubiertas || 0;
-            multasPendientes = totalMultas - multasCubiertasTotal;
-            nroCuotaPendiente = cuotaOriginal.nroCuota;
-
-            // Calcular el valor pendiente de la cuota usando abonoAplicado
-            const abonoAplicado = cuotaActualizada.abonoAplicado || 0;
-            cuotaPendiente = credito.valorCuota - abonoAplicado;
-
-            // Calcular cuánto del abono de HOY se aplicó a multas y cuánto a la cuota
-            // Necesitamos calcular esto basándonos en el estado ANTES del abono de hoy
-            // Para simplificar, asumimos que el abono de hoy sigue la misma lógica:
-            // primero multas, luego cuota
-
-            // Calcular multas y abonos ANTES del abono de hoy
-            const totalAbonosAntesDeHoy = totalAbonosCredito - totalAbonadoHoy;
-            const { cuotasActualizadas: cuotasAntesDeHoy } = aplicarAbonosAutomaticamente({
-              ...credito,
-              abonos: (credito.abonos || []).filter(a => {
-                const fechaAbono = a.fecha?.split('T')[0] || a.fecha;
-                return fechaAbono !== fechaSeleccionadaStr;
-              })
+        if (cuotasAbonadasHoy.length > 0 || abonosGeneralesHoy.length > 0) {
+            tieneActividadHoy = true;
+            cuotasAbonadasHoy.forEach(c => {
+                const abonos = c.abonosCuota.filter(a => a.fecha === fechaSeleccionadaStr);
+                totalAbonadoHoy += abonos.reduce((s, a) => s + a.valor, 0);
             });
+            totalAbonadoHoy += abonosGeneralesHoy.reduce((s, a) => s + a.valor, 0);
+        }
 
-            const cuotaAntesDeHoy = cuotasAntesDeHoy[indexPrimeraCuotaPendiente];
-            const multasAntesDeHoy = calcularTotalMultasCuota(cuotaAntesDeHoy);
-            const multasCubiertasAntesDeHoy = cuotaAntesDeHoy.multasCubiertas || 0;
-            const multasPendientesAntesDeHoy = multasAntesDeHoy - multasCubiertasAntesDeHoy;
+        if (!tieneActividadHoy) return;
 
-            // El abono de hoy primero cubre multas pendientes
-            if (multasPendientesAntesDeHoy > 0) {
-              abonoHoyAMultas = Math.min(totalAbonadoHoy, multasPendientesAntesDeHoy);
-              abonoHoyACuota = totalAbonadoHoy - abonoHoyAMultas;
-            } else {
-              // Si no hay multas pendientes, todo el abono va a la cuota
-              abonoHoyACuota = totalAbonadoHoy;
-            }
-          }
+        // Determinar estado visual para la tabla
+        // Prioridad: Pendiente > Abonado > Cobrado
+        let tipoItem = 'cobrado';
+        if (totalACobrarHoy > 0) tipoItem = 'pendiente';
+        else if (totalAbonadoHoy > 0 && totalACobrarHoy === 0) tipoItem = 'abonado'; // Si abonó y no debe nada pendiente viejo/hoy
+        
+        // Si debe pendiente, el valor a mostrar principal es lo que debe.
+        // Si no debe, mostramos lo que pagó/abonó.
+        let valorMostrar = 0;
+        // CAMBIO: Para pendiente, mostrar siempre el valor de la cuota general del crédito,
+        // independiente de si debe varias. El usuario solicitó ver la cuota estándar.
+        if (tipoItem === 'pendiente') valorMostrar = credito.valorCuota; 
+        else if (tipoItem === 'cobrado') valorMostrar = totalCobradoHoy;
+        else valorMostrar = totalAbonadoHoy;
 
-          const abonadoGeneral = {
+        // Calcular info de vencimiento (Global del crédito)
+        // Similar a Clientes.jsx
+        let cuotasVencidasCount = 0;
+        let primerCuotaVencidaFecha = null;
+        const fechaHoyObj = startOfDay(new Date());
+
+        cuotasActualizadas.forEach(cuota => {
+             if (cuota.pagado) return;
+             const abono = cuota.abonoAplicado || 0;
+             if ((credito.valorCuota - abono) > 0) {
+                 const fProg = startOfDay(parseISO(cuota.fechaProgramada));
+                 if (isBefore(fProg, fechaHoyObj)) {
+                     cuotasVencidasCount++;
+                     if (!primerCuotaVencidaFecha || isBefore(fProg, startOfDay(parseISO(primerCuotaVencidaFecha)))) {
+                         primerCuotaVencidaFecha = cuota.fechaProgramada;
+                     }
+                 }
+             }
+        });
+
+        // Calcular saldo total del crédito
+        let pagadoTotal = 0;
+        credito.cuotas.forEach(c => { if(c.pagado) pagadoTotal += credito.valorCuota; }); 
+        const totalAbonosCredito = (credito.abonos || []).reduce((sum, a) => sum + a.valor, 0);
+        
+        const saldoTotalCredito = cuotasActualizadas.reduce((sum, c) => {
+             if (c.pagado) return sum;
+             const abono = c.abonoAplicado || 0;
+             const multas = calcularTotalMultasCuota(c) - (c.multasCubiertas || 0);
+             return sum + (credito.valorCuota - abono) + multas;
+        }, 0);
+
+
+        const item = {
+            tipo: tipoItem,
             clienteId: cliente.id,
             clienteNombre: cliente.nombre,
+            clienteDocumento: cliente.documento,
             clienteTelefono: cliente.telefono,
+            clienteDireccion: cliente.direccion,
+            clienteBarrio: cliente.barrio,
             creditoId: credito.id,
-            nroCuota: nroCuotaPendiente,
-            valorCuota: credito.valorCuota,
-            totalAbonado: totalAbonosCredito,
-            totalAbonadoHoy: totalAbonadoHoy,
-            saldoPendiente: cuotaPendiente + multasPendientes,
-            cartera: cliente.cartera,
-            esAbonoGeneral: true,
-            multasPendientes: multasPendientes,
-            multasCubiertas: multasCubiertasTotal,
-            cuotaPendiente: cuotaPendiente,
-            abonoHoyAMultas: abonoHoyAMultas,
-            abonoHoyACuota: abonoHoyACuota
-          };
+            creditoMonto: credito.monto,
+            creditoTipo: credito.tipo,
+            valorMostrar: valorMostrar,
+            saldoTotalCredito: saldoTotalCredito,
+            estadoCredito: estadoCredito,
+            cuotasVencidasCount,
+            primerCuotaVencidaFecha
+        };
 
-          if (cliente.cartera === 'K1') {
-            abonadosK1.push(abonadoGeneral);
-          } else {
-            abonadosK2.push(abonadoGeneral);
-          }
-        }
+        agregarItem(cliente.barrio, item);
+        
+        // Stats
+        stats.esperado += totalACobrarHoy + totalCobradoHoy + totalAbonadoHoy; 
+        stats.pendiente += totalACobrarHoy;
+        stats.recogido += (totalCobradoHoy + totalAbonadoHoy);
+
       });
     });
+    
+    stats.clientesTotal = clientesUnicos.size;
+    
+    const barriosOrdenados = Object.keys(porBarrio).sort().reduce((obj, key) => {
+      obj[key] = porBarrio[key];
+      return obj;
+    }, {});
 
-    return { cobrosK1, cobrosK2, cobradosK1, cobradosK2, abonadosK1, abonadosK2 };
+    return { porBarrio: barriosOrdenados, stats };
   }, [clientes, fechaSeleccionadaStr]);
-
-
-  // Calcular totales pendientes
-  const totalPendienteK1 = cobrosDelDia.cobrosK1.reduce((sum, cobro) => sum + cobro.valorCuota, 0);
-  const totalPendienteK2 = cobrosDelDia.cobrosK2.reduce((sum, cobro) => sum + cobro.valorCuota, 0);
-  const totalPendienteGeneral = totalPendienteK1 + totalPendienteK2;
-
-  // Calcular totales cobrados hoy
-  const totalCobradoK1 = cobrosDelDia.cobradosK1.reduce((sum, cobro) => sum + cobro.valorCuota, 0);
-  const totalCobradoK2 = cobrosDelDia.cobradosK2.reduce((sum, cobro) => sum + cobro.valorCuota, 0);
-  const totalCobradoGeneral = totalCobradoK1 + totalCobradoK2;
-
-  // Calcular totales abonados hoy
-  const totalAbonadoK1 = cobrosDelDia.abonadosK1.reduce((sum, abono) => sum + abono.totalAbonadoHoy, 0);
-  const totalAbonadoK2 = cobrosDelDia.abonadosK2.reduce((sum, abono) => sum + abono.totalAbonadoHoy, 0);
-  const totalAbonadoGeneral = totalAbonadoK1 + totalAbonadoK2;
-
-  // Contar clientes únicos por cartera
-  const clientesUnicosK1 = new Set(cobrosDelDia.cobrosK1.map(c => c.clienteId)).size;
-  const clientesUnicosK2 = new Set(cobrosDelDia.cobrosK2.map(c => c.clienteId)).size;
-  const totalClientesUnicos = clientesUnicosK1 + clientesUnicosK2;
 
   // Funciones de navegación de fecha
   const irAyer = () => setFechaSeleccionada(subDays(fechaSeleccionada, 1));
@@ -401,559 +256,242 @@ const DiaDeCobro = () => {
     const nuevaFecha = parseISO(e.target.value);
     setFechaSeleccionada(startOfDay(nuevaFecha));
   };
-
-  // Verificar si la fecha seleccionada es hoy
   const esHoy = format(fechaSeleccionada, 'yyyy-MM-dd') === format(startOfDay(new Date()), 'yyyy-MM-dd');
 
-  // Estado para el crédito seleccionado desde CobroCard
   const [creditoSeleccionado, setCreditoSeleccionado] = useState(null);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
 
-  const CobroCard = ({ cobro }) => {
-    const tieneMultas = cobro.totalMultas && cobro.totalMultas > 0;
-    const tieneAbonos = cobro.abonoAplicado > 0 || cobro.multasCubiertas > 0;
-    const tieneSaldoOMultas = cobro.tieneSaldoPendiente || tieneMultas;
-
-    // Determinar si es un caso simple (sin abonos previos ni multas)
-    const esCasoSimple = !tieneAbonos && !tieneMultas;
-
-    const handleClick = () => {
-      const cliente = obtenerCliente(cobro.clienteId);
-      const credito = obtenerCredito(cobro.clienteId, cobro.creditoId);
-      if (cliente && credito) {
-        setClienteSeleccionado(cliente);
-        setCreditoSeleccionado(credito);
-      }
-    };
-
-    return (
-      <div
-        onClick={handleClick}
-        className={`border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer ${tieneSaldoOMultas ? 'bg-orange-50 border-orange-300' : 'bg-white border-gray-200'
-          }`}
-      >
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <h3 className="font-semibold text-gray-900 text-lg">{cobro.clienteNombre}</h3>
-              {cobro.tieneSaldoPendiente && (
-                <span className="inline-flex items-center px-2 py-1 bg-orange-500 text-white rounded-full text-xs font-semibold">
-                  + Saldo
-                </span>
-              )}
-              {tieneMultas && (
-                <span className="inline-flex items-center px-2 py-1 bg-red-500 text-white rounded-full text-xs font-semibold">
-                  ⚠️ Multa
-                </span>
-              )}
-            </div>
-
-            {/* TOTAL A PAGAR - Destacado al inicio */}
-            <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg px-4 py-3 mb-3 shadow-md">
-              <p className="text-xs font-medium opacity-90">DEBE PAGAR</p>
-              <p className="text-2xl font-bold">{formatearMoneda(cobro.valorCuota)}</p>
-            </div>
-
-            {/* Desglose del pago */}
-            {!esCasoSimple && (
-              <div className="space-y-1 text-sm text-gray-600">
-                <div className="pt-2 border-t-2 border-orange-300">
-                  <p className="text-xs font-bold text-gray-700 mb-2">📊 Desglose:</p>
-
-                  {/* Cuota original */}
-                  <div className="bg-blue-50 border-l-4 border-blue-400 px-3 py-2 mb-1">
-                    <p className="text-sm font-semibold text-blue-900">
-                      Cuota #{cobro.nroCuota}: {formatearMoneda(cobro.valorCuotaOriginal)}
-                    </p>
-                  </div>
-
-                  {/* Multas (si existen) */}
-                  {(cobro.totalMultas > 0 || cobro.multasCubiertas > 0) && (
-                    <div className="bg-red-50 border-l-4 border-red-400 px-3 py-2 mb-1">
-                      <p className="text-sm font-semibold text-red-900">
-                        + Multas: {formatearMoneda(cobro.totalMultas + cobro.multasCubiertas)}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Total a pagar */}
-                  {(cobro.totalMultas > 0 || cobro.multasCubiertas > 0) && (
-                    <div className="bg-purple-50 border-l-4 border-purple-400 px-3 py-2 mb-2">
-                      <p className="text-sm font-bold text-purple-900">
-                        = Total: {formatearMoneda(cobro.valorCuotaOriginal + (cobro.totalMultas + cobro.multasCubiertas))}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Abonos aplicados (si existen) */}
-                  {tieneAbonos && (
-                    <div className="bg-green-50 border-l-4 border-green-400 px-3 py-2 mb-1">
-                      <p className="text-sm font-semibold text-green-900">
-                        - Ya pagó: {formatearMoneda(cobro.abonoAplicado + cobro.multasCubiertas)}
-                      </p>
-                      {cobro.multasCubiertas > 0 && (
-                        <p className="text-xs text-green-700 ml-2">
-                          • Multas: {formatearMoneda(cobro.multasCubiertas)}
-                        </p>
-                      )}
-                      {cobro.abonoAplicado > 0 && (
-                        <p className="text-xs text-green-700 ml-2">
-                          • Cuota: {formatearMoneda(cobro.abonoAplicado)}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Total pendiente */}
-                  <div className="bg-orange-100 border-l-4 border-orange-500 px-3 py-2 mt-2">
-                    <p className="text-sm font-bold text-orange-900">
-                      = Pendiente: {formatearMoneda(cobro.valorCuota)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
+  const abrirDetalle = (clienteId, creditoId) => {
+    const cliente = obtenerCliente(clienteId);
+    const credito = obtenerCredito(clienteId, creditoId);
+    if (cliente && credito) {
+      setClienteSeleccionado(cliente);
+      setCreditoSeleccionado(credito);
+    }
   };
 
-  const ClientePagadoCard = ({ cobrado }) => (
-    <div
-      onClick={() => navigate(`/cliente/${cobrado.clienteId}`)}
-      className="bg-green-50 border border-green-200 rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-gray-900 text-lg">{cobrado.clienteNombre}</h3>
-            <span className="inline-flex items-center px-2 py-1 bg-green-500 text-white rounded-full text-xs font-semibold">
-              ✓ Pagado
-            </span>
-          </div>
-        </div>
-        <div className="ml-4 text-right">
-          <div className="inline-flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded-full text-sm font-semibold">
-            <DollarSign className="h-4 w-4" />
-            {formatearMoneda(cobrado.valorCuota)}
-          </div>
-        </div>
-      </div>
+  // Tabla de Cobros (Nuevo Componente)
+  const TablaCobros = ({ items }) => (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm text-left text-gray-500">
+        <thead className="text-xs text-white uppercase bg-slate-800">
+          <tr>
+            <th scope="col" className="px-4 py-3 w-16 text-center">Ref. Crédito</th>
+            <th scope="col" className="px-4 py-3">Cliente</th>
+            <th scope="col" className="px-4 py-3">Crédito</th>
+            <th scope="col" className="px-4 py-3 text-green-400">Valor Cuota</th>
+            <th scope="col" className="px-4 py-3">Saldo Pendiente</th>
+            <th scope="col" className="px-4 py-3">Vencido</th>
+            <th scope="col" className="px-4 py-3">Modalidad</th>
+            <th scope="col" className="px-4 py-3 text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item, index) => (
+            <tr key={`${item.clienteId}-${item.creditoId}-${index}`} className="bg-white border-b hover:bg-gray-50">
+              <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
+                #{item.creditoId}
+              </td>
+              <td className="px-4 py-4">
+                <div className="flex flex-col">
+                  <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
+                  <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
+                  <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
+                    <Phone className="h-3 w-3" />
+                    <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
+                    <MapPin className="h-3 w-3" />
+                    {item.clienteBarrio || 'Sin barrio'}
+                  </div>
+                </div>
+              </td>
+              <td className="px-4 py-4 font-medium text-gray-900">
+                {formatearMoneda(item.creditoMonto)}
+              </td>
+              <td className="px-4 py-4 font-bold text-green-600 text-base">
+                {item.tipo === 'pendiente' 
+                  ? formatearMoneda(item.valorMostrar) 
+                  : item.tipo === 'cobrado'
+                    ? <span className="text-green-600">Pagado ({formatearMoneda(item.valorMostrar)})</span>
+                    : <span className="text-yellow-600">Abonado ({formatearMoneda(item.valorMostrar)})</span>
+                }
+              </td>
+              <td className="px-4 py-4 font-medium text-gray-900">
+                {formatearMoneda(item.saldoTotalCredito)}
+              </td>
+              <td className="px-4 py-4">
+                {item.cuotasVencidasCount > 0 ? (
+                  <div className="text-red-600 font-bold">
+                    (SI) - <span className="text-xs">{formatearFechaCorta(item.primerCuotaVencidaFecha)}</span>
+                    {item.cuotasVencidasCount > 1 && (
+                      <div className="text-xs text-red-500 mt-0.5 font-normal">
+                        ({item.cuotasVencidasCount} cuotas)
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-green-600 font-medium">Al día</span>
+                )}
+              </td>
+              <td className="px-4 py-4 capitalize">
+                {item.creditoTipo}
+              </td>
+              <td className="px-4 py-4 text-center">
+                <button
+                  onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
+                  className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
+                >
+                  Ver Detalle
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 
-  const ClienteAbonadoCard = ({ abonado }) => {
-    const tieneMultas = abonado.multasPendientes && abonado.multasPendientes > 0;
-    const multasPagadasCompleto = abonado.abonoHoyAMultas > 0 && abonado.multasPendientes === 0;
-    const saldoTotal = abonado.cuotaPendiente + (abonado.multasPendientes || 0);
-
-    return (
-      <div
-        onClick={() => navigate(`/cliente/${abonado.clienteId}`)}
-        className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-3">
-              <h3 className="font-semibold text-gray-900 text-lg">{abonado.clienteNombre}</h3>
-              <span className="inline-flex items-center px-2 py-1 bg-yellow-500 text-white rounded-full text-xs font-semibold">
-                💰 Abono {abonado.esAbonoGeneral ? 'General' : ''}
-              </span>
-              {tieneMultas && (
-                <span className="inline-flex items-center px-2 py-1 bg-red-500 text-white rounded-full text-xs font-semibold">
-                  ⚠️ Multa
-                </span>
-              )}
+  return (
+    <div className="space-y-6 pb-20">
+      {/* Header y Totales */}
+      <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl shadow-lg p-6 text-white">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="bg-white/10 p-3 rounded-lg">
+              <Calendar className="h-8 w-8 text-blue-300" />
             </div>
-
-            {/* SECCIÓN 1: Lo que abonó HOY */}
-            <div className="bg-blue-100 border-2 border-blue-400 rounded-lg p-3 mb-3">
-              <p className="text-xs font-bold text-blue-900 mb-2">💰 ABONÓ HOY:</p>
-              <p className="text-2xl font-bold text-blue-900 mb-2">{formatearMoneda(abonado.totalAbonadoHoy)}</p>
-
-              <div className="space-y-1">
-                {abonado.abonoHoyAMultas > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs font-semibold ${multasPagadasCompleto ? 'text-green-700' : 'text-blue-700'}`}>
-                      {multasPagadasCompleto ? '✓ Multas pagadas:' : '• A multas:'}
-                    </span>
-                    <span className="text-sm font-bold text-blue-900">
-                      {formatearMoneda(abonado.abonoHoyAMultas)}
-                    </span>
-                    {multasPagadasCompleto && (
-                      <span className="text-xs text-green-600">(completo)</span>
-                    )}
-                  </div>
-                )}
-                {abonado.abonoHoyACuota > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-blue-700">
-                      • A cuota:
-                    </span>
-                    <span className="text-sm font-bold text-blue-900">
-                      {formatearMoneda(abonado.abonoHoyACuota)}
-                    </span>
-                    <span className="text-xs text-blue-600">(parcial)</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* SECCIÓN 2: Saldo después del abono */}
-            <div className="bg-white border border-gray-200 rounded-lg p-3">
-              <div className="flex items-center gap-2">
-                <p className="text-xs font-medium text-gray-600">Teléfono:</p>
-                <p className="text-sm text-gray-900">{abonado.clienteTelefono}</p>
-              </div>
-              <div className="flex items-center gap-2 mt-1">
-                <p className="text-xs font-medium text-gray-600">Cuota:</p>
-                <p className="text-sm text-gray-900">#{abonado.nroCuota}</p>
-              </div>
-
-              <div className="mt-3 pt-3 border-t border-gray-200">
-                <p className="text-xs font-bold text-gray-700 mb-2">⚠️ AÚN DEBE:</p>
-                <div className="bg-orange-100 border-2 border-orange-400 rounded-lg px-4 py-3">
-                  <p className="text-2xl font-bold text-orange-900">{formatearMoneda(saldoTotal)}</p>
-                  <div className="mt-2 space-y-1 text-xs text-orange-800">
-                    {abonado.cuotaPendiente > 0 && (
-                      <p>• Cuota: {formatearMoneda(abonado.cuotaPendiente)}</p>
-                    )}
-                    {tieneMultas && (
-                      <p>• Multas: {formatearMoneda(abonado.multasPendientes)}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const CarteraSection = ({ titulo, cobros, cobrados, abonados, total, color }) => (
-    <div className="bg-white rounded-xl shadow-md overflow-hidden">
-      <div className={`${color} px-6 py-4 flex items-center justify-between`}>
-        <div className="flex items-center gap-3">
-          <Wallet className="h-6 w-6 text-white" />
-          <h2 className="text-xl font-bold text-white">{titulo}</h2>
-        </div>
-        <div className="text-right">
-          <p className="text-sm text-white/80">Total a cobrar</p>
-          <p className="text-2xl font-bold text-white">{formatearMoneda(total)}</p>
-        </div>
-      </div>
-
-      <div className="p-6">
-        {cobros.length === 0 ? (
-          <div className="text-center py-12">
-            <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 text-lg">No hay cobros programados para esta fecha</p>
-          </div>
-        ) : (
-          <>
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm text-gray-600">
-                <span className="font-semibold">{cobros.length}</span> {cobros.length === 1 ? 'cliente' : 'clientes'} para cobrar
+            <div>
+              <h1 className="text-2xl font-bold">Día de Cobro</h1>
+              <p className="text-slate-300 text-sm">
+                {format(fechaSeleccionada, "EEEE, d 'de' MMMM", { locale: es })}
               </p>
             </div>
-            <div className="space-y-3">
-              {cobros.map((cobro, index) => (
-                <CobroCard key={`${cobro.clienteId}-${cobro.creditoId}-${cobro.nroCuota}`} cobro={cobro} />
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* Sección de clientes que abonaron */}
-        {abonados && abonados.length > 0 && (
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <div className="mb-4 flex items-center gap-2">
-              <div className="bg-yellow-100 p-2 rounded-full">
-                <DollarSign className="h-5 w-5 text-yellow-600" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900">
-                Clientes que Abonaron
-              </h3>
-              <span className="ml-auto bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-semibold">
-                {abonados.length} {abonados.length === 1 ? 'abono' : 'abonos'}
-              </span>
-            </div>
-            <div className="space-y-3">
-              {abonados.map((abonado, index) => (
-                <ClienteAbonadoCard key={`${abonado.clienteId}-${abonado.creditoId}-${index}`} abonado={abonado} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Sección de clientes que ya pagaron */}
-        {cobrados && cobrados.length > 0 && (
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <div className="mb-4 flex items-center gap-2">
-              <div className="bg-green-100 p-2 rounded-full">
-                <Users className="h-5 w-5 text-green-600" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900">
-                Clientes que ya Pagaron
-              </h3>
-              <span className="ml-auto bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">
-                {cobrados.length} {cobrados.length === 1 ? 'pago' : 'pagos'}
-              </span>
-            </div>
-            <div className="space-y-3">
-              {cobrados.map((cobrado, index) => (
-                <ClientePagadoCard key={`${cobrado.clienteId}-${index}`} cobrado={cobrado} />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  // Vista normal
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-slate-700 to-slate-900 rounded-xl shadow-md overflow-hidden">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-3">
-              <Calendar className="h-8 w-8" />
-              <h1 className="text-3xl font-bold">Día de Cobro</h1>
-            </div>
-
-            {/* Selector de Fecha */}
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={irAyer}
-                className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                <span className="text-sm font-medium">Ayer</span>
-              </button>
-
-              <button
-                onClick={irHoy}
-                disabled={esHoy}
-                className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${esHoy
-                  ? 'bg-blue-500 text-white cursor-default'
-                  : 'bg-white/10 hover:bg-white/20'
-                  }`}
-              >
-                Hoy
-              </button>
-
-              <button
-                onClick={irMañana}
-                className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                <span className="text-sm font-medium">Mañana</span>
-                <ChevronRight className="h-4 w-4" />
-              </button>
-
-              <div className="flex items-center gap-2 bg-white/10 rounded-lg px-4 py-2">
-                <Calendar className="h-4 w-4" />
-                <input
-                  type="date"
-                  value={format(fechaSeleccionada, 'yyyy-MM-dd')}
-                  onChange={cambiarFecha}
-                  className="bg-transparent border-none text-white text-sm font-medium focus:outline-none cursor-pointer"
-                />
-              </div>
-            </div>
-
-            <p className="text-slate-200 text-lg mt-3">
-              {format(fechaSeleccionada, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
-            </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Users className="h-6 w-6 text-slate-300" />
-            <div className="text-right">
-              <p className="text-sm text-slate-300">Clientes a cobrar</p>
-              <p className="text-3xl font-bold">{totalClientesUnicos}</p>
+          {/* Navegación Fecha */}
+          <div className="flex bg-slate-700/50 rounded-lg p-1">
+            <button onClick={irAyer} className="p-2 hover:bg-white/10 rounded-md transition-colors">
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div className="relative">
+              <input
+                type="date"
+                value={fechaSeleccionadaStr}
+                onChange={cambiarFecha}
+                className="bg-transparent text-center font-bold w-32 focus:outline-none cursor-pointer h-full"
+              />
             </div>
+            <button onClick={irMañana} className="p-2 hover:bg-white/10 rounded-md transition-colors">
+              <ChevronRight className="h-5 w-5" />
+            </button>
+            <button 
+              onClick={irHoy}
+              className={`ml-2 px-3 text-sm font-bold rounded-md transition-colors ${esHoy ? 'bg-blue-600 text-white' : 'hover:bg-white/10 text-slate-300'}`}
+            >
+              Hoy
+            </button>
           </div>
         </div>
 
-        {/* Totales */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-            <p className="text-sm text-slate-300 mb-1">📊 Total Esperado</p>
-            <p className="text-3xl font-bold text-white">{formatearMoneda(totalPendienteGeneral + totalCobradoGeneral + totalAbonadoGeneral)}</p>
-            <p className="text-sm text-slate-300 mt-1">
-              Para el día de {esHoy ? 'hoy' : 'cobro'}
-            </p>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <div className="bg-white/10 rounded-lg p-3">
+            <p className="text-xs text-slate-400 uppercase font-bold mb-1">Por Cobrar</p>
+            <p className="text-xl md:text-2xl font-bold text-orange-300">{formatearMoneda(datosCobro.stats.pendiente)}</p>
           </div>
-
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-            <p className="text-sm text-slate-300 mb-1">✅ Total Recogido</p>
-            <p className="text-3xl font-bold text-green-300">{formatearMoneda(totalCobradoGeneral + totalAbonadoGeneral)}</p>
-            <p className="text-sm text-slate-300 mt-1">
-              {cobrosDelDia.cobradosK1.length + cobrosDelDia.cobradosK2.length} cuotas + {cobrosDelDia.abonadosK1.length + cobrosDelDia.abonadosK2.length} abonos
-            </p>
+          <div className="bg-white/10 rounded-lg p-3">
+            <p className="text-xs text-slate-400 uppercase font-bold mb-1">Recogido</p>
+            <p className="text-xl md:text-2xl font-bold text-green-300">{formatearMoneda(datosCobro.stats.recogido)}</p>
           </div>
-
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-            <p className="text-sm text-slate-300 mb-1">⏳ Faltante por Cobrar</p>
-            <p className="text-3xl font-bold text-orange-300">{formatearMoneda(totalPendienteGeneral)}</p>
-            <p className="text-sm text-slate-300 mt-1">
-              {cobrosDelDia.cobrosK1.length + cobrosDelDia.cobrosK2.length} cuotas pendientes
-            </p>
+          <div className="bg-white/10 rounded-lg p-3">
+            <p className="text-xs text-slate-400 uppercase font-bold mb-1">Clientes</p>
+            <p className="text-xl md:text-2xl font-bold text-blue-300">{datosCobro.stats.clientesTotal}</p>
           </div>
         </div>
-
       </div>
 
-      {/* Sección de Visitas Programadas */}
+      {/* Visitas */}
       {visitasDelDia.length > 0 && (
-        <div className="bg-white rounded-xl shadow-md overflow-hidden border border-purple-100">
-          <div className="bg-purple-600 px-6 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Clock className="h-6 w-6 text-white" />
-              <h2 className="text-xl font-bold text-white">Visitas Programadas</h2>
-            </div>
-            <span className="bg-white/20 text-white px-3 py-1 rounded-full text-sm font-semibold">
-              {visitasDelDia.length} pendientes
-            </span>
+        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3 text-purple-800">
+            <Clock className="h-5 w-5" />
+            <h2 className="font-bold text-lg">Visitas Programadas ({visitasDelDia.length})</h2>
           </div>
-
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {visitasDelDia.map((visita, index) => (
-              <div key={visita.id} className="border border-purple-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-purple-50">
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h3 className="font-bold text-gray-800">{visita.solicitante.nombre}</h3>
-                    <p className="text-xs text-purple-600 font-semibold">
-                      {visita.fechaVisita < fechaSeleccionadaStr ? '⚠️ Atrasada desde ' + visita.fechaVisita : '📅 Programada para hoy'}
-                    </p>
+          <div className="grid gap-3 md:grid-cols-2">
+            {visitasDelDia.map(visita => (
+              <div key={visita.id} className="bg-white p-3 rounded-lg shadow-sm flex justify-between items-center border border-purple-100">
+                <div>
+                  <p className="font-bold text-gray-800">{visita.solicitante.nombre}</p>
+                  <div className="flex items-center gap-1 text-xs text-gray-500">
+                    <MapPin className="h-3 w-3" />
+                    {visita.solicitante.barrioCasa}
                   </div>
-                  <button
-                    onClick={() => handleCompletarVisita(visita.id)}
-                    className="p-2 bg-green-100 text-green-600 rounded-full hover:bg-green-200 transition-colors"
-                    title="Marcar como completada"
-                  >
-                    <CheckCircle size={20} />
-                  </button>
                 </div>
-
-                <div className="space-y-2 text-sm text-gray-600">
-                  <div className="flex items-start gap-2">
-                    <MapPin size={16} className="mt-0.5 text-gray-400" />
-                    <p>{visita.solicitante.direccionCasa} ({visita.solicitante.barrioCasa})</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <DollarSign size={16} className="text-gray-400" />
-                    <p>Solicita: <span className="font-semibold text-gray-900">${visita.valorPrestamo}</span></p>
-                  </div>
-                  {visita.observaciones && (
-                    <div className="mt-2 pt-2 border-t border-purple-200 text-xs italic">
-                      "{visita.observaciones}"
-                    </div>
-                  )}
-                </div>
+                <button 
+                  onClick={() => handleCompletarVisita(visita.id)}
+                  className="p-2 hover:bg-green-100 text-gray-400 hover:text-green-600 rounded-full transition-colors"
+                >
+                  <CheckCircle className="h-5 w-5" />
+                </button>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Resumen por Cartera */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Cartera K1 */}
-        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-sm font-medium text-blue-600 mb-1">Cartera K1</p>
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-blue-600" />
-                <p className="text-xl font-bold text-blue-900">{clientesUnicosK1} clientes</p>
+      {/* Lista de Barrios (Acordeones) */}
+      <div className="space-y-4">
+        {Object.keys(datosCobro.porBarrio).length === 0 ? (
+          <div className="text-center py-12 text-gray-400">
+            <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
+            <p className="text-lg">No hay cobros para esta fecha</p>
+          </div>
+        ) : (
+          Object.entries(datosCobro.porBarrio).map(([barrio, items]) => {
+            const expandido = barriosExpandidos[barrio];
+            const totalBarrio = items.reduce((sum, item) => {
+              if (item.tipo === 'pendiente') return sum + item.valorMostrar;
+              return sum;
+            }, 0);
+            const clientesCount = items.length;
+
+            return (
+              <div key={barrio} className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">
+                <button
+                  onClick={() => toggleBarrio(barrio)}
+                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="bg-blue-100 p-2 rounded-full text-blue-600">
+                      <MapPin className="h-5 w-5" />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="font-bold text-gray-800 text-lg">{barrio}</h3>
+                      <p className="text-xs text-gray-500">{clientesCount} {clientesCount === 1 ? 'cliente' : 'clientes'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right hidden sm:block">
+                      <p className="text-xs text-gray-500 font-bold uppercase">Pendiente</p>
+                      <p className="font-bold text-orange-600">{formatearMoneda(totalBarrio)}</p>
+                    </div>
+                    {expandido ? <ChevronUp className="h-5 w-5 text-gray-400" /> : <ChevronDown className="h-5 w-5 text-gray-400" />}
+                  </div>
+                </button>
+                
+                {expandido && (
+                  <div className="border-t border-gray-100">
+                    <TablaCobros items={items} />
+                  </div>
+                )}
               </div>
-            </div>
-            <div className="bg-blue-100 p-4 rounded-full">
-              <Wallet className="h-8 w-8 text-blue-600" />
-            </div>
-          </div>
-
-          <div className="space-y-2 border-t border-blue-200 pt-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-blue-700">📊 Total esperado:</span>
-              <span className="text-lg font-bold text-blue-900">{formatearMoneda(totalPendienteK1 + totalCobradoK1)}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-blue-700">✅ Total recogido:</span>
-              <span className="text-lg font-bold text-green-700">{formatearMoneda(totalCobradoK1 + totalAbonadoK1)}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-blue-700">⏳ Faltante por cobrar:</span>
-              <span className="text-lg font-bold text-orange-600">{formatearMoneda(totalPendienteK1)}</span>
-            </div>
-            <div className="flex justify-between items-center text-xs text-blue-600 pt-2 border-t border-blue-200">
-              <span>{cobrosDelDia.cobrosK1.length} cuotas pendientes</span>
-              <span>{cobrosDelDia.cobradosK1.length} cuotas cobradas</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Cartera K2 */}
-        <div className="bg-green-50 border-2 border-green-200 rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-sm font-medium text-green-600 mb-1">Cartera K2</p>
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-green-600" />
-                <p className="text-xl font-bold text-green-900">{clientesUnicosK2} clientes</p>
-              </div>
-            </div>
-            <div className="bg-green-100 p-4 rounded-full">
-              <Wallet className="h-8 w-8 text-green-600" />
-            </div>
-          </div>
-
-          <div className="space-y-2 border-t border-green-200 pt-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-green-700">📊 Total esperado:</span>
-              <span className="text-lg font-bold text-green-900">{formatearMoneda(totalPendienteK2 + totalCobradoK2)}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-green-700">✅ Total recogido:</span>
-              <span className="text-lg font-bold text-green-700">{formatearMoneda(totalCobradoK2 + totalAbonadoK2)}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-green-700">⏳ Faltante por cobrar:</span>
-              <span className="text-lg font-bold text-orange-600">{formatearMoneda(totalPendienteK2)}</span>
-            </div>
-            <div className="flex justify-between items-center text-xs text-green-600 pt-2 border-t border-green-200">
-              <span>{cobrosDelDia.cobrosK2.length} cuotas pendientes</span>
-              <span>{cobrosDelDia.cobradosK2.length} cuotas cobradas</span>
-            </div>
-          </div>
-        </div>
+            );
+          })
+        )}
       </div>
 
-      {/* Carteras */}
-      <div className="space-y-6">
-        <CarteraSection
-          titulo="Cartera K1"
-          cobros={cobrosDelDia.cobrosK1}
-          cobrados={cobrosDelDia.cobradosK1}
-          abonados={cobrosDelDia.abonadosK1}
-          total={totalPendienteK1}
-          color="bg-gradient-to-r from-blue-600 to-blue-700"
-        />
-
-        <CarteraSection
-          titulo="Cartera K2"
-          cobros={cobrosDelDia.cobrosK2}
-          cobrados={cobrosDelDia.cobradosK2}
-          abonados={cobrosDelDia.abonadosK2}
-          total={totalPendienteK2}
-          color="bg-gradient-to-r from-green-600 to-green-700"
-        />
-      </div>
-
-      {/* Modal de detalle de crédito */}
+      {/* Modal Detalle */}
       {creditoSeleccionado && clienteSeleccionado && (
         <CreditoDetalle
           credito={creditoSeleccionado}

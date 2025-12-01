@@ -303,10 +303,7 @@ export const calcularDiasMora = (fechaProgramada) => {
 
 // Aplicar abonos automáticamente a multas y cuotas
 export const aplicarAbonosAutomaticamente = (credito) => {
-  const totalAbonos = (credito.abonos || []).reduce((total, abono) => total + abono.valor, 0);
-  let saldoAbono = totalAbonos;
-
-  // Copiar las cuotas para modificarlas
+  // 1. Inicializar cuotas
   const cuotasActualizadas = credito.cuotas.map(cuota => ({
     ...cuota,
     multas: cuota.multas ? [...cuota.multas] : [],
@@ -314,44 +311,77 @@ export const aplicarAbonosAutomaticamente = (credito) => {
     multasCubiertas: 0
   }));
 
-  // Aplicar abonos a cada cuota en orden (primero multas, luego valor de cuota)
-  for (let cuota of cuotasActualizadas) {
-    if (saldoAbono <= 0) break;
-    if (cuota.pagado) continue; // Saltar cuotas ya pagadas manualmente
+  let saldoAbonoGeneral = 0;
 
-    // Primero cubrir las multas de esta cuota (si las tiene)
-    if (cuota.multas && cuota.multas.length > 0) {
-      const totalMultasCuota = cuota.multas.reduce((sum, m) => sum + m.valor, 0);
+  // 2. Procesar abonos dirigidos (específicos para una cuota)
+  // Buscamos en la descripción algo como "Cuota #1" o si el objeto tiene nroCuota
+  (credito.abonos || []).forEach(abono => {
+    const match = abono.descripcion && abono.descripcion.match(/(?:Cuota|cuota)\s*#(\d+)/);
+    const nroCuotaTarget = abono.nroCuota || (match ? parseInt(match[1]) : null);
 
-      if (saldoAbono >= totalMultasCuota) {
-        // El abono cubre todas las multas de esta cuota
-        saldoAbono -= totalMultasCuota;
-        cuota.multasCubiertas = totalMultasCuota;
+    if (nroCuotaTarget) {
+      const cuota = cuotasActualizadas.find(c => c.nroCuota === nroCuotaTarget);
+      if (cuota) {
+        let monto = abono.valor;
+
+        // Aplicar a multas primero
+        if (cuota.multas && cuota.multas.length > 0) {
+          const totalMultas = cuota.multas.reduce((sum, m) => sum + m.valor, 0);
+          const multasYaCubiertas = cuota.multasCubiertas || 0;
+          const multasPendientes = totalMultas - multasYaCubiertas;
+
+          if (multasPendientes > 0) {
+            const aporteMultas = Math.min(monto, multasPendientes);
+            cuota.multasCubiertas += aporteMultas;
+            monto -= aporteMultas;
+          }
+        }
+
+        // Aplicar al capital de la cuota
+        // Nota: Permitimos acumular incluso si supera el valor de la cuota para mantener el abono atado aquí
+        cuota.abonoAplicado += monto;
       } else {
-        // El abono cubre parcialmente las multas
-        cuota.multasCubiertas = saldoAbono;
-        saldoAbono = 0;
-        continue; // Si no alcanzó para las multas, no puede cubrir la cuota
+        // Si la cuota no existe, lo tratamos como general
+        saldoAbonoGeneral += abono.valor;
       }
+    } else {
+      // Abono general
+      saldoAbonoGeneral += abono.valor;
+    }
+  });
+
+  // 3. Procesar abonos generales (Waterfall - Cascada)
+  // Solo se aplican a cuotas NO pagadas manualmente
+  for (let cuota of cuotasActualizadas) {
+    if (saldoAbonoGeneral <= 0) break;
+    if (cuota.pagado) continue;
+
+    // Primero cubrir las multas pendientes de esta cuota
+    const totalMultasCuota = cuota.multas ? cuota.multas.reduce((sum, m) => sum + m.valor, 0) : 0;
+    const multasPendientes = totalMultasCuota - cuota.multasCubiertas;
+
+    if (multasPendientes > 0) {
+      const aporte = Math.min(saldoAbonoGeneral, multasPendientes);
+      cuota.multasCubiertas += aporte;
+      saldoAbonoGeneral -= aporte;
     }
 
-    // Después cubrir el valor de la cuota
-    const valorCuota = credito.valorCuota;
+    if (saldoAbonoGeneral <= 0) continue;
 
-    if (saldoAbono >= valorCuota) {
-      // El abono cubre toda la cuota
-      cuota.abonoAplicado = valorCuota;
-      saldoAbono -= valorCuota;
-    } else if (saldoAbono > 0) {
-      // El abono cubre parcialmente la cuota
-      cuota.abonoAplicado = saldoAbono;
-      saldoAbono = 0;
+    // Después cubrir el valor pendiente de la cuota
+    const valorCuota = credito.valorCuota;
+    const capitalPendiente = valorCuota - cuota.abonoAplicado;
+
+    if (capitalPendiente > 0) {
+      const aporte = Math.min(saldoAbonoGeneral, capitalPendiente);
+      cuota.abonoAplicado += aporte;
+      saldoAbonoGeneral -= aporte;
     }
   }
 
   return {
     cuotasActualizadas,
-    saldoAbonoRestante: saldoAbono
+    saldoAbonoRestante: saldoAbonoGeneral
   };
 };
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { formatearMoneda } from '../../utils/creditCalculations';
 import CuotaCard from './CuotaCard';
 import RecobroCard from './RecobroCard';
@@ -8,58 +8,125 @@ const GrillaCuotas = ({
   credito, 
   cuotasActualizadas, 
   todasLasMultas,
-  obtenerNumeroCuotas 
+  obtenerNumeroCuotas,
+  onPagar,
+  onNuevaMulta,
+  sinContenedor = false
 }) => {
-  // Calcular qué abonos individuales se aplicaron a cada cuota
-  const calcularAbonosIndividuales = (cuota) => {
-    const abonosIndividuales = [];
-    if (credito.abonos && credito.abonos.length > 0 && cuota) {
-      credito.abonos.forEach((abono, abonoIdx) => {
-        // Calcular abonos anteriores a este
-        let abonosAnteriores = 0;
-        for (let i = 0; i < abonoIdx; i++) {
-          abonosAnteriores += credito.abonos[i].valor;
+  // Calcular distribución de abonos para visualización
+  const abonosPorCuota = useMemo(() => {
+    const mapa = {}; // { nroCuota: [ { fecha, valor } ] }
+    
+    // Inicializar mapa
+    (credito.cuotas || []).forEach(c => mapa[c.nroCuota] = []);
+    
+    // Estado temporal para simulación de waterfall
+    const estadoCuotas = (credito.cuotas || []).map(c => ({
+      ...c,
+      abonoAplicado: 0,
+      multasCubiertas: 0
+    }));
+    
+    (credito.abonos || []).forEach(abono => {
+      // Detectar si es un abono específico
+      const match = abono.descripcion && abono.descripcion.match(/(?:Cuota|cuota)\s*#(\d+)/);
+      const nroCuotaTarget = abono.nroCuota || (match ? parseInt(match[1]) : null);
+      
+      let monto = abono.valor;
+      
+      if (nroCuotaTarget) {
+        const cuota = estadoCuotas.find(c => c.nroCuota === nroCuotaTarget);
+        if (cuota) {
+          // Es un abono para esta cuota
+          mapa[cuota.nroCuota].push({ fecha: abono.fecha, valor: monto });
+          
+          // Actualizar estado para que el waterfall sepa cuánto deuda queda
+          // Nota: En la lógica real, esto se aplica a multas y capital. Simplificamos aquí.
+          cuota.abonoAplicado += monto; // Simplemente sumamos al abono aplicado
         }
-        
-        let saldoAbono = abono.valor;
-        let saldoPrevio = abonosAnteriores;
-        
-        for (let c of credito.cuotas) {
-          if (saldoAbono <= 0) break;
-          if (c.pagado) continue;
+      } else {
+        // Abono general (Waterfall)
+        let saldo = monto;
+        for (let cuota of estadoCuotas) {
+          if (saldo <= 0) break;
+          if (cuota.pagado) continue;
           
-          const multasC = c.multas && c.multas.length > 0 
-            ? c.multas.reduce((sum, m) => sum + m.valor, 0) 
-            : 0;
-          const necesario = multasC + credito.valorCuota;
+          const totalMultas = cuota.multas ? cuota.multas.reduce((s, m) => s + m.valor, 0) : 0;
+          const multasPend = totalMultas - cuota.multasCubiertas;
+          const capitalPend = credito.valorCuota - cuota.abonoAplicado;
           
-          if (saldoPrevio >= necesario) {
-            saldoPrevio -= necesario;
-            continue;
+          let consumo = 0;
+          
+          // Cubrir multas
+          if (multasPend > 0) {
+            const aporte = Math.min(saldo, multasPend);
+            cuota.multasCubiertas += aporte;
+            saldo -= aporte;
+            consumo += aporte;
           }
           
-          const falta = necesario - saldoPrevio;
-          const aplicado = Math.min(saldoAbono, falta);
-          
-          if (aplicado > 0 && c.nroCuota === cuota.nroCuota) {
-            abonosIndividuales.push({
-              fecha: abono.fecha,
-              valor: aplicado
-            });
+          // Cubrir capital
+          if (saldo > 0 && capitalPend > 0) {
+            const aporte = Math.min(saldo, capitalPend);
+            cuota.abonoAplicado += aporte;
+            saldo -= aporte;
+            consumo += aporte;
           }
           
-          saldoAbono -= aplicado;
-          saldoPrevio = 0;
+          if (consumo > 0) {
+            if (!mapa[cuota.nroCuota]) mapa[cuota.nroCuota] = [];
+            mapa[cuota.nroCuota].push({ fecha: abono.fecha, valor: consumo });
+          }
         }
-      });
-    }
-    return abonosIndividuales;
-  };
+      }
+    });
+    
+    return mapa;
+  }, [credito]);
+
+  const content = (
+    <>
+      {/* VALOR CUOTA - Título removido ya que está en el header general */}
+      
+      {/* Grilla de cuotas */}
+      <div className={`grid gap-4 mx-auto w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 auto-rows-fr`}>
+        {Array.from({ length: obtenerNumeroCuotas(formData.tipoPago) }, (_, index) => {
+          const nroCuota = index + 1;
+          const cuota = cuotasActualizadas[index];
+          const abonosIndividuales = abonosPorCuota[nroCuota] || [];
+          
+          return (
+            <div key={nroCuota} className="w-full">
+              <CuotaCard
+                nroCuota={nroCuota}
+                cuota={cuota}
+                credito={credito}
+                abonosIndividuales={abonosIndividuales}
+                valorCuota={formData.valorCuota}
+                onPagar={onPagar}
+              />
+            </div>
+          );
+        })}
+      </div>
+      
+      {/* Card de Recobro - Ancho completo debajo de la grilla */}
+      <div className="mt-4 w-full">
+        <RecobroCard 
+          todasLasMultas={todasLasMultas} 
+          onNuevaMulta={onNuevaMulta}
+        />
+      </div>
+    </>
+  );
+
+  if (sinContenedor) {
+    return <div className="h-full">{content}</div>;
+  }
 
   return (
     <div className="mt-8 print-section">
       <div className="bg-white border-2 border-blue-500 rounded-lg p-6">
-        {/* VALOR CUOTA */}
         <div className="mb-6">
           <h3 className="text-xl font-bold text-blue-600 text-center mb-2">VALOR CUOTA $</h3>
           <div className="flex justify-center">
@@ -70,35 +137,7 @@ const GrillaCuotas = ({
             </div>
           </div>
         </div>
-
-        {/* Grilla de cuotas */}
-        <div className={`grid gap-4 mx-auto ${
-          obtenerNumeroCuotas(formData.tipoPago) === 60 
-            ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 max-w-7xl' 
-            : obtenerNumeroCuotas(formData.tipoPago) === 10
-            ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 max-w-6xl'
-            : obtenerNumeroCuotas(formData.tipoPago) === 5
-            ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 max-w-5xl'
-            : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 max-w-4xl'
-        }`}>
-          {Array.from({ length: obtenerNumeroCuotas(formData.tipoPago) }, (_, index) => {
-            const nroCuota = index + 1;
-            const cuota = cuotasActualizadas[index];
-            const abonosIndividuales = calcularAbonosIndividuales(cuota);
-            
-            return (
-              <CuotaCard
-                key={nroCuota}
-                nroCuota={nroCuota}
-                cuota={cuota}
-                credito={credito}
-                abonosIndividuales={abonosIndividuales}
-                valorCuota={formData.valorCuota}
-              />
-            );
-          })}
-          <RecobroCard todasLasMultas={todasLasMultas} />
-        </div>
+        {content}
       </div>
     </div>
   );
