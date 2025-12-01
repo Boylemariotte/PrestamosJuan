@@ -222,6 +222,7 @@ const DiaDeCobro = () => {
             creditoMonto: credito.monto,
             creditoTipo: credito.tipo,
             valorMostrar: valorMostrar,
+            valorRealACobrar: totalACobrarHoy,
             saldoTotalCredito: saldoTotalCredito,
             estadoCredito: estadoCredito,
             cuotasVencidasCount,
@@ -280,7 +281,8 @@ const DiaDeCobro = () => {
             <th scope="col" className="px-4 py-3">Cliente</th>
             <th scope="col" className="px-4 py-3">Crédito</th>
             <th scope="col" className="px-4 py-3 text-green-400">Valor Cuota</th>
-            <th scope="col" className="px-4 py-3">Saldo Pendiente</th>
+            <th scope="col" className="px-4 py-3">Saldo Pendiente (Cuota)</th>
+            <th scope="col" className="px-4 py-3">Saldo Pendiente (Total)</th>
             <th scope="col" className="px-4 py-3">Vencido</th>
             <th scope="col" className="px-4 py-3">Modalidad</th>
             <th scope="col" className="px-4 py-3 text-center">Acciones</th>
@@ -316,6 +318,9 @@ const DiaDeCobro = () => {
                     ? <span className="text-green-600">Pagado ({formatearMoneda(item.valorMostrar)})</span>
                     : <span className="text-yellow-600">Abonado ({formatearMoneda(item.valorMostrar)})</span>
                 }
+              </td>
+              <td className="px-4 py-4 font-medium text-orange-600">
+                {item.tipo === 'cobrado' ? '-' : formatearMoneda(item.valorRealACobrar)}
               </td>
               <td className="px-4 py-4 font-medium text-gray-900">
                 {formatearMoneda(item.saldoTotalCredito)}
@@ -451,7 +456,7 @@ const DiaDeCobro = () => {
           Object.entries(datosCobro.porBarrio).map(([barrio, items]) => {
             const expandido = barriosExpandidos[barrio];
             const totalBarrio = items.reduce((sum, item) => {
-              if (item.tipo === 'pendiente') return sum + item.valorMostrar;
+              if (item.tipo === 'pendiente') return sum + (item.valorRealACobrar || 0);
               return sum;
             }, 0);
             const clientesCount = items.length;
