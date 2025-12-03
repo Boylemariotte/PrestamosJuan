@@ -244,7 +244,7 @@ const Visitas = () => {
     };
 
     return (
-        <div className="max-w-6xl mx-auto space-y-8 p-4">
+        <div className="max-w-6xl mx-auto space-y-8 p-4 print:p-2 print:space-y-4 print:max-w-full">
             {/* Header Global */}
             <div className="flex justify-between items-center bg-white p-6 rounded-lg shadow-sm no-print">
                 <h1 className="text-2xl font-bold text-gray-800">Gestión de Visitas</h1>
@@ -591,7 +591,7 @@ const Visitas = () => {
             </div>
 
             {/* Lista de Visitas Agendadas */}
-            <div className="space-y-6">
+            <div className="space-y-6 print:space-y-3 print:text-xs">
                 <h2 className="text-2xl font-bold text-gray-800 text-center no-print">Visitas Agendadas ({visitas.length})</h2>
 
                 {visitas.length === 0 ? (
@@ -599,11 +599,15 @@ const Visitas = () => {
                         <p className="text-gray-500 text-lg">No hay visitas agendadas para imprimir.</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 gap-8">
+                    <div className="grid grid-cols-1 gap-8 print:gap-4">
                         {visitas.map((visit, index) => (
-                            <div key={visit.id} className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200 break-inside-avoid">
-                                <div className="bg-gray-50 px-6 py-3 border-b border-gray-200 flex justify-between items-center">
-                                    <h3 className="font-bold text-lg text-gray-800">Visita #{index + 1} - {visit.solicitante.nombre}</h3>
+                            <div key={visit.id} className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200 break-inside-avoid print:shadow-none print:border print:mb-2 print:page-break-inside-avoid">
+                                {/* Encabezado similar al formulario */}
+                                <div className="px-8 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center print:px-4 print:py-2">
+                                    <h3 className="text-lg font-bold text-gray-700 flex items-center gap-2">
+                                        <span>Visita #{index + 1}</span>
+                                        <span className="text-sm font-normal text-gray-500">- {visit.solicitante.nombre}</span>
+                                    </h3>
                                     <div className="flex gap-2 no-print">
                                         <button
                                             onClick={() => openCarteraModal(visit)}
@@ -621,24 +625,120 @@ const Visitas = () => {
                                         </button>
                                     </div>
                                 </div>
-                                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
-                                    <div className="space-y-2">
-                                        <p><span className="font-semibold">Fecha Visita:</span> {visit.fechaVisita}</p>
-                                        <p><span className="font-semibold">Tipo Préstamo:</span> {visit.tipoPrestamo}</p>
-                                        <p><span className="font-semibold">Valor:</span> ${visit.valorPrestamo}</p>
-                                        <p><span className="font-semibold">Cuota:</span> ${visit.valorCuota}</p>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <p><span className="font-semibold">Solicitante:</span> {visit.solicitante.nombre} - {visit.solicitante.telefono}</p>
-                                        <p><span className="font-semibold">Dirección:</span> {visit.solicitante.direccionCasa} ({visit.solicitante.barrioCasa})</p>
-                                        <p><span className="font-semibold">Fiador:</span> {visit.fiador.nombre} - {visit.fiador.telefono}</p>
-                                        <p><span className="font-semibold">Dirección Fiador:</span> {visit.fiador.direccionCasa} ({visit.fiador.barrioCasa})</p>
-                                    </div>
-                                    {visit.observaciones && (
-                                        <div className="col-span-1 md:col-span-2 mt-2 pt-2 border-t border-gray-100">
-                                            <p><span className="font-semibold">Observaciones:</span> {visit.observaciones}</p>
+
+                                {/* Cuerpo con formato similar al formulario de Nueva Visita */}
+                                <div className="p-8 space-y-6 text-sm print:p-4 print:space-y-3 print:text-[11px]">
+                                    {/* Fechas */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1 print:gap-3">
+                                        <div className="flex flex-col">
+                                            <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Fecha Agendamiento</label>
+                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800">
+                                                {visit.fechaAgendamiento}
+                                            </div>
                                         </div>
-                                    )}
+                                        <div className="flex flex-col">
+                                            <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Fecha de la Visita</label>
+                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800">
+                                                {visit.fechaVisita}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Información del Préstamo */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-6">
+                                            <div className="flex flex-col">
+                                                <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Tipo de Préstamo</label>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.tipoPrestamo}
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Valor del Préstamo</label>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.valorPrestamo ? `$ ${visit.valorPrestamo}` : ''}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-6">
+                                            <div className="flex flex-col">
+                                                <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Número de Cliente</label>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.numeroCliente}
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Valor Cuota</label>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.valorCuota ? `$ ${visit.valorCuota}` : ''}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Solicitante */}
+                                    <div className="space-y-4 border-t pt-4">
+                                        <h3 className="text-md font-bold text-gray-700 uppercase">Datos del Solicitante</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1 print:gap-2">
+                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                {visit.solicitante.nombre}
+                                            </div>
+                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                {visit.solicitante.cc}
+                                            </div>
+                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                {visit.solicitante.telefono}
+                                            </div>
+                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                {visit.solicitante.direccionCasa}
+                                            </div>
+                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                {visit.solicitante.barrioCasa}
+                                            </div>
+                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                {visit.solicitante.direccionTrabajo}
+                                            </div>
+                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                {visit.solicitante.barrioTrabajo}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Fiador */}
+                                    <div className="space-y-4 border-t pt-4">
+                                        <h3 className="text-md font-bold text-gray-700 uppercase">Datos del Fiador</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                {visit.fiador.nombre}
+                                            </div>
+                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                {visit.fiador.cc}
+                                            </div>
+                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                {visit.fiador.telefono}
+                                            </div>
+                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                {visit.fiador.direccionCasa}
+                                            </div>
+                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                {visit.fiador.barrioCasa}
+                                            </div>
+                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                {visit.fiador.direccionTrabajo}
+                                            </div>
+                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                {visit.fiador.barrioTrabajo}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Observaciones */}
+                                    <div className="pt-4 border-t min-h-[3rem]">
+                                        <label className="text-xs font-semibold text-gray-600 mb-1 uppercase block">Observaciones</label>
+                                        <div className="w-full border-2 border-gray-300 rounded-lg p-3 min-h-[3rem] text-gray-800 whitespace-pre-wrap">
+                                            {visit.observaciones}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         ))}
