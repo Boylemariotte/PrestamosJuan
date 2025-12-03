@@ -337,7 +337,13 @@ const CajaSection = React.memo(({
     }, 0);
     const totalE = filasMovimientos.reduce((sum, fila) => {
       if (fila.prestamo) {
-        return sum + calcularMontoEntregado(fila.prestamo.valor || 0);
+        // Calcular monto entregado igual que en la tabla: valor del préstamo menos la papelería efectiva
+        const valorPrestamo = fila.prestamo.valor || 0;
+        const papeleria = fila.prestamo.papeleria !== undefined && fila.prestamo.papeleria !== null
+          ? fila.prestamo.papeleria
+          : calcularPapeleria(valorPrestamo);
+        const montoEntregado = valorPrestamo - papeleria;
+        return sum + montoEntregado;
       }
       return sum;
     }, 0);

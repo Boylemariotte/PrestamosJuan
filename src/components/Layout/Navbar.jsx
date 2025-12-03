@@ -48,9 +48,13 @@ const Navbar = () => {
     { path: '/configuracion', label: 'Configuración', icon: Settings },
   ];
 
-  // Filtrar items del nav según permisos
+  // Filtrar items del nav según permisos y rol de usuario
   const getFilteredNavItems = () => {
     return navItems.filter(item => {
+      // Ocultar Caja y Papelería para el rol de domiciliario
+      if (user?.role === 'domiciliario' && (item.path === '/caja' || item.path === '/papeleria')) {
+        return false;
+      }
       if (item.path === '/estadisticas') return hasPermission('verEstadisticas');
       if (item.path === '/configuracion') return hasPermission('verConfiguracion');
       return true;

@@ -66,7 +66,7 @@ function App() {
             <Route
               path="/caja"
               element={
-                <ProtectedRoute requiredPermission="verCaja">
+                <ProtectedRoute requiredRole="administrador">
                   <Layout>
                     <FlujoCajas />
                   </Layout>
@@ -145,7 +145,7 @@ function App() {
             <Route
               path="/papeleria"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredRole="administrador">
                   <Layout>
                     <Papeleria />
                   </Layout>
