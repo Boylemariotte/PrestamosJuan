@@ -655,6 +655,35 @@ export const AppProvider = ({ children }) => {
     }));
   };
 
+  const editarAbono = (clienteId, creditoId, abonoId, datosActualizados) => {
+    setClientes(prev => prev.map(cliente => {
+      if (cliente.id === clienteId) {
+        return {
+          ...cliente,
+          creditos: cliente.creditos.map(credito => {
+            if (credito.id === creditoId) {
+              return {
+                ...credito,
+                abonos: (credito.abonos || []).map(abono =>
+                  abono.id === abonoId
+                    ? {
+                        ...abono,
+                        valor: datosActualizados.valor !== undefined ? datosActualizados.valor : abono.valor,
+                        descripcion: datosActualizados.descripcion !== undefined ? datosActualizados.descripcion : abono.descripcion,
+                        fecha: datosActualizados.fecha !== undefined ? datosActualizados.fecha : abono.fecha
+                      }
+                    : abono
+                )
+              };
+            }
+            return credito;
+          })
+        };
+      }
+      return cliente;
+    }));
+  };
+
   const eliminarAbono = (clienteId, creditoId, abonoId) => {
     setClientes(prev => prev.map(cliente => {
       if (cliente.id === clienteId) {

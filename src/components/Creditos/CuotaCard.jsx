@@ -10,7 +10,8 @@ const CuotaCard = ({
   abonosIndividuales,
   valorCuota,
   onPagar,
-  onEditDate
+  onEditDate,
+  onEditarAbono
 }) => {
   // Verificar si está pagada manualmente O si el abono cubre completamente la cuota
   const abonoCuota = cuota?.abonoAplicado || 0;
@@ -58,8 +59,8 @@ const CuotaCard = ({
           <Check className="h-3 w-3 text-green-600" />
         )}
       </div>
-      <div className={`border-b ${isPaid ? 'border-green-400' : hasPartialPayment ? 'border-yellow-400' : isOverdue ? 'border-red-400' : 'border-blue-600'} h-4 flex items-center justify-center mb-1 relative group`}>
-        <span className={`${textClasses} font-normal`}>
+      <div className={`border-b ${isPaid ? 'border-green-400' : hasPartialPayment ? 'border-yellow-400' : isOverdue ? 'border-red-400' : 'border-blue-600'} h-5 flex items-center justify-center mb-1 relative group`}>
+        <span className={`${textClasses} font-normal text-xs md:text-sm`}>
           {cuota ? formatearFechaCorta(cuota.fechaProgramada) : ''}
         </span>
         {!isPaid && onEditDate && (
@@ -90,7 +91,7 @@ const CuotaCard = ({
               const [año, mes, dia] = abono.fecha.split('T')[0].split('-');
               return (
                 <div key={idx} className="text-green-600 text-[10px] font-medium leading-tight">
-                  -Abono: ${formatearMoneda(abono.valor).replace('$', '').replace(/,/g, '')} ({dia}/{mes})
+                  -Abono: ${formatearMoneda(abono.valorAplicado ?? abono.valor).replace('$', '').replace(/,/g, '')} ({dia}/{mes})
                 </div>
               );
             })}
@@ -100,8 +101,18 @@ const CuotaCard = ({
 
       <div className="mt-auto pt-2">
         {isPaid ? (
-          <div className="w-full py-2 px-2 text-sm font-bold text-center rounded bg-green-200 text-green-800">
-            Pagada
+          <div className="flex flex-col gap-1">
+            <div className="w-full py-2 px-2 text-sm font-bold text-center rounded bg-green-200 text-green-800">
+              Pagada
+            </div>
+            {onEditarAbono && abonosIndividuales.length > 0 && (
+              <button
+                onClick={() => onEditarAbono(abonosIndividuales[abonosIndividuales.length - 1])}
+                className="w-full py-1.5 px-2 text-xs font-semibold text-center rounded border border-blue-500 text-blue-600 hover:bg-blue-50 transition-colors"
+              >
+                Editar pago
+              </button>
+            )}
           </div>
         ) : (
           <button

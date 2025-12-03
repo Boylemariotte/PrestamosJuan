@@ -73,6 +73,9 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
   const [mostrarEditorFecha, setMostrarEditorFecha] = useState(null);
   const [nuevaFecha, setNuevaFecha] = useState('');
 
+  // Estado para edición de abonos (pagos)
+  const [abonoEnEdicion, setAbonoEnEdicion] = useState(null);
+
   // Estados para el refactor de pagos/multas en grilla
   const [cuotaParaPagar, setCuotaParaPagar] = useState(null);
   const [mostrarModalNuevaMulta, setMostrarModalNuevaMulta] = useState(false);
@@ -253,6 +256,27 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
     if (confirm('¿Estás seguro de eliminar este abono?')) {
       eliminarAbono(clienteId, credito.id, abonoId);
     }
+  };
+
+  const handleEditarAbono = (abono) => {
+    setAbonoEnEdicion(abono);
+  };
+
+  const handleGuardarEdicionAbono = ({ valor, fecha, descripcion }) => {
+    if (!abonoEnEdicion) return;
+    const valorNumerico = parseFloat(valor);
+    if (isNaN(valorNumerico) || valorNumerico <= 0) {
+      alert('Por favor ingresa un valor válido para el abono');
+      return;
+    }
+
+    editarAbono(clienteId, credito.id, abonoEnEdicion.id, {
+      valor: valorNumerico,
+      fecha,
+      descripcion
+    });
+
+    setAbonoEnEdicion(null);
   };
 
   const handleAgregarDescuento = () => {
@@ -578,6 +602,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
                   onPagar={handleAbrirPago}
                   onNuevaMulta={() => setMostrarModalNuevaMulta(true)}
                   onEditDate={handleEditarFecha}
+                  onEditarAbono={handleEditarAbono}
                   sinContenedor={true}
                 />
               </div>
@@ -614,6 +639,17 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
                 setFechaAbono(new Date().toISOString().split('T')[0]);
               }}
               onMostrarFormularioRenovacion={() => setMostrarFormularioRenovacion(true)}
+            />
+          </div>
+
+          {/* Lista de abonos (pagos realizados) */}
+          <div className="mt-6">
+            <ListaAbonos
+              abonos={credito.abonos}
+              credito={credito}
+              cuotas={credito.cuotas}
+              onEliminarAbono={handleEliminarAbono}
+              onEditarAbono={handleEditarAbono}
             />
           </div>
 
@@ -691,11 +727,89 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
           onClose={() => setMostrarFormularioRenovacion(false)}
         />
       )}
+
+      {/* Modal para editar abono (pago) */}
+      {abonoEnEdicion && (
+        <ModalEditarAbono
+          abono={abonoEnEdicion}
+          onClose={() => setAbonoEnEdicion(null)}
+          onConfirm={handleGuardarEdicionAbono}
+        />
+      )}
     </div>
   );
 };
 
 export default CreditoDetalle;
+
+const ModalEditarAbono = ({ abono, onClose, onConfirm }) => {
+  const [valor, setValor] = useState(abono.valor || '');
+  const [fecha, setFecha] = useState(abono.fecha ? abono.fecha.split('T')[0] : new Date().toISOString().split('T')[0]);
+  const [descripcion, setDescripcion] = useState(abono.descripcion || '');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!valor || parseFloat(valor) <= 0) {
+      alert('Ingrese un valor válido');
+      return;
+    }
+    onConfirm({ valor, fecha, descripcion });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+      <div className="bg-white rounded-lg p-6 w-96 shadow-2xl">
+        <h3 className="text-lg font-bold text-blue-600 mb-4">Editar abono</h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Valor del abono</label>
+            <input
+              type="number"
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              className="w-full border rounded p-2"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Fecha</label>
+            <input
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className="w-full border rounded p-2"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Descripción</label>
+            <input
+              type="text"
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+              className="w-full border rounded p-2"
+              placeholder="Ej: Abono cuota #1"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold"
+            >
+              Guardar cambios
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 const ModalPago = ({ cuota, onClose, onConfirm }) => {
   const [valor, setValor] = useState(cuota.valorPendiente || '');

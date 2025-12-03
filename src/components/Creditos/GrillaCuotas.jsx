@@ -12,6 +12,7 @@ const GrillaCuotas = ({
   onPagar,
   onNuevaMulta,
   onEditDate,
+  onEditarAbono,
   sinContenedor = false
 }) => {
   // Calcular distribución de abonos para visualización
@@ -39,7 +40,10 @@ const GrillaCuotas = ({
         const cuota = estadoCuotas.find(c => c.nroCuota === nroCuotaTarget);
         if (cuota) {
           // Es un abono para esta cuota
-          mapa[cuota.nroCuota].push({ fecha: abono.fecha, valor: monto });
+          mapa[cuota.nroCuota].push({
+            ...abono,
+            valorAplicado: monto
+          });
 
           // Actualizar estado para que el waterfall sepa cuánto deuda queda
           // Nota: En la lógica real, esto se aplica a multas y capital. Simplificamos aquí.
@@ -76,7 +80,10 @@ const GrillaCuotas = ({
 
           if (consumo > 0) {
             if (!mapa[cuota.nroCuota]) mapa[cuota.nroCuota] = [];
-            mapa[cuota.nroCuota].push({ fecha: abono.fecha, valor: consumo });
+            mapa[cuota.nroCuota].push({
+              ...abono,
+              valorAplicado: consumo
+            });
           }
         }
       }
@@ -106,6 +113,7 @@ const GrillaCuotas = ({
                 valorCuota={formData.valorCuota}
                 onPagar={onPagar}
                 onEditDate={onEditDate}
+                onEditarAbono={onEditarAbono}
               />
             </div>
           );
