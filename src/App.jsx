@@ -14,7 +14,7 @@ import CreditosFinalizados from './pages/CreditosFinalizados';
 import Estadisticas from './pages/Estadisticas';
 import Configuracion from './pages/Configuracion';
 import DiaDeCobro from './pages/DiaDeCobro';
-import RutasDeCobro from './pages/RutasDeCobro';
+
 import FlujoCajas from './pages/FlujoCajas';
 import Alertas from './pages/Alertas';
 import Papeleria from './pages/Papeleria';
@@ -118,16 +118,7 @@ function App() {
               }
             />
 
-            <Route
-              path="/rutas-de-cobro"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <RutasDeCobro />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+
 
             <Route
               path="/flujo-cajas"

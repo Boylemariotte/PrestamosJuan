@@ -80,28 +80,28 @@ const ClienteDetalle = () => {
           Volver a Clientes
         </button>
 
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div className="flex items-center">
-            <div className="bg-sky-100 p-4 rounded-full">
+            <div className="bg-sky-100 p-4 rounded-full shrink-0">
               <User className="h-8 w-8 text-sky-600" />
             </div>
             <div className="ml-4">
-              <h1 className="text-3xl font-bold text-gray-900">{cliente.nombre}</h1>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 break-all">{cliente.nombre}</h1>
               <p className="text-gray-600">CC: {cliente.documento}</p>
             </div>
           </div>
 
-          <div className="flex space-x-3">
+          <div className="flex space-x-3 w-full md:w-auto justify-end">
             <button
               onClick={() => setShowEditForm(true)}
-              className="btn-secondary flex items-center"
+              className="btn-secondary flex items-center justify-center flex-1 md:flex-none"
             >
               <Edit className="h-4 w-4 mr-2" />
               Editar
             </button>
             <button
               onClick={handleEliminarCliente}
-              className="btn-danger flex items-center"
+              className="btn-danger flex items-center justify-center flex-1 md:flex-none"
             >
               <Trash2 className="h-4 w-4 mr-2" />
               Eliminar

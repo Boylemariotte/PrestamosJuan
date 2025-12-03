@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AlertCircle, Trash2, Award, Check, Calendar } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import RenovacionForm from './RenovacionForm';
-import { 
-  determinarEstadoCredito, 
-  getColorEstado, 
+import {
+  determinarEstadoCredito,
+  getColorEstado,
   formatearMoneda,
   calcularTotalMultasCredito,
   aplicarAbonosAutomaticamente
@@ -26,13 +26,14 @@ import FormularioDescuento from './FormularioDescuento';
 import ListaDescuentos from './ListaDescuentos';
 import ListaAbonos from './ListaAbonos';
 import ListaNotas from './ListaNotas';
+import EditorFecha from './EditorFecha';
 
 const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }) => {
   const { registrarPago, cancelarPago, editarFechaCuota, agregarNota, eliminarNota, agregarMulta, eliminarMulta, agregarAbono, eliminarAbono, agregarDescuento, eliminarDescuento, asignarEtiquetaCredito, renovarCredito, eliminarCredito, obtenerCredito } = useApp();
-  
+
   // Obtener el crédito actualizado del contexto
   const credito = obtenerCredito(clienteId, creditoInicial.id) || creditoInicial;
-  
+
   // Estados para el formulario
   const [formData, setFormData] = useState({
     tipoPago: credito.tipo || 'semanal',
@@ -54,7 +55,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
       telefono: cliente?.fiador?.telefono || credito.codeudor?.telefono || ''
     }
   });
-  
+
   const [nuevaNota, setNuevaNota] = useState('');
   const [mostrarFormularioMulta, setMostrarFormularioMulta] = useState(null);
   const [valorMulta, setValorMulta] = useState('');
@@ -71,14 +72,14 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
   const [mostrarFormularioRenovacion, setMostrarFormularioRenovacion] = useState(false);
   const [mostrarEditorFecha, setMostrarEditorFecha] = useState(null);
   const [nuevaFecha, setNuevaFecha] = useState('');
-  
+
   // Estados para el refactor de pagos/multas en grilla
   const [cuotaParaPagar, setCuotaParaPagar] = useState(null);
   const [mostrarModalNuevaMulta, setMostrarModalNuevaMulta] = useState(false);
-  
+
   // Ref para el contenedor que se va a imprimir/exportar
   const formularioRef = useRef(null);
-  
+
   const estado = determinarEstadoCredito(credito.cuotas, credito);
   const colorEstado = getColorEstado(estado);
 
@@ -189,7 +190,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
       `Estado: ${estado}\n\n` +
       `Esta acción no se puede deshacer.`
     );
-    
+
     if (confirmacion) {
       eliminarCredito(clienteId, credito.id);
       onClose();
@@ -232,16 +233,16 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
       alert('Por favor ingresa un valor válido para el abono');
       return;
     }
-    
+
     if (!fechaAbono) {
       alert('Por favor selecciona una fecha para el abono');
       return;
     }
-    
+
     // Simplemente agregar el abono con la fecha especificada
     // aplicarAbonosAutomaticamente se encargará de calcular cómo se distribuye
     agregarAbono(clienteId, credito.id, parseFloat(valorAbono), descripcionAbono, fechaAbono);
-    
+
     setMostrarFormularioAbono(false);
     setValorAbono('');
     setDescripcionAbono('');
@@ -282,13 +283,13 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
   const handleAbrirPago = (nroCuota) => {
     const cuota = cuotasActualizadas.find(c => c.nroCuota === nroCuota);
     if (!cuota) return;
-    
+
     const totalMultasCuota = cuota.multas ? cuota.multas.reduce((sum, m) => sum + m.valor, 0) : 0;
     const multasCubiertas = cuota.multasCubiertas || 0;
     const multasPendientes = totalMultasCuota - multasCubiertas;
     const valorBaseCuota = credito.valorCuota || 0;
     const abonoYaAplicado = cuota.abonoAplicado || 0;
-    
+
     const valorRestante = (valorBaseCuota + multasPendientes) - abonoYaAplicado;
 
     setCuotaParaPagar({
@@ -301,15 +302,15 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
     if (!cuotaParaPagar) return;
     const { nroCuota } = cuotaParaPagar;
     const valorNumerico = parseFloat(valor);
-    
+
     // Aseguramos que la descripción incluya la cuota para el trackeo correcto
-    const descFinal = descripcion 
+    const descFinal = descripcion
       ? (descripcion.includes(`Cuota #${nroCuota}`) ? descripcion : `${descripcion} (Cuota #${nroCuota})`)
       : `Abono a Cuota #${nroCuota}`;
 
     // Siempre agregamos como abono para mantener el historial visual y la lógica de asignación específica
     await agregarAbono(clienteId, credito.id, valorNumerico, descFinal, fecha);
-    
+
     setCuotaParaPagar(null);
   };
 
@@ -320,7 +321,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
     agregarMulta(clienteId, credito.id, parseInt(nroCuota), parseFloat(valor), motivoFinal);
     setMostrarModalNuevaMulta(false);
   };
-  
+
   const todasLasMultas = useMemo(() => {
     const lista = [];
     (credito.cuotas || []).forEach((cuota) => {
@@ -328,16 +329,16 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
       const cuotaActualizada = cuotasActualizadas.find(c => c.nroCuota === cuota.nroCuota);
       const totalMultasCuota = cuota.multas ? cuota.multas.reduce((sum, m) => sum + m.valor, 0) : 0;
       const multasCubiertas = cuotaActualizada?.multasCubiertas || 0;
-      
+
       // Las multas están pagadas si:
       // 1. La cuota fue marcada como pagada manualmente (con el botón "Marcar pagado")
       // 2. O si todas las multas están cubiertas por abonos
       const todasLasMultasPagadas = cuota.pagado || (totalMultasCuota > 0 && multasCubiertas >= totalMultasCuota);
-      
+
       (cuota.multas || []).forEach((multa) => {
         // Si todas las multas de la cuota están pagadas, esta multa también lo está
         const estaMultaPagada = todasLasMultasPagadas;
-        
+
         lista.push({
           id: multa.id,
           valor: multa.valor,
@@ -359,21 +360,21 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
   const progreso = (() => {
     const totalCuotas = credito.cuotas.length;
     let cuotasPagadas = 0;
-    
+
     cuotasActualizadas.forEach((cuota, index) => {
       // Verificar si está pagada manualmente O si el abono cubre completamente la cuota
       const totalMultasCuota = cuota.multas ? cuota.multas.reduce((sum, m) => sum + m.valor, 0) : 0;
       const multasCubiertas = cuota.multasCubiertas || 0;
       const multasPendientes = totalMultasCuota - multasCubiertas;
       const valorRestante = (credito.valorCuota - (cuota.abonoAplicado || 0)) + multasPendientes;
-      
+
       const isPaid = cuota.pagado || (valorRestante <= 0 && cuota.abonoAplicado > 0);
-      
+
       if (isPaid) {
         cuotasPagadas++;
       }
     });
-    
+
     return {
       cuotasPagadas,
       totalCuotas,
@@ -424,20 +425,20 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
       const multasCubiertas = cuota.multasCubiertas || 0;
       const multasPendientes = totalMultasCuota - multasCubiertas;
       const valorRestante = (credito.valorCuota - (cuota.abonoAplicado || 0)) + multasPendientes;
-      
+
       const isPaid = cuota.pagado || (valorRestante <= 0 && cuota.abonoAplicado > 0);
-      
+
       if (isPaid) {
         contador++;
       }
     });
     return contador;
   })();
-  
+
   const puedeRenovar = (() => {
     if (credito.renovado) return false; // Ya fue renovado
     if (estado === 'finalizado') return false; // Ya está finalizado
-    
+
     switch (credito.tipo) {
       case 'semanal':
         return cuotasPagadas >= 7;
@@ -502,15 +503,15 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
       <div className="bg-white rounded-xl shadow-xl max-w-6xl w-full max-h-[95vh] flex flex-col">
         <CreditoDetalleHeader onClose={onClose} onPrint={handlePrint} />
 
-        <div className="px-8 pt-10 pb-8 space-y-6 overflow-y-auto flex-1">
+        <div className="px-4 md:px-8 pt-6 md:pt-10 pb-8 space-y-6 overflow-y-auto flex-1">
           {/* Contenedor para imprimir - incluye header, formulario y grilla */}
           <div ref={formularioRef}>
             {/* Header para el PDF (solo visible al imprimir) */}
             <div className="hidden print:flex bg-white px-6 py-4 items-center justify-center border-b-2 border-blue-500 mb-16">
               <div className="flex items-center space-x-4">
-                <img 
-                  src={CowImage} 
-                  alt="Vaca" 
+                <img
+                  src={CowImage}
+                  alt="Vaca"
                   className="w-20 h-20 object-contain"
                 />
                 <h1 className="text-3xl font-bold text-blue-600 uppercase tracking-wide">
@@ -521,7 +522,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
 
             {/* NUEVA CARD HORIZONTAL: DATOS GENERALES */}
             <div className="bg-white border-2 border-blue-500 rounded-lg p-4 mb-6">
-              <div className="grid grid-cols-4 gap-4 text-center divide-x-2 divide-blue-200">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center divide-y-2 md:divide-y-0 md:divide-x-2 divide-blue-200">
                 <div className="flex flex-col items-center justify-center">
                   <span className="text-xs font-bold text-blue-600 uppercase mb-1">TIPO DE PAGO</span>
                   <span className="text-lg font-bold text-gray-800 capitalize">{formData.tipoPago}</span>
@@ -548,10 +549,10 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
             </div>
 
             {/* CARD PRINCIPAL: SOLICITANTE/CODEUDOR (Izquierda) y CUOTAS (Derecha) */}
-            <div className="bg-white border-2 border-blue-500 rounded-lg p-6 flex flex-col lg:flex-row gap-6">
-              
+            <div className="bg-white border-2 border-blue-500 rounded-lg p-4 md:p-6 flex flex-col lg:flex-row gap-6">
+
               {/* COLUMNA IZQUIERDA: DATOS PERSONALES */}
-              <div className="lg:w-1/3 flex flex-col gap-8 border-r-2 border-blue-100 pr-6">
+              <div className="lg:w-1/3 flex flex-col gap-8 border-b-2 lg:border-b-0 lg:border-r-2 border-blue-100 pb-6 lg:pb-0 lg:pr-6">
                 <div className="space-y-6">
                   <FormularioSolicitante
                     solicitante={formData.solicitante}
@@ -568,7 +569,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
 
               {/* COLUMNA DERECHA: GRILLA DE CUOTAS */}
               <div className="lg:w-2/3">
-                 <GrillaCuotas
+                <GrillaCuotas
                   formData={formData}
                   credito={credito}
                   cuotasActualizadas={cuotasActualizadas}
@@ -576,93 +577,110 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
                   obtenerNumeroCuotas={obtenerNumeroCuotas}
                   onPagar={handleAbrirPago}
                   onNuevaMulta={() => setMostrarModalNuevaMulta(true)}
-                  sinContenedor={true} 
+                  onEditDate={handleEditarFecha}
+                  sinContenedor={true}
                 />
               </div>
             </div>
           </div>
 
-            {/* Resumen General del Crédito */}
-            <div className="mt-6">
-              <ResumenCredito
-                credito={credito}
-                estado={estado}
-                colorEstado={colorEstado}
-                ETIQUETAS={ETIQUETAS}
-                totalMultasCredito={totalMultasCredito}
-                totalAbonos={totalAbonos}
-                totalDescuentos={totalDescuentos}
-                progreso={progreso}
-                cuotasActualizadas={cuotasActualizadas}
-                mostrarFormularioAbono={mostrarFormularioAbono}
-                valorAbono={valorAbono}
-                descripcionAbono={descripcionAbono}
-                fechaAbono={fechaAbono}
-                puedeRenovar={puedeRenovar}
-                onMostrarSelectorEtiqueta={() => setMostrarSelectorEtiqueta(!mostrarSelectorEtiqueta)}
-                onMostrarFormularioAbono={() => setMostrarFormularioAbono(true)}
-                onValorAbonoChange={(value) => setValorAbono(value)}
-                onDescripcionAbonoChange={(value) => setDescripcionAbono(value)}
-                onFechaAbonoChange={(value) => setFechaAbono(value)}
-                onAgregarAbono={handleAgregarAbono}
-                onCancelarAbono={() => {
-                                setMostrarFormularioAbono(false);
-                                setValorAbono('');
-                                setDescripcionAbono('');
-                                setFechaAbono(new Date().toISOString().split('T')[0]);
-                              }}
-                onMostrarFormularioRenovacion={() => setMostrarFormularioRenovacion(true)}
-              />
-            </div>
+          {/* Resumen General del Crédito */}
+          <div className="mt-6">
+            <ResumenCredito
+              credito={credito}
+              estado={estado}
+              colorEstado={colorEstado}
+              ETIQUETAS={ETIQUETAS}
+              totalMultasCredito={totalMultasCredito}
+              totalAbonos={totalAbonos}
+              totalDescuentos={totalDescuentos}
+              progreso={progreso}
+              cuotasActualizadas={cuotasActualizadas}
+              mostrarFormularioAbono={mostrarFormularioAbono}
+              valorAbono={valorAbono}
+              descripcionAbono={descripcionAbono}
+              fechaAbono={fechaAbono}
+              puedeRenovar={puedeRenovar}
+              onMostrarSelectorEtiqueta={() => setMostrarSelectorEtiqueta(!mostrarSelectorEtiqueta)}
+              onMostrarFormularioAbono={() => setMostrarFormularioAbono(true)}
+              onValorAbonoChange={(value) => setValorAbono(value)}
+              onDescripcionAbonoChange={(value) => setDescripcionAbono(value)}
+              onFechaAbonoChange={(value) => setFechaAbono(value)}
+              onAgregarAbono={handleAgregarAbono}
+              onCancelarAbono={() => {
+                setMostrarFormularioAbono(false);
+                setValorAbono('');
+                setDescripcionAbono('');
+                setFechaAbono(new Date().toISOString().split('T')[0]);
+              }}
+              onMostrarFormularioRenovacion={() => setMostrarFormularioRenovacion(true)}
+            />
+          </div>
 
-            {/* Notas */}
-            <div className="mt-6">
-              <ListaNotas
-                notas={credito.notas}
-                nuevaNota={nuevaNota}
-                onNotaChange={(value) => setNuevaNota(value)}
-                onAgregarNota={handleAgregarNota}
-                onEliminarNota={handleEliminarNota}
-              />
-            </div>
+          {/* Notas */}
+          <div className="mt-6">
+            <ListaNotas
+              notas={credito.notas}
+              nuevaNota={nuevaNota}
+              onNotaChange={(value) => setNuevaNota(value)}
+              onAgregarNota={handleAgregarNota}
+              onEliminarNota={handleEliminarNota}
+            />
+          </div>
 
-            {/* Zona de Peligro */}
-            <div className="border-t pt-6 mt-6">
-              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-red-900 mb-2 flex items-center">
-                  <AlertCircle className="h-5 w-5 mr-2" />
-                  Zona de Peligro
-                </h3>
-                <p className="text-sm text-red-700 mb-4">
-                  Eliminar este crédito borrará permanentemente toda la información asociada, incluyendo pagos, multas, abonos y notas. Esta acción no se puede deshacer.
-                </p>
-                <button
-                  onClick={handleEliminarCredito}
-                  className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors flex items-center justify-center"
-                >
-                  <Trash2 className="h-5 w-5 mr-2" />
-                  Eliminar Crédito Permanentemente
-                </button>
-              </div>
+          {/* Zona de Peligro */}
+          <div className="border-t pt-6 mt-6">
+            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-red-900 mb-2 flex items-center">
+                <AlertCircle className="h-5 w-5 mr-2" />
+                Zona de Peligro
+              </h3>
+              <p className="text-sm text-red-700 mb-4">
+                Eliminar este crédito borrará permanentemente toda la información asociada, incluyendo pagos, multas, abonos y notas. Esta acción no se puede deshacer.
+              </p>
+              <button
+                onClick={handleEliminarCredito}
+                className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors flex items-center justify-center"
+              >
+                <Trash2 className="h-5 w-5 mr-2" />
+                Eliminar Crédito Permanentemente
+              </button>
             </div>
           </div>
         </div>
-      
+      </div>
+
       {/* Modales de Pago y Multa */}
       {cuotaParaPagar && (
-        <ModalPago 
-          cuota={cuotaParaPagar} 
-          onClose={() => setCuotaParaPagar(null)} 
-          onConfirm={handleConfirmarPago} 
+        <ModalPago
+          cuota={cuotaParaPagar}
+          onClose={() => setCuotaParaPagar(null)}
+          onConfirm={handleConfirmarPago}
         />
       )}
-      
+
       {mostrarModalNuevaMulta && (
-        <ModalMulta 
-          onClose={() => setMostrarModalNuevaMulta(false)} 
+        <ModalMulta
+          onClose={() => setMostrarModalNuevaMulta(false)}
           onConfirm={handleConfirmarMulta}
           maxCuotas={obtenerNumeroCuotas(formData.tipoPago)}
         />
+      )}
+
+      {/* Modal para editar fecha */}
+      {mostrarEditorFecha && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg p-6 w-96 shadow-2xl">
+            <EditorFecha
+              cuota={cuotasActualizadas.find(c => c.nroCuota === mostrarEditorFecha)}
+              credito={credito}
+              nuevaFecha={nuevaFecha}
+              onFechaChange={setNuevaFecha}
+              onGuardar={handleGuardarFecha}
+              onCancelar={handleCancelarEdicionFecha}
+            />
+          </div>
+        </div>
       )}
 
       {/* Modal de Renovación */}

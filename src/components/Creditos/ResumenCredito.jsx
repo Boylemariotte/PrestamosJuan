@@ -1,7 +1,7 @@
 import React from 'react';
-import { Tag, Plus, RefreshCw } from 'lucide-react';
+import { Tag, RefreshCw } from 'lucide-react';
 import { formatearMoneda, formatearFechaCorta } from '../../utils/creditCalculations';
-import FormularioAbono from './FormularioAbono';
+
 
 const ResumenCredito = ({
   credito,
@@ -35,22 +35,22 @@ const ResumenCredito = ({
 
     // Calcular cuánto se ha pagado realmente por cada cuota pagada
     let totalPagadoReal = 0;
-    
+
     credito.cuotas.forEach(cuota => {
       if (cuota.pagado) {
         const valorCuota = credito.valorCuota;
         const multasCuota = cuota.multas && cuota.multas.length > 0
           ? cuota.multas.reduce((sum, m) => sum + m.valor, 0)
           : 0;
-        
+
         const cuotaActualizada = cuotasActualizadas.find(c => c.nroCuota === cuota.nroCuota);
         const abonoAplicado = cuotaActualizada?.abonoAplicado || 0;
         const multasCubiertas = cuotaActualizada?.multasCubiertas || 0;
-        
+
         totalPagadoReal += valorCuota + multasCuota;
       }
     });
-    
+
     // Calcular abonos aplicados a cuotas pendientes (no pagadas)
     let abonosEnCuotasPendientes = 0;
     credito.cuotas.forEach(cuota => {
@@ -62,7 +62,7 @@ const ResumenCredito = ({
         }
       }
     });
-    
+
     // Saldo = Total a pagar + Multas - Descuentos - Total pagado real - Abonos en cuotas pendientes
     const saldoPendiente = credito.totalAPagar + totalMultasCredito - totalDescuentos - totalPagadoReal - abonosEnCuotasPendientes;
     return formatearMoneda(Math.max(0, saldoPendiente));
@@ -79,7 +79,7 @@ const ResumenCredito = ({
             <span className={`px-3 py-1 rounded-full text-sm font-medium ${colorEstado}`}>
               {estado.charAt(0).toUpperCase() + estado.slice(1)}
             </span>
-            
+
             {/* Etiqueta actual */}
             {credito.etiqueta && ETIQUETAS[credito.etiqueta] && (
               <span className={`px-3 py-1 rounded-lg text-sm font-medium border-2 flex items-center gap-1 ${ETIQUETAS[credito.etiqueta].color}`}>
@@ -87,7 +87,7 @@ const ResumenCredito = ({
                 {ETIQUETAS[credito.etiqueta].nombre}
               </span>
             )}
-            
+
             {/* Botón para asignar etiqueta (solo si el crédito está finalizado) */}
             {estado === 'finalizado' && (
               <button
@@ -100,7 +100,7 @@ const ResumenCredito = ({
               </button>
             )}
           </div>
-          
+
           <div>
             <p className="text-sm text-gray-500">Monto del crédito</p>
             <p className="text-2xl font-bold text-gray-900">
@@ -142,14 +142,7 @@ const ResumenCredito = ({
             </div>
           )}
 
-          {totalAbonos > 0 && (
-            <div>
-              <p className="text-sm text-blue-600">Total abonos</p>
-              <p className="text-xl font-bold text-blue-600">
-                - {formatearMoneda(totalAbonos)}
-              </p>
-            </div>
-          )}
+
 
           {totalMultasCredito > 0 && (
             <div>
@@ -170,28 +163,8 @@ const ResumenCredito = ({
           )}
 
           <div className="space-y-2 mt-4">
-            <button
-              onClick={onMostrarFormularioAbono}
-              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Abono
-            </button>
-            
-            {/* Formulario de Abonos */}
-            {mostrarFormularioAbono && (
-              <FormularioAbono
-                valorAbono={valorAbono}
-                descripcionAbono={descripcionAbono}
-                fechaAbono={fechaAbono}
-                onValorChange={onValorAbonoChange}
-                onDescripcionChange={onDescripcionAbonoChange}
-                onFechaChange={onFechaAbonoChange}
-                onSubmit={onAgregarAbono}
-                onCancel={onCancelarAbono}
-              />
-            )}
-            
+
+
             {/* Botón de Renovación */}
             {puedeRenovar && (
               <button

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Check, Calendar, AlertCircle, Edit2, Plus, DollarSign, Trash2 } from 'lucide-react';
-import { 
-  formatearMoneda, 
-  formatearFechaCorta, 
-  calcularTotalMultasCuota, 
+import {
+  formatearMoneda,
+  formatearFechaCorta,
+  calcularTotalMultasCuota,
   calcularDiasMora,
-  formatearFecha 
+  formatearFecha
 } from '../../utils/creditCalculations';
 import FormularioMulta from './FormularioMulta';
 import EditorFecha from './EditorFecha';
@@ -61,29 +61,27 @@ const ListaCuotas = ({
           const multasPendientes = totalMultas - (cuota.multasCubiertas || 0);
           const valorPendiente = (credito.valorCuota - (cuota.abonoAplicado || 0)) + multasPendientes;
           const isPaid = cuota.pagado || (valorPendiente <= 0 && cuota.abonoAplicado > 0);
-          
+
           const diasMora = !isPaid ? calcularDiasMora(cuota.fechaProgramada) : 0;
           const enMora = diasMora > 0;
 
           return (
             <div key={cuota.nroCuota} className="space-y-2">
               <div
-                className={`flex items-center justify-between p-4 rounded-lg border-2 transition-all ${
-                  isPaid
+                className={`flex items-center justify-between p-4 rounded-lg border-2 transition-all ${isPaid
                     ? 'bg-green-50 border-green-200'
                     : enMora
-                    ? 'bg-red-50 border-red-200'
-                    : 'bg-white border-gray-200'
-                }`}
+                      ? 'bg-red-50 border-red-200'
+                      : 'bg-white border-gray-200'
+                  }`}
               >
                 <div className="flex items-center space-x-4 flex-1">
-                  <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                    isPaid
+                  <div className={`flex items-center justify-center w-10 h-10 rounded-full ${isPaid
                       ? 'bg-green-500 text-white'
                       : enMora
-                      ? 'bg-red-500 text-white'
-                      : 'bg-gray-200 text-gray-600'
-                  }`}>
+                        ? 'bg-red-500 text-white'
+                        : 'bg-gray-200 text-gray-600'
+                    }`}>
                     {isPaid ? (
                       <Check className="h-5 w-5" />
                     ) : (
@@ -112,14 +110,14 @@ const ListaCuotas = ({
                         </span>
                       )}
                     </div>
-                    
+
                     {/* Desglose de valores */}
                     <div className="mt-2 text-sm space-y-1">
                       <div>
                         <span className="text-gray-600">Valor cuota: </span>
                         <span className="font-medium">{formatearMoneda(credito.valorCuota)}</span>
                       </div>
-                      
+
                       {cuota.abonoAplicado > 0 && (
                         <div>
                           <span className="text-blue-600 font-semibold">
@@ -127,7 +125,7 @@ const ListaCuotas = ({
                           </span>
                         </div>
                       )}
-                      
+
                       {totalMultas > 0 && (
                         <div>
                           <span className="text-red-600 font-semibold">
@@ -140,7 +138,7 @@ const ListaCuotas = ({
                           )}
                         </div>
                       )}
-                      
+
                       {!isPaid && valorPendiente < credito.valorCuota && (
                         <div className="pt-1 border-t">
                           <span className="text-gray-900 font-bold">
@@ -192,7 +190,7 @@ const ListaCuotas = ({
                       </>
                     )}
                   </div>
-                  
+
                   {/* Verificar si hay abonos (a cuota o multas) para deshabilitar el botón */}
                   {!isPaid && (cuota.abonoAplicado > 0 || cuota.multasCubiertas > 0) && valorPendiente > 0 ? (
                     <div className="flex flex-col items-end">
@@ -223,11 +221,10 @@ const ListaCuotas = ({
                   ) : (
                     <button
                       onClick={() => handlePago(cuota.nroCuota, cuota.pagado)}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                        isPaid
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${isPaid
                           ? 'bg-gray-200 hover:bg-gray-300 text-gray-700'
                           : 'bg-sky-600 hover:bg-sky-700 text-white'
-                      }`}
+                        }`}
                     >
                       {isPaid ? 'Cancelar' : 'Marcar pagado'}
                     </button>
@@ -235,16 +232,17 @@ const ListaCuotas = ({
                 </div>
               </div>
 
-              {/* Modal para editar fecha */}
               {mostrarEditorFecha === cuota.nroCuota && (
-                <EditorFecha
-                  cuota={cuota}
-                  credito={credito}
-                  nuevaFecha={nuevaFecha}
-                  onFechaChange={onFechaChange}
-                  onGuardar={onGuardarFecha}
-                  onCancelar={onCancelarEdicionFecha}
-                />
+                <div className="ml-14">
+                  <EditorFecha
+                    cuota={cuota}
+                    credito={credito}
+                    nuevaFecha={nuevaFecha}
+                    onFechaChange={onFechaChange}
+                    onGuardar={onGuardarFecha}
+                    onCancelar={onCancelarEdicionFecha}
+                  />
+                </div>
               )}
 
               {/* Formulario para agregar multa */}

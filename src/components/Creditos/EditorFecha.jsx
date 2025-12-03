@@ -2,16 +2,16 @@ import React from 'react';
 import { Calendar } from 'lucide-react';
 import { formatearFecha } from '../../utils/creditCalculations';
 
-const EditorFecha = ({ 
-  cuota, 
-  credito, 
-  nuevaFecha, 
-  onFechaChange, 
-  onGuardar, 
-  onCancelar 
+const EditorFecha = ({
+  cuota,
+  credito,
+  nuevaFecha,
+  onFechaChange,
+  onGuardar,
+  onCancelar
 }) => {
   return (
-    <div className="ml-14 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+    <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
       <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
         <Calendar className="h-5 w-5 mr-2 text-blue-600" />
         Cambiar Fecha de Vencimiento

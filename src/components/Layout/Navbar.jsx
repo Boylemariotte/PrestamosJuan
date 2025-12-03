@@ -38,7 +38,7 @@ const Navbar = () => {
   const navItems = [
     { path: '/', label: 'Clientes', icon: Users },
     { path: '/dia-de-cobro', label: 'Día de Cobro', icon: Calendar },
-    { path: '/rutas-de-cobro', label: 'Rutas de Cobro', icon: Route },
+
     { path: '/caja', label: 'Caja', icon: Wallet },
     { path: '/visitas', label: 'Visitas', icon: ClipboardList },
     { path: '/papeleria', label: 'Papelería', icon: ClipboardList },
@@ -104,8 +104,8 @@ const Navbar = () => {
                         key={item.path}
                         to={item.path}
                         className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${isActive
-                            ? 'bg-slate-700 text-white shadow-md'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                          ? 'bg-slate-700 text-white shadow-md'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
                           }`}
                       >
                         <Icon className="h-4 w-4" />
