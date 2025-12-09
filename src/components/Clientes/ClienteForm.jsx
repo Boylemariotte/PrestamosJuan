@@ -19,6 +19,7 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
       documento: '',
       telefono: '',
       direccion: '',
+      barrio: '',
       direccionTrabajo: ''
     }
   });
@@ -29,11 +30,20 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
   const [otroBarrio, setOtroBarrio] = useState('');
   const barriosRef = useRef(null);
 
+  const [showBarriosFiador, setShowBarriosFiador] = useState(false);
+  const [barrioSearchFiador, setBarrioSearchFiador] = useState('');
+  const [usarOtroBarrioFiador, setUsarOtroBarrioFiador] = useState(false);
+  const [otroBarrioFiador, setOtroBarrioFiador] = useState('');
+  const barriosFiadorRef = useRef(null);
+
   // Cerrar dropdown al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (barriosRef.current && !barriosRef.current.contains(event.target)) {
         setShowBarrios(false);
+      }
+      if (barriosFiadorRef.current && !barriosFiadorRef.current.contains(event.target)) {
+        setShowBarriosFiador(false);
       }
     };
 
@@ -49,14 +59,21 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
   };
 
   // Filtrar barrios
-  const filteredBarrios = BARRIOS_TULUA.filter(barrio => 
+  const filteredBarrios = BARRIOS_TULUA.filter(barrio =>
     normalizeText(barrio).includes(normalizeText(barrioSearch))
+  );
+
+  const filteredBarriosFiador = BARRIOS_TULUA.filter(barrio =>
+    normalizeText(barrio).includes(normalizeText(barrioSearchFiador))
   );
 
   useEffect(() => {
     if (cliente) {
       const barrioCliente = cliente.barrio || '';
       const esOtroBarrio = !BARRIOS_TULUA.includes(barrioCliente);
+
+      const barrioFiador = cliente.fiador?.barrio || '';
+      const esOtroBarrioFiador = barrioFiador && !BARRIOS_TULUA.includes(barrioFiador);
 
       setFormData({
         nombre: cliente.nombre || '',
@@ -74,12 +91,22 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
           documento: cliente.fiador?.documento || '',
           telefono: cliente.fiador?.telefono || '',
           direccion: cliente.fiador?.direccion || '',
+          barrio: esOtroBarrioFiador ? 'Otro' : barrioFiador,
           direccionTrabajo: cliente.fiador?.direccionTrabajo || ''
         }
       });
 
       setUsarOtroBarrio(esOtroBarrio);
       setOtroBarrio(esOtroBarrio ? barrioCliente : '');
+      if (!esOtroBarrio && barrioCliente) {
+        setBarrioSearch(barrioCliente);
+      }
+
+      setUsarOtroBarrioFiador(esOtroBarrioFiador);
+      setOtroBarrioFiador(esOtroBarrioFiador ? barrioFiador : '');
+      if (!esOtroBarrioFiador && barrioFiador) {
+        setBarrioSearchFiador(barrioFiador);
+      }
     } else if (initialData) {
       // Si vienen datos iniciales (ej. desde Visitas)
       setFormData(prev => ({
@@ -118,6 +145,18 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
       }
     } else if (name === 'otroBarrio') {
       setOtroBarrio(value);
+    } else if (name === 'fiador.barrio') {
+      // Logic handled via specific handlers, but kept for fallback or direct name usage
+      if (value === 'Otro') {
+        setUsarOtroBarrioFiador(true);
+        setFormData(prev => ({ ...prev, fiador: { ...prev.fiador, barrio: 'Otro' } }));
+      } else {
+        setUsarOtroBarrioFiador(false);
+        setOtroBarrioFiador('');
+        setFormData(prev => ({ ...prev, fiador: { ...prev.fiador, barrio: value } }));
+      }
+    } else if (name === 'otroBarrioFiador') {
+      setOtroBarrioFiador(value);
     } else if (name.startsWith('fiador.')) {
       const fiadorField = name.split('.')[1];
       setFormData(prev => ({
@@ -147,6 +186,21 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
     setShowBarrios(true);
   };
 
+  const handleBarrioSelectFiador = (barrio) => {
+    setFormData(prev => ({ ...prev, fiador: { ...prev.fiador, barrio } }));
+    setBarrioSearchFiador(barrio);
+    setShowBarriosFiador(false);
+  };
+
+  const handleBarrioSearchChangeFiador = (e) => {
+    setBarrioSearchFiador(e.target.value);
+    setFormData(prev => ({
+      ...prev,
+      fiador: { ...prev.fiador, barrio: e.target.value }
+    }));
+    setShowBarriosFiador(true);
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
@@ -156,10 +210,19 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
       return;
     }
 
+    if (usarOtroBarrioFiador && !otroBarrioFiador.trim()) {
+      alert('Por favor ingrese el nombre del barrio del fiador');
+      return;
+    }
+
     // Incluir tipoPagoEsperado
     const dataToSubmit = {
       ...formData,
       barrio: usarOtroBarrio ? otroBarrio.trim() : formData.barrio,
+      fiador: {
+        ...formData.fiador,
+        barrio: usarOtroBarrioFiador ? otroBarrioFiador.trim() : formData.fiador.barrio
+      },
       tipoPagoEsperado: formData.tipoPagoEsperado || tipoPagoPredefinido || null
     };
     onSubmit(dataToSubmit);
@@ -267,7 +330,7 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                       required
                       autoComplete="off"
                     />
-                    <div 
+                    <div
                       className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer"
                       onClick={() => setShowBarrios(!showBarrios)}
                     >
@@ -278,7 +341,7 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                       )}
                     </div>
                   </div>
-                  
+
                   {showBarrios && (
                     <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
                       {filteredBarrios.length > 0 ? (
@@ -413,7 +476,6 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                       <option value="">Sin preferencia (Elegir al crear crédito)</option>
                       {formData.cartera === 'K1' ? (
                         <>
-                          <option value="diario">Diario</option>
                           <option value="semanal">Semanal</option>
                           <option value="quincenal">Quincenal</option>
                         </>
@@ -491,8 +553,71 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                   value={formData.fiador.direccion}
                   onChange={handleChange}
                   className="input-field"
-                  placeholder="Ej: Calle 23 Número 45-30, Barrio Centro"
+                  placeholder="Ej: Calle 23 Número 45-30"
                 />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="label">Barrio (Fiador)</label>
+                <div className="relative" ref={barriosFiadorRef}>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="fiador.barrio"
+                      value={barrioSearchFiador}
+                      onChange={handleBarrioSearchChangeFiador}
+                      onFocus={() => setShowBarriosFiador(true)}
+                      className="input-field pr-10"
+                      placeholder="Buscar o seleccionar barrio del fiador..."
+                      autoComplete="off"
+                    />
+                    <div
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer"
+                      onClick={() => setShowBarriosFiador(!showBarriosFiador)}
+                    >
+                      {showBarriosFiador ? (
+                        <Search className="h-5 w-5 text-blue-500" />
+                      ) : (
+                        <ChevronDown className="h-5 w-5 text-gray-400" />
+                      )}
+                    </div>
+                  </div>
+
+                  {showBarriosFiador && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      {filteredBarriosFiador.length > 0 ? (
+                        filteredBarriosFiador.map((barrio) => (
+                          <div
+                            key={barrio}
+                            className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700"
+                            onClick={() => handleBarrioSelectFiador(barrio)}
+                          >
+                            {barrio}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-4 py-2 text-sm text-gray-500 italic">
+                          No se encontraron resultados. Se guardará "{barrioSearchFiador}" como nuevo barrio.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {usarOtroBarrioFiador && (
+                  <div className="mt-3">
+                    <label className="label">Nombre del barrio (Fiador) *</label>
+                    <input
+                      type="text"
+                      name="otroBarrioFiador"
+                      value={otroBarrioFiador}
+                      onChange={handleChange}
+                      className="input-field"
+                      placeholder="Ej: Barrio Nuevo"
+                      required
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="md:col-span-2">

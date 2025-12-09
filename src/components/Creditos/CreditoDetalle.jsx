@@ -29,7 +29,7 @@ import ListaNotas from './ListaNotas';
 import EditorFecha from './EditorFecha';
 
 const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }) => {
-  const { registrarPago, cancelarPago, editarFechaCuota, agregarNota, eliminarNota, agregarMulta, eliminarMulta, agregarAbono, eliminarAbono, agregarDescuento, eliminarDescuento, asignarEtiquetaCredito, renovarCredito, eliminarCredito, obtenerCredito } = useApp();
+  const { registrarPago, cancelarPago, editarFechaCuota, agregarNota, eliminarNota, agregarMulta, eliminarMulta, agregarAbono, editarAbono, eliminarAbono, agregarDescuento, eliminarDescuento, asignarEtiquetaCredito, renovarCredito, eliminarCredito, obtenerCredito } = useApp();
 
   // Obtener el crédito actualizado del contexto
   const credito = obtenerCredito(clienteId, creditoInicial.id) || creditoInicial;
@@ -231,6 +231,27 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
     }
   };
 
+  const handlePagarMulta = async (multa) => {
+    const valorPendiente = multa.valor; // En este modelo simple, no trackeamos parciales de multa individualmente en el objeto multa, sino en cuota.multasCubiertas.
+    // Sin embargo, `todasLasMultas` calculado en useMemo no tiene el 'pendiente' exacto por multa individual fácilmente accesible si hay pagos parciales a la bolsa de multas.
+    // Pero la lógica de abono 'tipo: multa' distribuirá a la cuota.
+
+    // Simplificación: Pedir el monto total de la multa por defecto
+    const monto = prompt(`Ingrese el valor a pagar para la multa de la Cuota #${multa.nroCuota}:`, valorPendiente);
+
+    if (monto && parseFloat(monto) > 0) {
+      const descripcion = `Pago Multa Cuota #${multa.nroCuota}`;
+      const fecha = new Date().toISOString().split('T')[0];
+
+      // Pasar tipo = 'multa' y usar el nroCuota en la descripción para el targeting
+      // NOTA: agregarAbono no fue actualizado en la interface de useApp?
+      // Sí, updated in AppContext.jsx definition.
+      // Pero agregarAbono en this component calls context.
+
+      await agregarAbono(clienteId, credito.id, parseFloat(monto), descripcion, fecha, 'multa', multa.nroCuota);
+    }
+  };
+
   const handleAgregarAbono = () => {
     if (!valorAbono || parseFloat(valorAbono) <= 0) {
       alert('Por favor ingresa un valor válido para el abono');
@@ -351,17 +372,35 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
     (credito.cuotas || []).forEach((cuota) => {
       // Buscar la cuota actualizada correspondiente
       const cuotaActualizada = cuotasActualizadas.find(c => c.nroCuota === cuota.nroCuota);
-      const totalMultasCuota = cuota.multas ? cuota.multas.reduce((sum, m) => sum + m.valor, 0) : 0;
-      const multasCubiertas = cuotaActualizada?.multasCubiertas || 0;
-
-      // Las multas están pagadas si:
-      // 1. La cuota fue marcada como pagada manualmente (con el botón "Marcar pagado")
-      // 2. O si todas las multas están cubiertas por abonos
-      const todasLasMultasPagadas = cuota.pagado || (totalMultasCuota > 0 && multasCubiertas >= totalMultasCuota);
+      let multasCubiertas = cuotaActualizada?.multasCubiertas || 0;
 
       (cuota.multas || []).forEach((multa) => {
-        // Si todas las multas de la cuota están pagadas, esta multa también lo está
-        const estaMultaPagada = todasLasMultasPagadas;
+        // Verificar si esta multa específica está pagada
+        // Lógica: Si la cuota está pagada manual, todas sus multas también.
+        // Si no, verificamos si el saldo de "multasCubiertas" alcanza para esta multa en orden secuencial.
+        let estaMultaPagada = false;
+
+        if (cuota.pagado) {
+          estaMultaPagada = true;
+        } else {
+          // Si hay saldo suficiente para cubrir esta multa
+          if (multasCubiertas >= multa.valor) {
+            estaMultaPagada = true;
+            multasCubiertas -= multa.valor; // Consumimos el saldo
+          } else {
+            // El saldo no alcanza o es 0, esta multa queda pendiente (o parcialmente pagada, pero la marcamos pendiente para simplificar UI)
+            estaMultaPagada = false;
+            // No restamos si no alcanza, o restamos lo que hay?
+            // Para "pagada" requerimos valor completo.
+            // Si multasCubiertas es 3000 y multa es 5000, no se paga.
+            // Y el saldo de 3000 ¿se debe guardar para la siguiente? NO, el waterfall es secuencial.
+            // Si no cubrimos esta, asumimos que el saldo se queda ahí (o parcial).
+            // Pero para simplificar el estado booleano:
+            if (multasCubiertas > 0) {
+              multasCubiertas = 0; // Ya usamos el remanente parcial aquí, no sigue a la siguiente
+            }
+          }
+        }
 
         lista.push({
           id: multa.id,
@@ -603,6 +642,8 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
                   onNuevaMulta={() => setMostrarModalNuevaMulta(true)}
                   onEditDate={handleEditarFecha}
                   onEditarAbono={handleEditarAbono}
+                  onEliminarAbono={handleEliminarAbono}
+                  onPagarMulta={(multa) => handlePagarMulta(multa)}
                   sinContenedor={true}
                 />
               </div>
@@ -639,17 +680,6 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
                 setFechaAbono(new Date().toISOString().split('T')[0]);
               }}
               onMostrarFormularioRenovacion={() => setMostrarFormularioRenovacion(true)}
-            />
-          </div>
-
-          {/* Lista de abonos (pagos realizados) */}
-          <div className="mt-6">
-            <ListaAbonos
-              abonos={credito.abonos}
-              credito={credito}
-              cuotas={credito.cuotas}
-              onEliminarAbono={handleEliminarAbono}
-              onEditarAbono={handleEditarAbono}
             />
           </div>
 
@@ -734,6 +764,10 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
           abono={abonoEnEdicion}
           onClose={() => setAbonoEnEdicion(null)}
           onConfirm={handleGuardarEdicionAbono}
+          onDelete={() => {
+            handleEliminarAbono(abonoEnEdicion.id);
+            setAbonoEnEdicion(null);
+          }}
         />
       )}
     </div>
@@ -742,7 +776,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
 
 export default CreditoDetalle;
 
-const ModalEditarAbono = ({ abono, onClose, onConfirm }) => {
+const ModalEditarAbono = ({ abono, onClose, onConfirm, onDelete }) => {
   const [valor, setValor] = useState(abono.valor || '');
   const [fecha, setFecha] = useState(abono.fecha ? abono.fecha.split('T')[0] : new Date().toISOString().split('T')[0]);
   const [descripcion, setDescripcion] = useState(abono.descripcion || '');
@@ -790,20 +824,37 @@ const ModalEditarAbono = ({ abono, onClose, onConfirm }) => {
               placeholder="Ej: Abono cuota #1"
             />
           </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold"
-            >
-              Guardar cambios
-            </button>
+          <div className="flex justify-between pt-2">
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => {
+                  // Confirmación está en handleEliminarAbono, pero aquí cerramos el modal si se borra?
+                  // handleEliminarAbono tiene su propio confirm. Si el usuario cancela, no cerramos modal?
+                  // Mejor llamar a onDelete y que él maneje.
+                  onDelete();
+                }}
+                className="px-3 py-2 text-red-600 hover:bg-red-50 rounded flex items-center gap-1"
+                title="Eliminar pago"
+              >
+                <Trash2 className="h-4 w-4" /> Eliminar
+              </button>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold"
+              >
+                Guardar cambios
+              </button>
+            </div>
           </div>
         </form>
       </div>

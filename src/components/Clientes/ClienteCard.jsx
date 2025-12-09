@@ -85,7 +85,7 @@ const ClienteCard = ({ cliente, cardVacia, numeroCard, cartera, tipoPago, onAgre
 
   // Obtener tipos únicos de créditos activos
   const tiposCreditosActivos = [...new Set(creditosActivosLista.map(c => c.tipo))];
-  
+
   // Nombres de tipos de crédito
   const nombresTipos = {
     diario: 'Diario',
@@ -119,13 +119,13 @@ const ClienteCard = ({ cliente, cardVacia, numeroCard, cartera, tipoPago, onAgre
   // Colores según cartera
   const carteraColors = {
     K1: {
-      bg: 'bg-white',
+      bg: 'bg-blue-50',
       border: 'border-blue-200',
       icon: 'bg-blue-100 text-blue-600',
       badge: 'bg-blue-100 text-blue-700 border-blue-300'
     },
     K2: {
-      bg: 'bg-white',
+      bg: 'bg-green-50',
       border: 'border-green-300',
       icon: 'bg-green-200 text-green-700',
       badge: 'bg-green-200 text-green-800 border-green-400'
@@ -159,7 +159,7 @@ const ClienteCard = ({ cliente, cardVacia, numeroCard, cartera, tipoPago, onAgre
             <p className="text-sm text-gray-500">CC: {cliente.documento}</p>
           </div>
         </div>
-        
+
         {creditosEnMora > 0 && (
           <div className="flex items-center text-red-600 bg-red-100 px-3 py-1 rounded-full ml-2">
             <AlertCircle className="h-4 w-4 mr-1" />
@@ -173,7 +173,7 @@ const ClienteCard = ({ cliente, cardVacia, numeroCard, cartera, tipoPago, onAgre
           <Phone className="h-4 w-4 mr-2 text-gray-400" />
           {cliente.telefono}
         </div>
-        
+
         {cliente.direccion && (
           <div className="flex items-start text-sm text-gray-600">
             <MapPin className="h-4 w-4 mr-2 text-gray-400 mt-0.5 flex-shrink-0" />
@@ -193,7 +193,7 @@ const ClienteCard = ({ cliente, cardVacia, numeroCard, cartera, tipoPago, onAgre
             </div>
           </div>
         )}
-        
+
         {cliente.correo && (
           <div className="flex items-center text-sm text-gray-600">
             <Mail className="h-4 w-4 mr-2 text-gray-400" />
@@ -255,7 +255,7 @@ const ClienteCard = ({ cliente, cardVacia, numeroCard, cartera, tipoPago, onAgre
             {creditosActivos} crédito{creditosActivos !== 1 ? 's' : ''} activo{creditosActivos !== 1 ? 's' : ''}
           </span>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <button
             onClick={handleEliminar}

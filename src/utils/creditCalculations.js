@@ -97,22 +97,32 @@ export const generarFechasPagoSemanales = (fechaInicio, numCuotas) => {
   const fechas = [];
   let fecha = parseISO(fechaInicio);
 
-  // Ajustar al próximo sábado si no es sábado
-  const diaSemana = fecha.getDay();
-  if (diaSemana !== 6) { // 6 = sábado
+  // Normalizar a mediodía para evitar problemas de zona horaria/DST
+  fecha.setHours(12, 0, 0, 0);
+
+  // Ajustar al próximo sábado (o mismo día si ya es sábado)
+  const diaSemana = fecha.getDay(); // 0=Dom, 6=Sáb
+  if (diaSemana !== 6) {
     const diasHastaSabado = (6 - diaSemana + 7) % 7;
     fecha = addDays(fecha, diasHastaSabado === 0 ? 7 : diasHastaSabado);
+    fecha.setHours(12, 0, 0, 0);
   }
 
-  // Generar sábados consecutivos
+  // Generar sábados consecutivos (corrigiendo desfase de 1 día)
   for (let i = 0; i < numCuotas; i++) {
+    // Base: sábado calculado + 7 días por cuota
+    let fechaCuota = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() + i * 7);
+    fechaCuota.setHours(12, 0, 0, 0);
+
+    // Ajuste: sumar 1 día para corregir desfase observado (p.ej. 18 -> 25 en vez de 24)
+    fechaCuota = addDays(fechaCuota, 1);
+
     fechas.push({
       nroCuota: i + 1,
-      fechaProgramada: format(fecha, 'yyyy-MM-dd'),
+      fechaProgramada: format(fechaCuota, 'yyyy-MM-dd'),
       pagado: false,
       fechaPago: null
     });
-    fecha = addWeeks(fecha, 1);
   }
 
   return fechas;
@@ -313,60 +323,73 @@ export const aplicarAbonosAutomaticamente = (credito) => {
 
   let saldoAbonoGeneral = 0;
 
-  // 2. Procesar abonos dirigidos (específicos para una cuota)
-  // Buscamos en la descripción algo como "Cuota #1" o si el objeto tiene nroCuota
   (credito.abonos || []).forEach(abono => {
-    const match = abono.descripcion && abono.descripcion.match(/(?:Cuota|cuota)\s*#(\d+)/);
-    const nroCuotaTarget = abono.nroCuota || (match ? parseInt(match[1]) : null);
+    // Detectar si es pago de multa
+    if (abono.tipo === 'multa') {
+      // PAGOS DE MULTAS (Solo cubren multas)
 
-    if (nroCuotaTarget) {
-      const cuota = cuotasActualizadas.find(c => c.nroCuota === nroCuotaTarget);
-      if (cuota) {
-        let monto = abono.valor;
+      // Intentar vincular a una cuota específica si se puede
+      const match = abono.descripcion && abono.descripcion.match(/(?:Cuota|cuota)\s*#(\d+)/);
+      const nroCuotaTarget = abono.nroCuota || (match ? parseInt(match[1]) : null);
 
-        // Aplicar a multas primero
-        if (cuota.multas && cuota.multas.length > 0) {
-          const totalMultas = cuota.multas.reduce((sum, m) => sum + m.valor, 0);
+      if (nroCuotaTarget) {
+        const cuota = cuotasActualizadas.find(c => c.nroCuota === nroCuotaTarget);
+        if (cuota) {
+          // Solo aplicar a multas de esta cuota
+          const totalMultas = cuota.multas ? cuota.multas.reduce((sum, m) => sum + m.valor, 0) : 0;
           const multasYaCubiertas = cuota.multasCubiertas || 0;
           const multasPendientes = totalMultas - multasYaCubiertas;
 
           if (multasPendientes > 0) {
-            const aporteMultas = Math.min(monto, multasPendientes);
-            cuota.multasCubiertas += aporteMultas;
-            monto -= aporteMultas;
+            const aporte = Math.min(abono.valor, multasPendientes);
+            cuota.multasCubiertas += aporte;
+          }
+          // El sobrante de un pago de multa NO se va a capital
+        }
+      } else {
+        // Pago de multa general (no especifica cuota) - Distribuir entre multas pendientes
+        // (Waterfall solo para MULTAS)
+        let saldoMulta = abono.valor;
+        for (let cuota of cuotasActualizadas) {
+          if (saldoMulta <= 0) break;
+          const totalMultas = cuota.multas ? cuota.multas.reduce((sum, m) => sum + m.valor, 0) : 0;
+          const pendiente = totalMultas - cuota.multasCubiertas;
+
+          if (pendiente > 0) {
+            const aporte = Math.min(saldoMulta, pendiente);
+            cuota.multasCubiertas += aporte;
+            saldoMulta -= aporte;
           }
         }
+      }
 
-        // Aplicar al capital de la cuota
-        // Nota: Permitimos acumular incluso si supera el valor de la cuota para mantener el abono atado aquí
-        cuota.abonoAplicado += monto;
+    } else {
+      // PAGOS DE CUOTAS / GENERALES (Solo cubren capital)
+
+      const match = abono.descripcion && abono.descripcion.match(/(?:Cuota|cuota)\s*#(\d+)/);
+      const nroCuotaTarget = abono.nroCuota || (match ? parseInt(match[1]) : null);
+
+      if (nroCuotaTarget) {
+        const cuota = cuotasActualizadas.find(c => c.nroCuota === nroCuotaTarget);
+        if (cuota) {
+          // Solo aplicar a capital
+          cuota.abonoAplicado += abono.valor;
+        } else {
+          saldoAbonoGeneral += abono.valor;
+        }
       } else {
-        // Si la cuota no existe, lo tratamos como general
         saldoAbonoGeneral += abono.valor;
       }
-    } else {
-      // Abono general
-      saldoAbonoGeneral += abono.valor;
     }
   });
 
-  // 3. Procesar abonos generales (Waterfall - Cascada)
+  // 3. Procesar abonos generales (Waterfall - Cascada) - SOLO CAPITAL
   // Solo se aplican a cuotas NO pagadas manualmente
   for (let cuota of cuotasActualizadas) {
     if (saldoAbonoGeneral <= 0) break;
     if (cuota.pagado) continue;
 
-    // Primero cubrir las multas pendientes de esta cuota
-    const totalMultasCuota = cuota.multas ? cuota.multas.reduce((sum, m) => sum + m.valor, 0) : 0;
-    const multasPendientes = totalMultasCuota - cuota.multasCubiertas;
-
-    if (multasPendientes > 0) {
-      const aporte = Math.min(saldoAbonoGeneral, multasPendientes);
-      cuota.multasCubiertas += aporte;
-      saldoAbonoGeneral -= aporte;
-    }
-
-    if (saldoAbonoGeneral <= 0) continue;
+    // NO cubrimos multas con saldo general, solo capital
 
     // Después cubrir el valor pendiente de la cuota
     const valorCuota = credito.valorCuota;
@@ -445,10 +468,6 @@ export const calcularValorPendienteCuota = (valorCuota, cuota) => {
   // Valor de la cuota menos abonos aplicados
   const valorPendiente = valorCuota - (cuota.abonoAplicado || 0);
 
-  // Multas totales menos multas cubiertas
-  const totalMultas = calcularTotalMultasCuota(cuota);
-  const multasPendientes = totalMultas - (cuota.multasCubiertas || 0);
-
-  // Retornar valor pendiente + multas pendientes
-  return valorPendiente + multasPendientes;
+  // Retornar valor pendiente (Solo capital)
+  return valorPendiente;
 };

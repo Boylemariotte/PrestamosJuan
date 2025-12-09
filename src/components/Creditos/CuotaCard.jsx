@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Edit2 } from 'lucide-react';
+import { Check, Edit2, Trash2 } from 'lucide-react';
 import { formatearMoneda, formatearFechaCorta, calcularTotalMultasCuota } from '../../utils/creditCalculations';
 import { isBefore, startOfDay, parseISO } from 'date-fns';
 
@@ -11,14 +11,12 @@ const CuotaCard = ({
   valorCuota,
   onPagar,
   onEditDate,
-  onEditarAbono
+  onEditarAbono,
+  onEliminarAbono
 }) => {
   // Verificar si está pagada manualmente O si el abono cubre completamente la cuota
   const abonoCuota = cuota?.abonoAplicado || 0;
-  const totalMultasCuota = cuota?.multas ? calcularTotalMultasCuota(cuota) : 0;
-  const multasCubiertas = cuota?.multasCubiertas || 0;
-  const multasPendientes = totalMultasCuota - multasCubiertas;
-  const valorRestante = (valorCuota || 0) - abonoCuota + multasPendientes;
+  const valorRestante = (valorCuota || 0) - abonoCuota;
 
   const isPaid = cuota?.pagado || (valorRestante <= 0 && abonoCuota > 0);
   const valorRestanteDisplay = isPaid ? 0 : valorRestante;
@@ -90,8 +88,22 @@ const CuotaCard = ({
             {abonosIndividuales.map((abono, idx) => {
               const [año, mes, dia] = abono.fecha.split('T')[0].split('-');
               return (
-                <div key={idx} className="text-green-600 text-[10px] font-medium leading-tight">
-                  -Abono: ${formatearMoneda(abono.valorAplicado ?? abono.valor).replace('$', '').replace(/,/g, '')} ({dia}/{mes})
+                <div key={idx} className="text-green-600 text-[10px] font-medium leading-tight flex justify-between items-center group/abono">
+                  <span>-Abono: ${formatearMoneda(abono.valorAplicado ?? abono.valor).replace('$', '').replace(/,/g, '')} ({dia}/{mes})</span>
+                  {onEditarAbono && (
+                    <div className="flex gap-1 opacity-0 group-hover/abono:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditarAbono(abono);
+                        }}
+                        className="px-1 text-blue-500 hover:text-blue-700"
+                        title="Editar pago"
+                      >
+                        <Edit2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -106,29 +118,31 @@ const CuotaCard = ({
               Pagada
             </div>
             {onEditarAbono && abonosIndividuales.length > 0 && (
-              <button
-                onClick={() => onEditarAbono(abonosIndividuales[abonosIndividuales.length - 1])}
-                className="w-full py-1.5 px-2 text-xs font-semibold text-center rounded border border-blue-500 text-blue-600 hover:bg-blue-50 transition-colors"
-              >
-                Editar pago
-              </button>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => onEditarAbono(abonosIndividuales[abonosIndividuales.length - 1])}
+                  className="flex-1 py-1.5 px-2 text-xs font-semibold text-center rounded border border-blue-500 text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center gap-1"
+                >
+                  <Edit2 className="h-3 w-3" /> Editar
+                </button>
+              </div>
             )}
           </div>
         ) : (
           <button
             onClick={() => onPagar(nroCuota)}
             className={`w-full py-2 px-2 text-sm font-bold text-center rounded transition-colors shadow-sm ${isOverdue
-                ? 'bg-red-600 hover:bg-red-700 text-white'
-                : hasPartialPayment
-                  ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+              ? 'bg-red-600 hover:bg-red-700 text-white'
+              : hasPartialPayment
+                ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
               }`}
           >
             Pagar
           </button>
         )}
       </div>
-    </div>
+    </div >
   );
 };
 

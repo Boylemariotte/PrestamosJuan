@@ -60,7 +60,31 @@ export const AppProvider = ({ children }) => {
       return c;
     });
 
-    setClientes(dataChanged ? clientesMigrados : clientesData);
+    // MIGRACIÓN: Liberar posición 27 semanal en K1 si el cliente no tiene crédito semanal activo/en mora
+    const clientesPosicionLimpiada = clientesMigrados.map(c => {
+      if ((c.cartera || 'K1') !== 'K1' || Number(c.posicion) !== 27) {
+        return c;
+      }
+
+      // Verificar si tiene algún crédito semanal activo o en mora
+      const tieneSemanalActivo = (c.creditos || []).some(cred => {
+        const estado = determinarEstadoCredito(cred.cuotas, cred);
+        return (estado === 'activo' || estado === 'mora') && cred.tipo === 'semanal';
+      });
+
+      if (tieneSemanalActivo) {
+        return c;
+      }
+
+      dataChanged = true;
+      return {
+        ...c,
+        posicion: null,
+        tipoPagoEsperado: c.tipoPagoEsperado === 'semanal' ? null : c.tipoPagoEsperado
+      };
+    });
+
+    setClientes(dataChanged ? clientesPosicionLimpiada : clientesData);
     setMovimientosCaja(data.movimientosCaja || []);
     setAlertas(data.alertas || []);
     setLoading(false);
@@ -112,7 +136,7 @@ export const AppProvider = ({ children }) => {
         });
 
         const posicionesOcupadas = clientesMismoTipo.map(c => c.posicion).filter(Boolean);
-        const capacidadMaxima = tipoPagoEsperado === 'diario' ? 75 : 150;
+        const capacidadMaxima = 150;
 
         posicion = 1;
         while (posicionesOcupadas.includes(posicion) && posicion <= capacidadMaxima) {
@@ -149,6 +173,10 @@ export const AppProvider = ({ children }) => {
       });
 
       if (posicionOcupada) {
+        console.log('Posición ocupada por:', clientes.filter(c =>
+          (c.cartera || 'K1') === cartera &&
+          c.posicion === posicion
+        ));
         throw new Error(`La posición ${posicion} ya está ocupada en la cartera ${cartera} para el tipo de pago ${tipoPagoEsperado || 'sin tipo'}.`);
       }
     }
@@ -265,7 +293,7 @@ export const AppProvider = ({ children }) => {
     const { monto, tipo, fechaInicio, tipoQuincenal, papeleriaManual, usarPapeleriaManual } = creditoData;
     // Validación de cupos por cartera/tipo de pago y asignación de cartera
     const CAPACIDADES = {
-      K1: { diario: 75, semanal: 150, quincenal: 150 },
+      K1: { semanal: 150, quincenal: 150 },
       K2: { general: 225 }
     };
 
@@ -629,7 +657,7 @@ export const AppProvider = ({ children }) => {
   };
 
   // Gestión de Abonos
-  const agregarAbono = (clienteId, creditoId, valorAbono, descripcion = '', fechaAbono = null) => {
+  const agregarAbono = (clienteId, creditoId, valorAbono, descripcion = '', fechaAbono = null, tipo = 'abono', nroCuota = null) => {
     setClientes(prev => prev.map(cliente => {
       if (cliente.id === clienteId) {
         return {
@@ -640,7 +668,9 @@ export const AppProvider = ({ children }) => {
                 id: Date.now().toString(),
                 valor: valorAbono,
                 descripcion: descripcion || 'Abono al crédito',
-                fecha: fechaAbono || obtenerFechaHoraLocal()
+                fecha: fechaAbono || obtenerFechaHoraLocal(),
+                tipo: tipo, // 'abono' | 'multa'
+                nroCuota: nroCuota // Store target quota number if provided
               };
               return {
                 ...credito,
@@ -667,11 +697,11 @@ export const AppProvider = ({ children }) => {
                 abonos: (credito.abonos || []).map(abono =>
                   abono.id === abonoId
                     ? {
-                        ...abono,
-                        valor: datosActualizados.valor !== undefined ? datosActualizados.valor : abono.valor,
-                        descripcion: datosActualizados.descripcion !== undefined ? datosActualizados.descripcion : abono.descripcion,
-                        fecha: datosActualizados.fecha !== undefined ? datosActualizados.fecha : abono.fecha
-                      }
+                      ...abono,
+                      valor: datosActualizados.valor !== undefined ? datosActualizados.valor : abono.valor,
+                      descripcion: datosActualizados.descripcion !== undefined ? datosActualizados.descripcion : abono.descripcion,
+                      fecha: datosActualizados.fecha !== undefined ? datosActualizados.fecha : abono.fecha
+                    }
                     : abono
                 )
               };
@@ -978,6 +1008,7 @@ export const AppProvider = ({ children }) => {
     editarFechaCuota,
     // Abonos
     agregarAbono,
+    editarAbono,
     eliminarAbono,
     // Descuentos
     agregarDescuento,

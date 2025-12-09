@@ -2,7 +2,7 @@ import React from 'react';
 import { Check, Plus } from 'lucide-react';
 import { formatearMoneda, formatearFechaCorta } from '../../utils/creditCalculations';
 
-const RecobroCard = ({ todasLasMultas, onNuevaMulta }) => {
+const RecobroCard = ({ todasLasMultas, onNuevaMulta, onPagarMulta }) => {
   return (
     <div key="recobro" className="border-2 border-blue-600 rounded-lg p-3 flex flex-col min-h-36 w-full print-grid-item">
       <div className="flex items-center justify-between mb-2">
@@ -13,7 +13,7 @@ const RecobroCard = ({ todasLasMultas, onNuevaMulta }) => {
               {todasLasMultas.length} multa{todasLasMultas.length !== 1 ? 's' : ''}
             </span>
           )}
-          <button 
+          <button
             onClick={onNuevaMulta}
             className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-[10px] px-2 py-1 rounded transition-colors"
           >
@@ -38,11 +38,18 @@ const RecobroCard = ({ todasLasMultas, onNuevaMulta }) => {
                 <div className={`font-bold text-sm mt-1 ${multa.pagada ? 'text-green-900' : 'text-red-900'}`}>
                   {formatearMoneda(multa.valor)}
                 </div>
-                {multa.pagada && (
+                {multa.pagada ? (
                   <div className="text-[10px] text-green-600 font-semibold mt-1 flex items-center gap-1">
                     <Check className="h-3 w-3" />
                     Pagada
                   </div>
+                ) : (
+                  <button
+                    onClick={() => onPagarMulta(multa)}
+                    className="w-full mt-2 py-1 px-2 bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold rounded flex items-center justify-center gap-1 transition-colors"
+                  >
+                    Pagar
+                  </button>
                 )}
                 {multa.motivo && (
                   <div className={`text-[10px] mt-1 ${multa.pagada ? 'text-green-600' : 'text-red-600'}`}>

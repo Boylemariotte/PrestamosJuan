@@ -20,7 +20,7 @@ const DiaDeCobro = () => {
 
   // Estado para visitas
   const [visitas, setVisitas] = useState([]);
-  
+
   // Estado para acordeones de barrios
   const [barriosExpandidos, setBarriosExpandidos] = useState({});
 
@@ -77,7 +77,7 @@ const DiaDeCobro = () => {
       pendiente: 0,
       clientesTotal: 0
     };
-    
+
     const clientesUnicos = new Set();
 
     // Helper para agregar item a barrio
@@ -102,7 +102,7 @@ const DiaDeCobro = () => {
         let totalACobrarHoy = 0;
         let totalCobradoHoy = 0;
         let totalAbonadoHoy = 0;
-        
+
         // 1. Cuotas Pendientes (Programadas hoy o Vencidas)
         const cuotasPendientesHoy = cuotasActualizadas.filter((cuota, index) => {
           const cuotaOriginal = credito.cuotas[index];
@@ -123,12 +123,12 @@ const DiaDeCobro = () => {
         });
 
         if (cuotasPendientesHoy.length > 0) {
-            tieneActividadHoy = true;
-            cuotasPendientesHoy.forEach(c => {
-                const abono = c.abonoAplicado || 0;
-                const multas = calcularTotalMultasCuota(c) - (c.multasCubiertas || 0);
-                totalACobrarHoy += (credito.valorCuota - abono) + multas;
-            });
+          tieneActividadHoy = true;
+          cuotasPendientesHoy.forEach(c => {
+            const abono = c.abonoAplicado || 0;
+            const multas = calcularTotalMultasCuota(c) - (c.multasCubiertas || 0);
+            totalACobrarHoy += (credito.valorCuota - abono) + multas;
+          });
         }
 
         // 2. Cuotas Cobradas Hoy
@@ -136,28 +136,28 @@ const DiaDeCobro = () => {
           return cuota.pagado && cuota.fechaPago === fechaSeleccionadaStr && !cuota.tieneAbono;
         });
         if (cuotasCobradasHoy.length > 0) {
-            tieneActividadHoy = true;
-            totalCobradoHoy += (cuotasCobradasHoy.length * credito.valorCuota);
+          tieneActividadHoy = true;
+          totalCobradoHoy += (cuotasCobradasHoy.length * credito.valorCuota);
         }
 
         // 3. Abonos Hoy (Específicos o Generales)
         // a. Específicos
-        const cuotasAbonadasHoy = credito.cuotas.filter(cuota => 
-             cuota.abonosCuota && cuota.abonosCuota.some(a => a.fecha === fechaSeleccionadaStr)
+        const cuotasAbonadasHoy = credito.cuotas.filter(cuota =>
+          cuota.abonosCuota && cuota.abonosCuota.some(a => a.fecha === fechaSeleccionadaStr)
         );
         // b. Generales
         const abonosGeneralesHoy = (credito.abonos || []).filter(abono => {
-             const f = abono.fecha?.split('T')[0] || abono.fecha;
-             return f === fechaSeleccionadaStr;
+          const f = abono.fecha?.split('T')[0] || abono.fecha;
+          return f === fechaSeleccionadaStr;
         });
 
         if (cuotasAbonadasHoy.length > 0 || abonosGeneralesHoy.length > 0) {
-            tieneActividadHoy = true;
-            cuotasAbonadasHoy.forEach(c => {
-                const abonos = c.abonosCuota.filter(a => a.fecha === fechaSeleccionadaStr);
-                totalAbonadoHoy += abonos.reduce((s, a) => s + a.valor, 0);
-            });
-            totalAbonadoHoy += abonosGeneralesHoy.reduce((s, a) => s + a.valor, 0);
+          tieneActividadHoy = true;
+          cuotasAbonadasHoy.forEach(c => {
+            const abonos = c.abonosCuota.filter(a => a.fecha === fechaSeleccionadaStr);
+            totalAbonadoHoy += abonos.reduce((s, a) => s + a.valor, 0);
+          });
+          totalAbonadoHoy += abonosGeneralesHoy.reduce((s, a) => s + a.valor, 0);
         }
 
         if (!tieneActividadHoy) return;
@@ -167,13 +167,13 @@ const DiaDeCobro = () => {
         let tipoItem = 'cobrado';
         if (totalACobrarHoy > 0) tipoItem = 'pendiente';
         else if (totalAbonadoHoy > 0 && totalACobrarHoy === 0) tipoItem = 'abonado'; // Si abonó y no debe nada pendiente viejo/hoy
-        
+
         // Si debe pendiente, el valor a mostrar principal es lo que debe.
         // Si no debe, mostramos lo que pagó/abonó.
         let valorMostrar = 0;
         // CAMBIO: Para pendiente, mostrar siempre el valor de la cuota general del crédito,
         // independiente de si debe varias. El usuario solicitó ver la cuota estándar.
-        if (tipoItem === 'pendiente') valorMostrar = credito.valorCuota; 
+        if (tipoItem === 'pendiente') valorMostrar = credito.valorCuota;
         else if (tipoItem === 'cobrado') valorMostrar = totalCobradoHoy;
         else valorMostrar = totalAbonadoHoy;
 
@@ -184,63 +184,63 @@ const DiaDeCobro = () => {
         const fechaHoyObj = startOfDay(new Date());
 
         cuotasActualizadas.forEach(cuota => {
-             if (cuota.pagado) return;
-             const abono = cuota.abonoAplicado || 0;
-             if ((credito.valorCuota - abono) > 0) {
-                 const fProg = startOfDay(parseISO(cuota.fechaProgramada));
-                 if (isBefore(fProg, fechaHoyObj)) {
-                     cuotasVencidasCount++;
-                     if (!primerCuotaVencidaFecha || isBefore(fProg, startOfDay(parseISO(primerCuotaVencidaFecha)))) {
-                         primerCuotaVencidaFecha = cuota.fechaProgramada;
-                     }
-                 }
-             }
+          if (cuota.pagado) return;
+          const abono = cuota.abonoAplicado || 0;
+          if ((credito.valorCuota - abono) > 0) {
+            const fProg = startOfDay(parseISO(cuota.fechaProgramada));
+            if (isBefore(fProg, fechaHoyObj)) {
+              cuotasVencidasCount++;
+              if (!primerCuotaVencidaFecha || isBefore(fProg, startOfDay(parseISO(primerCuotaVencidaFecha)))) {
+                primerCuotaVencidaFecha = cuota.fechaProgramada;
+              }
+            }
+          }
         });
 
         // Calcular saldo total del crédito
         let pagadoTotal = 0;
-        credito.cuotas.forEach(c => { if(c.pagado) pagadoTotal += credito.valorCuota; }); 
+        credito.cuotas.forEach(c => { if (c.pagado) pagadoTotal += credito.valorCuota; });
         const totalAbonosCredito = (credito.abonos || []).reduce((sum, a) => sum + a.valor, 0);
-        
+
         const saldoTotalCredito = cuotasActualizadas.reduce((sum, c) => {
-             if (c.pagado) return sum;
-             const abono = c.abonoAplicado || 0;
-             const multas = calcularTotalMultasCuota(c) - (c.multasCubiertas || 0);
-             return sum + (credito.valorCuota - abono) + multas;
+          if (c.pagado) return sum;
+          const abono = c.abonoAplicado || 0;
+          const multas = calcularTotalMultasCuota(c) - (c.multasCubiertas || 0);
+          return sum + (credito.valorCuota - abono) + multas;
         }, 0);
 
 
         const item = {
-            tipo: tipoItem,
-            clienteId: cliente.id,
-            clienteNombre: cliente.nombre,
-            clienteDocumento: cliente.documento,
-            clienteTelefono: cliente.telefono,
-            clienteDireccion: cliente.direccion,
-            clienteBarrio: cliente.barrio,
-            creditoId: credito.id,
-            creditoMonto: credito.monto,
-            creditoTipo: credito.tipo,
-            valorMostrar: valorMostrar,
-            valorRealACobrar: totalACobrarHoy,
-            saldoTotalCredito: saldoTotalCredito,
-            estadoCredito: estadoCredito,
-            cuotasVencidasCount,
-            primerCuotaVencidaFecha
+          tipo: tipoItem,
+          clienteId: cliente.id,
+          clienteNombre: cliente.nombre,
+          clienteDocumento: cliente.documento,
+          clienteTelefono: cliente.telefono,
+          clienteDireccion: cliente.direccion,
+          clienteBarrio: cliente.barrio,
+          creditoId: credito.id,
+          creditoMonto: credito.monto,
+          creditoTipo: credito.tipo,
+          valorMostrar: valorMostrar,
+          valorRealACobrar: totalACobrarHoy,
+          saldoTotalCredito: saldoTotalCredito,
+          estadoCredito: estadoCredito,
+          cuotasVencidasCount,
+          primerCuotaVencidaFecha
         };
 
         agregarItem(cliente.barrio, item);
-        
+
         // Stats
-        stats.esperado += totalACobrarHoy + totalCobradoHoy + totalAbonadoHoy; 
+        stats.esperado += totalACobrarHoy + totalCobradoHoy + totalAbonadoHoy;
         stats.pendiente += totalACobrarHoy;
         stats.recogido += (totalCobradoHoy + totalAbonadoHoy);
 
       });
     });
-    
+
     stats.clientesTotal = clientesUnicos.size;
-    
+
     const barriosOrdenados = Object.keys(porBarrio).sort().reduce((obj, key) => {
       obj[key] = porBarrio[key];
       return obj;
@@ -312,8 +312,8 @@ const DiaDeCobro = () => {
                 {formatearMoneda(item.creditoMonto)}
               </td>
               <td className="px-4 py-4 font-bold text-green-600 text-base">
-                {item.tipo === 'pendiente' 
-                  ? formatearMoneda(item.valorMostrar) 
+                {item.tipo === 'pendiente'
+                  ? formatearMoneda(item.valorMostrar)
                   : item.tipo === 'cobrado'
                     ? <span className="text-green-600">Pagado ({formatearMoneda(item.valorMostrar)})</span>
                     : <span className="text-yellow-600">Abonado ({formatearMoneda(item.valorMostrar)})</span>
@@ -390,7 +390,7 @@ const DiaDeCobro = () => {
             <button onClick={irMañana} className="p-2 hover:bg-white/10 rounded-md transition-colors">
               <ChevronRight className="h-5 w-5" />
             </button>
-            <button 
+            <button
               onClick={irHoy}
               className={`ml-2 px-3 text-sm font-bold rounded-md transition-colors ${esHoy ? 'bg-blue-600 text-white' : 'hover:bg-white/10 text-slate-300'}`}
             >
@@ -433,7 +433,7 @@ const DiaDeCobro = () => {
                     {visita.solicitante.barrioCasa}
                   </div>
                 </div>
-                <button 
+                <button
                   onClick={() => handleCompletarVisita(visita.id)}
                   className="p-2 hover:bg-green-100 text-gray-400 hover:text-green-600 rounded-full transition-colors"
                 >
@@ -484,7 +484,7 @@ const DiaDeCobro = () => {
                     {expandido ? <ChevronUp className="h-5 w-5 text-gray-400" /> : <ChevronDown className="h-5 w-5 text-gray-400" />}
                   </div>
                 </button>
-                
+
                 {expandido && (
                   <div className="border-t border-gray-100">
                     <TablaCobros items={items} />

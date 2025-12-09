@@ -34,7 +34,7 @@ const Clientes = () => {
     if (filtroCartera === 'todas') {
       return ['todos', 'diario', 'semanal', 'quincenal', 'mensual'];
     } else if (filtroCartera === 'K1') {
-      return ['todos', 'diario', 'semanal', 'quincenal'];
+      return ['todos', 'semanal', 'quincenal'];
     } else if (filtroCartera === 'K2') {
       return ['todos'];
     }
@@ -100,14 +100,14 @@ const Clientes = () => {
 
   // Capacidades por cartera/tipo de pago
   const CAPACIDADES = {
-    K1: { diario: 75, semanal: 150, quincenal: 150 },
+    K1: { semanal: 150, quincenal: 150 },
     K2: { general: 225 }
   };
 
   // Ocupación actual por cartera/tipo (considera clientes con créditos activos/en mora o tipoPagoEsperado)
   const ocupacion = useMemo(() => {
     const base = {
-      K1: { diario: 0, semanal: 0, quincenal: 0 },
+      K1: { semanal: 0, quincenal: 0 },
       K2: { general: 0 }
     };
     clientes.forEach((cliente) => {
@@ -348,7 +348,6 @@ const Clientes = () => {
               <p className="text-3xl font-bold mt-1">{clientesK1}</p>
               <p className="text-blue-100 text-xs mt-1">clientes</p>
               <div className="mt-3 space-y-1 text-[11px]">
-                <p className="text-blue-100">Diario: {ocupacion.K1.diario}/{CAPACIDADES.K1.diario}</p>
                 <p className="text-blue-100">Semanal: {ocupacion.K1.semanal}/{CAPACIDADES.K1.semanal}</p>
                 <p className="text-blue-100">Quincenal: {ocupacion.K1.quincenal}/{CAPACIDADES.K1.quincenal}</p>
               </div>
@@ -518,8 +517,23 @@ const Clientes = () => {
                 const creditoInfo = getCreditoInfo(card.cliente, card.tipoPago);
                 const esVacia = !card.cliente;
 
+                let carteraRowClass = '';
+                if (esVacia) {
+                  // Filas vacías siempre blanco
+                  carteraRowClass = 'bg-white';
+                } else if (card.cartera === 'K1') {
+                  carteraRowClass = 'bg-blue-100 hover:bg-blue-200';
+                } else if (card.cartera === 'K2') {
+                  carteraRowClass = 'bg-green-100 hover:bg-green-200';
+                } else {
+                  carteraRowClass = 'hover:bg-gray-50';
+                }
+
                 return (
-                  <tr key={`${card.cartera}-${card.tipoPago}-${card.posicion}-${index}`} className={esVacia ? "bg-gray-50" : "hover:bg-gray-50"}>
+                  <tr
+                    key={`${card.cartera}-${card.tipoPago}-${card.posicion}-${index}`}
+                    className={carteraRowClass}
+                  >
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                       <span className="font-black text-base text-black">
                         #{card.posicion}

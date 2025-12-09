@@ -13,6 +13,8 @@ const GrillaCuotas = ({
   onNuevaMulta,
   onEditDate,
   onEditarAbono,
+  onEliminarAbono,
+  onPagarMulta,
   sinContenedor = false
 }) => {
   // Calcular distribución de abonos para visualización
@@ -33,21 +35,20 @@ const GrillaCuotas = ({
       // Detectar si es un abono específico
       const match = abono.descripcion && abono.descripcion.match(/(?:Cuota|cuota)\s*#(\d+)/);
       const nroCuotaTarget = abono.nroCuota || (match ? parseInt(match[1]) : null);
-
       let monto = abono.valor;
 
       if (nroCuotaTarget) {
         const cuota = estadoCuotas.find(c => c.nroCuota === nroCuotaTarget);
         if (cuota) {
           // Es un abono para esta cuota
+          if (!mapa[cuota.nroCuota]) mapa[cuota.nroCuota] = [];
           mapa[cuota.nroCuota].push({
             ...abono,
             valorAplicado: monto
           });
 
           // Actualizar estado para que el waterfall sepa cuánto deuda queda
-          // Nota: En la lógica real, esto se aplica a multas y capital. Simplificamos aquí.
-          cuota.abonoAplicado += monto; // Simplemente sumamos al abono aplicado
+          cuota.abonoAplicado += monto;
         }
       } else {
         // Abono general (Waterfall)
@@ -94,9 +95,6 @@ const GrillaCuotas = ({
 
   const content = (
     <>
-      {/* VALOR CUOTA - Título removido ya que está en el header general */}
-
-      {/* Grilla de cuotas */}
       <div className={`grid gap-4 mx-auto w-full ${formData.tipoPago === 'quincenal' ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5'} auto-rows-fr`}>
         {Array.from({ length: obtenerNumeroCuotas(formData.tipoPago) }, (_, index) => {
           const nroCuota = index + 1;
@@ -114,17 +112,19 @@ const GrillaCuotas = ({
                 onPagar={onPagar}
                 onEditDate={onEditDate}
                 onEditarAbono={onEditarAbono}
+                onEliminarAbono={onEliminarAbono}
               />
             </div>
           );
         })}
       </div>
 
-      {/* Card de Recobro - Ancho completo debajo de la grilla */}
+      {/* Card de Recobro */}
       <div className="mt-4 w-full">
         <RecobroCard
           todasLasMultas={todasLasMultas}
           onNuevaMulta={onNuevaMulta}
+          onPagarMulta={onPagarMulta}
         />
       </div>
     </>

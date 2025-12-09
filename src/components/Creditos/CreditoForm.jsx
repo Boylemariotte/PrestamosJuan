@@ -16,7 +16,7 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
   const tiposPermitidos = tipoPagoPredefinido
     ? [tipoPagoPredefinido]
     : (carteraCliente === 'K1'
-      ? ['diario', 'semanal', 'quincenal']
+      ? ['semanal', 'quincenal']
       : ['quincenal', 'mensual']);
 
   // Tipo por defecto: predefinido > preferido > default cartera
@@ -125,22 +125,20 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           <div className="p-6 space-y-6 overflow-y-auto flex-1">
 
-            {/* Opción Manual (Solo K2) */}
-            {carteraCliente === 'K2' && (
-              <div className="flex items-center mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                <input
-                  type="checkbox"
-                  id="usarMontoManual"
-                  name="usarMontoManual"
-                  checked={formData.usarMontoManual}
-                  onChange={handleChange}
-                  className="h-5 w-5 text-yellow-600 focus:ring-yellow-500 rounded"
-                />
-                <label htmlFor="usarMontoManual" className="ml-3 text-sm font-medium text-yellow-800 cursor-pointer">
-                  Ingresar valores manualmente (Monto y Cuota)
-                </label>
-              </div>
-            )}
+            {/* Opción Manual */}
+            <div className="flex items-center mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+              <input
+                type="checkbox"
+                id="usarMontoManual"
+                name="usarMontoManual"
+                checked={formData.usarMontoManual}
+                onChange={handleChange}
+                className="h-5 w-5 text-yellow-600 focus:ring-yellow-500 rounded"
+              />
+              <label htmlFor="usarMontoManual" className="ml-3 text-sm font-medium text-yellow-800 cursor-pointer">
+                Ingresar valores manualmente (Monto y Cuota)
+              </label>
+            </div>
 
             {/* Monto del préstamo */}
             <div>
@@ -247,23 +245,6 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
               ) : (
                 // Si no hay tipo predefinido, mostrar todas las opciones permitidas
                 <div className="space-y-3">
-                  {tiposPermitidos.includes('diario') && (
-                    <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                      <input
-                        type="radio"
-                        name="tipo"
-                        value="diario"
-                        checked={formData.tipo === 'diario'}
-                        onChange={handleChange}
-                        className="h-4 w-4 text-sky-600 focus:ring-sky-500"
-                      />
-                      <div className="ml-3">
-                        <span className="font-medium text-gray-900">Diario</span>
-                        <p className="text-sm text-gray-500">60 cuotas - Cada día</p>
-                      </div>
-                    </label>
-                  )}
-
                   {tiposPermitidos.includes('semanal') && (
                     <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
                       <input
