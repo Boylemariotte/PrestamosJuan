@@ -110,8 +110,8 @@ const creditoEmbebidoSchema = new mongoose.Schema({
 }, { _id: false });
 
 const clienteSchema = new mongoose.Schema({
-  // Permitir _id personalizado (String) para migración
-  _id: { type: String, required: true },
+  // Permitir _id personalizado (String) para migración, o generar uno nuevo si no existe
+  _id: { type: String, default: () => new mongoose.Types.ObjectId().toString() },
   nombre: {
     type: String,
     required: true,
