@@ -283,7 +283,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
     setAbonoEnEdicion(abono);
   };
 
-  const handleGuardarEdicionAbono = ({ valor, fecha, descripcion }) => {
+  const handleGuardarEdicionAbono = ({ valor, fecha, descripcion, nroCuota }) => {
     if (!abonoEnEdicion) return;
     const valorNumerico = parseFloat(valor);
     if (isNaN(valorNumerico) || valorNumerico <= 0) {
@@ -294,7 +294,8 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
     editarAbono(clienteId, credito.id, abonoEnEdicion.id, {
       valor: valorNumerico,
       fecha,
-      descripcion
+      descripcion,
+      nroCuota: nroCuota ? parseInt(nroCuota, 10) : null
     });
 
     setAbonoEnEdicion(null);
@@ -353,6 +354,12 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
       ? (descripcion.includes(`Cuota #${nroCuota}`) ? descripcion : `${descripcion} (Cuota #${nroCuota})`)
       : `Abono a Cuota #${nroCuota}`;
 
+    // Confirmar que valor es número
+    if (isNaN(valorNumerico) || valorNumerico <= 0) {
+      alert("Valor inválido");
+      return;
+    }
+
     // Siempre agregamos como abono para mantener el historial visual y la lógica de asignación específica
     await agregarAbono(clienteId, credito.id, valorNumerico, descFinal, fecha);
 
@@ -363,7 +370,8 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
     // Se agrega la multa. Si el backend soporta fecha, genial. Si no, se agrega con fecha actual.
     // Concatenamos fecha al motivo si se desea persistencia visual simple
     const motivoFinal = fecha ? `${motivo} (${fecha})` : motivo;
-    agregarMulta(clienteId, credito.id, parseInt(nroCuota), parseFloat(valor), motivoFinal);
+    // Asegurar enteros y floats correctos
+    agregarMulta(clienteId, credito.id, parseInt(nroCuota, 10), parseFloat(valor), motivoFinal);
     setMostrarModalNuevaMulta(false);
   };
 
@@ -762,6 +770,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
       {abonoEnEdicion && (
         <ModalEditarAbono
           abono={abonoEnEdicion}
+          maxCuotas={obtenerNumeroCuotas(formData.tipoPago)}
           onClose={() => setAbonoEnEdicion(null)}
           onConfirm={handleGuardarEdicionAbono}
           onDelete={() => {
@@ -776,10 +785,19 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
 
 export default CreditoDetalle;
 
-const ModalEditarAbono = ({ abono, onClose, onConfirm, onDelete }) => {
+const ModalEditarAbono = ({ abono, maxCuotas, onClose, onConfirm, onDelete }) => {
   const [valor, setValor] = useState(abono.valor || '');
   const [fecha, setFecha] = useState(abono.fecha ? abono.fecha.split('T')[0] : new Date().toISOString().split('T')[0]);
   const [descripcion, setDescripcion] = useState(abono.descripcion || '');
+
+  // Intentar deducir nroCuota si no viene explícito
+  const obtenerCuotaInicial = () => {
+    if (abono.nroCuota) return abono.nroCuota;
+    const match = abono.descripcion ? abono.descripcion.match(/(?:Cuota|cuota)\s*#(\d+)/) : null;
+    return match ? parseInt(match[1]) : 1;
+  };
+
+  const [nroCuota, setNroCuota] = useState(obtenerCuotaInicial());
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -787,7 +805,15 @@ const ModalEditarAbono = ({ abono, onClose, onConfirm, onDelete }) => {
       alert('Ingrese un valor válido');
       return;
     }
-    onConfirm({ valor, fecha, descripcion });
+    // Actualizar descripción si cambia la cuota y la descripción era genérica
+    let descFinal = descripcion;
+    if (descFinal.includes('Cuota #')) {
+      descFinal = descFinal.replace(/Cuota #\d+/, `Cuota #${nroCuota}`);
+    } else if (descFinal.includes('cuota #')) {
+      descFinal = descFinal.replace(/cuota #\d+/, `cuota #${nroCuota}`);
+    }
+
+    onConfirm({ valor, fecha, descripcion: descFinal, nroCuota });
   };
 
   return (
@@ -813,6 +839,18 @@ const ModalEditarAbono = ({ abono, onClose, onConfirm, onDelete }) => {
               onChange={(e) => setFecha(e.target.value)}
               className="w-full border rounded p-2"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Aplicar a Cuota #</label>
+            <select
+              value={nroCuota}
+              onChange={(e) => setNroCuota(e.target.value)}
+              className="w-full border rounded p-2"
+            >
+              {Array.from({ length: maxCuotas || 10 }, (_, i) => i + 1).map(num => (
+                <option key={num} value={num}>Cuota #{num}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1">Descripción</label>

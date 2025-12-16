@@ -8,6 +8,7 @@ import {
   registrarPago,
   agregarNota,
   agregarAbono,
+  editarAbono,
   eliminarAbono,
   agregarMulta,
   agregarDescuento
@@ -39,6 +40,7 @@ router.route('/:id/abonos')
   .post(authorize('registrarPagos'), agregarAbono);
 
 router.route('/:id/abonos/:abonoId')
+  .put(authorize('registrarPagos'), editarAbono)
   .delete(authorize('registrarPagos'), eliminarAbono);
 
 router.route('/:id/multas')

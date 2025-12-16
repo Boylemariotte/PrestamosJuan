@@ -47,16 +47,16 @@ export const deletePapeleriaTransaction = (id) => {
 export const filterPapeleriaTransactions = (filters = {}) => {
   const { searchTerm = '', dateFilter = '', typeFilter = 'all' } = filters;
   const transactions = getPapeleriaTransactions();
-  
+
   return transactions.filter(transaction => {
     const matchesSearch = transaction.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (transaction.prestamoId && transaction.prestamoId.toLowerCase().includes(searchTerm.toLowerCase()));
-    
+      (transaction.prestamoId && transaction.prestamoId.toLowerCase().includes(searchTerm.toLowerCase()));
+
     const transactionDate = new Date(transaction.fecha).toISOString().split('T')[0];
     const matchesDate = !dateFilter || transactionDate === dateFilter;
-    
+
     const matchesType = typeFilter === 'all' || transaction.tipo === typeFilter;
-    
+
     return matchesSearch && matchesDate && matchesType;
   });
 };

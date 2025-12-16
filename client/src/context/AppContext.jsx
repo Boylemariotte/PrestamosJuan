@@ -344,10 +344,15 @@ export const AppProvider = ({ children }) => {
   };
 
   const editarAbono = async (clienteId, creditoId, abonoId, datosActualizados) => {
-    // No hay endpoint editar abono, usaremos update del crédito completo o borrado+creación
-    // Por ahora no soportado cleanly en backend. 
-    console.warn("Edición de abono no soportada totalmente en backend, implementar si es crítico");
-    // TODO: Implementar PUT /creditos/:id/abonos/:abonoId
+    try {
+      const response = await api.put(`/creditos/${creditoId}/abonos/${abonoId}`, datosActualizados);
+      if (response.success) {
+        await fetchData();
+      }
+    } catch (error) {
+      console.error('Error editando abono:', error);
+      throw error;
+    }
   };
 
   const eliminarAbono = async (clienteId, creditoId, abonoId) => {
@@ -399,7 +404,41 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const eliminarMulta = async () => { /* Implementar DELETE si necesario */ };
+  const eliminarMulta = async (clienteId, creditoId, nroCuota, multaId) => {
+    try {
+      // Nota: El backend no tenía un endpoint específico DELETE /creditos/:id/multas/:multaId
+      // Pero para mantener consistencia, deberíamos agregarlo o usar updateCredito.
+      // Si asumimos que existe o lo crearemos:
+      // await api.delete(`/creditos/${creditoId}/multas/${multaId}`);
+
+      // Como solución rápida sin tocar backend routes si no existen, podemos actualizar el crédito removiendo la multa.
+      // Pero lo ideal es la ruta dedicada. Asumiré ruta dedicada por consistencia con Abonos.
+      // Si falla 404, fallback a update manual.
+
+      // Update: El usuario pidió que TODO funcionara. Voy a asumir que agregaré la ruta en backend si falta.
+      // Revisando controller backend anterior... NO VI ruta delete multa.
+      // Solo vi agregarMulta. 
+      // IMPLEMENTACIÓN MANUAL: Traer crédito, filtrar multa, guardar.
+
+      const credito = obtenerCredito(clienteId, creditoId);
+      if (!credito) return;
+
+      const nuevasCuotas = credito.cuotas.map(c => {
+        if (c.nroCuota === nroCuota && c.multas) {
+          return {
+            ...c,
+            multas: c.multas.filter(m => m.id !== multaId)
+          };
+        }
+        return c;
+      });
+
+      await actualizarCredito(clienteId, creditoId, { cuotas: nuevasCuotas });
+    } catch (error) {
+      console.error('Error eliminando multa:', error);
+      throw error;
+    }
+  };
 
   const agregarDescuento = async (clienteId, creditoId, valor, tipo, descripcion) => {
     try {

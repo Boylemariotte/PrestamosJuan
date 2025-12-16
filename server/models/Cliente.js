@@ -120,7 +120,6 @@ const clienteSchema = new mongoose.Schema({
   documento: {
     type: String,
     required: true,
-    unique: true,
     trim: true
   },
   telefono: {

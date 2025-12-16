@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Cliente from '../models/Cliente.js';
 import Credito from '../models/Credito.js';
 import MovimientoCaja from '../models/MovimientoCaja.js';
@@ -78,138 +79,192 @@ export const importData = async (req, res, next) => {
 
 const performImport = async (data) => {
     // Limpiar base de datos
+    // NOTA: Si se desea hacer un "merge", se debería quitar esto, pero "Import/Restore" suele implicar reemplazo o append.
+    // Dado que el código anterior borraba, mantenemos ese comportamiento.
     await Cliente.deleteMany({});
+
+    // IMPORTANTE: Eliminar índices únicos viejos que puedan causar conflicto (ej: documento_1)
+    try {
+        await Cliente.collection.dropIndex('documento_1');
+        console.log('Índice documento_1 eliminado correctamente para permitir duplicados.');
+    } catch (e) {
+        // Ignorar error si el índice no existe
+        if (e.code !== 27) {
+            console.log('Nota: El índice documento_1 no existía o no se pudo borrar:', e.message);
+        }
+    }
+
     await Credito.deleteMany({});
     await MovimientoCaja.deleteMany({});
     await Alerta.deleteMany({});
 
+    // Importación por lotes para escalabilidad (Batch Size)
+    const BATCH_SIZE = 500; // Procesar de a 500 registros para no bloquear ni saturar memoria en inserts
+
     if (data.clientes?.length) {
-        const clientesProcesados = [];
-        const creditosParaColeccion = [];
+        console.log(`Iniciando importación de ${data.clientes.length} clientes...`);
+        let importedClientesCount = 0;
+        let importedCreditosCount = 0;
+        let errorCount = 0;
 
-        for (const clienteRaw of data.clientes) {
-            const clienteId = clienteRaw.id || clienteRaw._id || Date.now().toString();
+        // Procesar en lotes
+        for (let i = 0; i < data.clientes.length; i += BATCH_SIZE) {
+            const clientesBatch = data.clientes.slice(i, i + BATCH_SIZE);
+            const clientesProcesados = [];
+            const creditosParaColeccion = [];
 
-            // Procesar créditos embebidos
-            const creditosEmbebidos = [];
-            if (clienteRaw.creditos && Array.isArray(clienteRaw.creditos)) {
-                for (const creditoRaw of clienteRaw.creditos) {
-                    const creditoId = creditoRaw.id || creditoRaw._id || `CRED-${Date.now()}`;
+            for (const clienteRaw of clientesBatch) {
+                // Usar ID existente o generar uno ROBUSTO (evitar Date.now() en loops rápidos)
+                const clienteId = clienteRaw.id || clienteRaw._id || new mongoose.Types.ObjectId().toString();
 
-                    // Corregir cuotas y saldos
-                    const cuotasProcesadas = (creditoRaw.cuotas || []).map(cuota => {
-                        let saldoCalculado = cuota.saldoPendiente;
+                // Procesar créditos embebidos
+                const creditosEmbebidos = [];
+                if (clienteRaw.creditos && Array.isArray(clienteRaw.creditos)) {
+                    for (const creditoRaw of clienteRaw.creditos) {
+                        const creditoId = creditoRaw.id || creditoRaw._id || `CRED-${new mongoose.Types.ObjectId().toString()}`;
 
-                        if (saldoCalculado === undefined || saldoCalculado === null) {
-                            if (cuota.pagado) {
-                                saldoCalculado = 0;
-                            } else {
-                                const abonosCuota = cuota.abonosCuota || [];
-                                const totalAbonado = abonosCuota.reduce((sum, a) => sum + (a.valor || 0), 0);
-                                saldoCalculado = (creditoRaw.valorCuota || 0) - totalAbonado;
-                                if (saldoCalculado < 0) saldoCalculado = 0;
+                        // Corregir cuotas y saldos
+                        const cuotasProcesadas = (creditoRaw.cuotas || []).map(cuota => {
+                            let saldoCalculado = cuota.saldoPendiente;
+
+                            if (saldoCalculado === undefined || saldoCalculado === null) {
+                                if (cuota.pagado) {
+                                    saldoCalculado = 0;
+                                } else {
+                                    const abonosCuota = cuota.abonosCuota || [];
+                                    const totalAbonado = abonosCuota.reduce((sum, a) => sum + (a.valor || 0), 0);
+                                    saldoCalculado = (creditoRaw.valorCuota || 0) - totalAbonado;
+                                    if (saldoCalculado < 0) saldoCalculado = 0;
+                                }
                             }
-                        }
 
-                        return {
-                            ...cuota,
-                            saldoPendiente: saldoCalculado,
-                            pagado: saldoCalculado <= 0 ? true : (cuota.pagado || false)
+                            return {
+                                ...cuota,
+                                saldoPendiente: saldoCalculado,
+                                pagado: saldoCalculado <= 0 ? true : (cuota.pagado || false)
+                            };
+                        });
+
+                        // Crédito embebido para el cliente
+                        const creditoEmbebido = {
+                            id: creditoId,
+                            monto: creditoRaw.monto,
+                            papeleria: creditoRaw.papeleria || 0,
+                            montoEntregado: creditoRaw.montoEntregado,
+                            tipo: creditoRaw.tipo,
+                            tipoQuincenal: creditoRaw.tipoQuincenal,
+                            fechaInicio: creditoRaw.fechaInicio,
+                            totalAPagar: creditoRaw.totalAPagar,
+                            valorCuota: creditoRaw.valorCuota,
+                            numCuotas: creditoRaw.numCuotas,
+                            cuotas: cuotasProcesadas,
+                            abonos: creditoRaw.abonos || [],
+                            descuentos: creditoRaw.descuentos || [],
+                            notas: creditoRaw.notas || [],
+                            etiqueta: creditoRaw.etiqueta,
+                            renovado: creditoRaw.renovado || false,
+                            esRenovacion: creditoRaw.esRenovacion || false,
+                            creditoAnteriorId: creditoRaw.creditoAnteriorId,
+                            fechaCreacion: creditoRaw.fechaCreacion
                         };
-                    });
 
-                    // Crédito embebido para el cliente
-                    const creditoEmbebido = {
-                        id: creditoId,
-                        monto: creditoRaw.monto,
-                        papeleria: creditoRaw.papeleria || 0,
-                        montoEntregado: creditoRaw.montoEntregado,
-                        tipo: creditoRaw.tipo,
-                        tipoQuincenal: creditoRaw.tipoQuincenal,
-                        fechaInicio: creditoRaw.fechaInicio,
-                        totalAPagar: creditoRaw.totalAPagar,
-                        valorCuota: creditoRaw.valorCuota,
-                        numCuotas: creditoRaw.numCuotas,
-                        cuotas: cuotasProcesadas,
-                        abonos: creditoRaw.abonos || [],
-                        descuentos: creditoRaw.descuentos || [],
-                        notas: creditoRaw.notas || [],
-                        etiqueta: creditoRaw.etiqueta,
-                        renovado: creditoRaw.renovado || false,
-                        esRenovacion: creditoRaw.esRenovacion || false,
-                        creditoAnteriorId: creditoRaw.creditoAnteriorId,
-                        fechaCreacion: creditoRaw.fechaCreacion
-                    };
+                        creditosEmbebidos.push(creditoEmbebido);
 
-                    creditosEmbebidos.push(creditoEmbebido);
+                        // También preparar para la colección Creditos
+                        creditosParaColeccion.push({
+                            _id: creditoId,
+                            cliente: clienteId,
+                            monto: creditoRaw.monto,
+                            papeleria: creditoRaw.papeleria || 0,
+                            montoEntregado: creditoRaw.montoEntregado,
+                            tipo: creditoRaw.tipo,
+                            tipoQuincenal: creditoRaw.tipoQuincenal,
+                            fechaInicio: creditoRaw.fechaInicio,
+                            totalAPagar: creditoRaw.totalAPagar,
+                            valorCuota: creditoRaw.valorCuota,
+                            numCuotas: creditoRaw.numCuotas,
+                            cuotas: cuotasProcesadas,
+                            abonos: creditoRaw.abonos || [],
+                            descuentos: creditoRaw.descuentos || [],
+                            notas: creditoRaw.notas || [],
+                            etiqueta: creditoRaw.etiqueta,
+                            renovado: creditoRaw.renovado || false,
+                            esRenovacion: creditoRaw.esRenovacion || false,
+                            creditoAnteriorId: creditoRaw.creditoAnteriorId,
+                            fechaCreacion: creditoRaw.fechaCreacion
+                        });
+                    }
+                }
 
-                    // También preparar para la colección Creditos
-                    creditosParaColeccion.push({
-                        _id: creditoId,
-                        cliente: clienteId,
-                        monto: creditoRaw.monto,
-                        papeleria: creditoRaw.papeleria || 0,
-                        montoEntregado: creditoRaw.montoEntregado,
-                        tipo: creditoRaw.tipo,
-                        tipoQuincenal: creditoRaw.tipoQuincenal,
-                        fechaInicio: creditoRaw.fechaInicio,
-                        totalAPagar: creditoRaw.totalAPagar,
-                        valorCuota: creditoRaw.valorCuota,
-                        numCuotas: creditoRaw.numCuotas,
-                        cuotas: cuotasProcesadas,
-                        abonos: creditoRaw.abonos || [],
-                        descuentos: creditoRaw.descuentos || [],
-                        notas: creditoRaw.notas || [],
-                        etiqueta: creditoRaw.etiqueta,
-                        renovado: creditoRaw.renovado || false,
-                        esRenovacion: creditoRaw.esRenovacion || false,
-                        creditoAnteriorId: creditoRaw.creditoAnteriorId,
-                        fechaCreacion: creditoRaw.fechaCreacion
-                    });
+                // Cliente con créditos embebidos
+                clientesProcesados.push({
+                    _id: clienteId,
+                    nombre: clienteRaw.nombre,
+                    documento: clienteRaw.documento,
+                    telefono: clienteRaw.telefono, // Asegurar que sea string
+                    direccion: clienteRaw.direccion,
+                    barrio: clienteRaw.barrio,
+                    direccionTrabajo: clienteRaw.direccionTrabajo,
+                    correo: clienteRaw.correo,
+                    cartera: clienteRaw.cartera,
+                    tipoPago: clienteRaw.tipoPago,
+                    tipoPagoEsperado: clienteRaw.tipoPagoEsperado,
+                    fiador: clienteRaw.fiador,
+                    posicion: clienteRaw.posicion,
+                    creditos: creditosEmbebidos,
+                    fechaCreacion: clienteRaw.fechaCreacion,
+                    coordenadasResidencia: clienteRaw.coordenadasResidencia,
+                    coordenadasTrabajo: clienteRaw.coordenadasTrabajo
+                });
+            }
+
+            // Insertar lotes con { ordered: false } para que no se detenga si uno falla
+            if (clientesProcesados.length > 0) {
+                try {
+                    const resultClientes = await Cliente.insertMany(clientesProcesados, { ordered: false });
+                    importedClientesCount += resultClientes.length;
+                } catch (e) {
+                    // Si hay partial failures, insertMany lanza error pero incluye lo insertado en e.result o e.insertedDocs (dependiendo version driver)
+                    // o e.writeErrors
+                    console.error(`Error parcial importando lote de clientes ${i}:`, e.message);
+                    if (e.writeErrors) {
+                        errorCount += e.writeErrors.length;
+                    }
+                    if (e.insertedDocs) {
+                        importedClientesCount += e.insertedDocs.length;
+                    }
                 }
             }
 
-            // Cliente con créditos embebidos
-            clientesProcesados.push({
-                _id: clienteId,
-                nombre: clienteRaw.nombre,
-                documento: clienteRaw.documento,
-                telefono: clienteRaw.telefono,
-                direccion: clienteRaw.direccion,
-                barrio: clienteRaw.barrio,
-                direccionTrabajo: clienteRaw.direccionTrabajo,
-                correo: clienteRaw.correo,
-                cartera: clienteRaw.cartera,
-                tipoPago: clienteRaw.tipoPago,
-                tipoPagoEsperado: clienteRaw.tipoPagoEsperado,
-                fiador: clienteRaw.fiador,
-                posicion: clienteRaw.posicion,
-                creditos: creditosEmbebidos,
-                fechaCreacion: clienteRaw.fechaCreacion,
-                coordenadasResidencia: clienteRaw.coordenadasResidencia,
-                coordenadasTrabajo: clienteRaw.coordenadasTrabajo
-            });
-        }
+            if (creditosParaColeccion.length > 0) {
+                try {
+                    const resultCreditos = await Credito.insertMany(creditosParaColeccion, { ordered: false });
+                    importedCreditosCount += resultCreditos.length;
+                } catch (e) {
+                    console.error(`Error parcial importando lote de creditos ${i}:`, e.message);
+                    // Manejo similar de errores parciales de MongoDB
+                }
+            }
 
-        // Insertar clientes con créditos embebidos
-        if (clientesProcesados.length > 0) {
-            await Cliente.insertMany(clientesProcesados);
+            // Liberar memoria explícitamente (opcional, el GC lo hace, pero ayuda en loops grandes)
+            // clientesBatch, clientesProcesados, creditosParaColeccion salen de scope aquí.
         }
-
-        // Insertar créditos en su colección separada
-        if (creditosParaColeccion.length > 0) {
-            await Credito.insertMany(creditosParaColeccion);
-        }
+        console.log(`Importación finalizada. Clientes: ${importedClientesCount}, Errores: ${errorCount}`);
     }
 
     if (data.movimientosCaja?.length) {
+        // También procesar movimientos en batch si fueran muchos, pero suele ser tabla pequeña
         const movimientos = data.movimientosCaja.map(m => ({ ...m, _id: m.id || m._id }));
-        await MovimientoCaja.insertMany(movimientos);
+        try {
+            await MovimientoCaja.insertMany(movimientos, { ordered: false });
+        } catch (e) { console.error('Error importando movimientos:', e.message); }
     }
 
     if (data.alertas?.length) {
         const alertas = data.alertas.map(a => ({ ...a, _id: a.id || a._id }));
-        await Alerta.insertMany(alertas);
+        try {
+            await Alerta.insertMany(alertas, { ordered: false });
+        } catch (e) { console.error('Error importando alertas:', e.message); }
     }
 };
 

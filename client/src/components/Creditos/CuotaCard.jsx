@@ -15,10 +15,22 @@ const CuotaCard = ({
   onEliminarAbono
 }) => {
   // Verificar si está pagada manualmente O si el abono cubre completamente la cuota
+  // Verificar si está pagada manualmente O si el abono cubre completamente la cuota
   const abonoCuota = cuota?.abonoAplicado || 0;
-  const valorRestante = (valorCuota || 0) - abonoCuota;
 
-  const isPaid = cuota?.pagado || (valorRestante <= 0 && abonoCuota > 0);
+  // Calcular multas
+  const totalMultas = cuota?.multas ? cuota.multas.reduce((acc, m) => acc + m.valor, 0) : 0;
+  const multasCubiertas = cuota?.multasCubiertas || 0;
+  const multasPendientes = totalMultas - multasCubiertas;
+
+  // Valor restante = (Capital - AbonosCapital) + (Multas - MultasPagadas)
+  // Nota: abonoAplicado en utils ya considera solo capital si así se definió, o mix.
+  // Asumiendo que abonoAplicado es 'capital cubierto' basado en la lógica de creditCalculations
+  const capitalPendiente = Math.max(0, (valorCuota || 0) - abonoCuota);
+  const valorRestante = capitalPendiente + multasPendientes;
+
+  const isPaid = cuota?.pagado || valorRestante <= 0;
+  // Si está pagado, mostrar 0. Si no, mostrar lo que falta.
   const valorRestanteDisplay = isPaid ? 0 : valorRestante;
 
   // Determinar estado para colores

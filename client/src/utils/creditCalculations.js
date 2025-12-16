@@ -468,6 +468,15 @@ export const calcularValorPendienteCuota = (valorCuota, cuota) => {
   // Valor de la cuota menos abonos aplicados
   const valorPendiente = valorCuota - (cuota.abonoAplicado || 0);
 
-  // Retornar valor pendiente (Solo capital)
-  return valorPendiente;
+  // Calcular multas totales y multas cubiertas
+  const totalMultas = cuota.multas ? cuota.multas.reduce((acc, m) => acc + m.valor, 0) : 0;
+  const multasCubiertas = cuota.multasCubiertas || 0;
+  const multasPendientes = totalMultas - multasCubiertas;
+
+  // Valor pendiente real = (Capital - Abonos) + (Multas - MultasPagadas)
+  const capitalPendiente = valorCuota - (cuota.abonoAplicado || 0);
+
+  const totalPendiente = Math.max(0, capitalPendiente) + Math.max(0, multasPendientes);
+
+  return totalPendiente;
 };
