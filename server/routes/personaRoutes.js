@@ -16,7 +16,7 @@ router.use(protect);
 
 router.route('/')
   .get(requireRole('administrador', 'ceo'), getPersonas)
-  .post(requireRole('administrador', 'ceo'), createPersona);
+  .post(requireRole('ceo'), createPersona);
 
 router.route('/:id')
   .get(getPersona)

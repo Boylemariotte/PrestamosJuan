@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Users, TrendingUp, CheckCircle, BarChart3, Settings, LogOut, User, Calendar, ChevronDown, Wallet, Route, ClipboardList } from 'lucide-react';
+import { Users, TrendingUp, CheckCircle, BarChart3, Settings, LogOut, User, Calendar, ChevronDown, Wallet, Route, ClipboardList, UserPlus } from 'lucide-react'; // Added UserPlus
+
 import { useAuth } from '../../context/AuthContext';
 
 const Navbar = () => {
@@ -38,12 +39,12 @@ const Navbar = () => {
   const navItems = [
     { path: '/', label: 'Clientes', icon: Users },
     { path: '/dia-de-cobro', label: 'Día de Cobro', icon: Calendar },
-
     { path: '/caja', label: 'Caja', icon: Wallet },
     { path: '/visitas', label: 'Visitas', icon: ClipboardList },
     { path: '/papeleria', label: 'Papelería', icon: ClipboardList },
     { path: '/creditos-activos', label: 'Créditos Activos', icon: TrendingUp },
     { path: '/creditos-finalizados', label: 'Finalizados', icon: CheckCircle },
+    { path: '/usuarios', label: 'Gestión de usuarios', icon: UserPlus }, // New Item
     { path: '/estadisticas', label: 'Estadísticas', icon: BarChart3 },
     { path: '/configuracion', label: 'Configuración', icon: Settings },
   ];
@@ -57,6 +58,7 @@ const Navbar = () => {
       }
       if (item.path === '/estadisticas') return hasPermission('verEstadisticas');
       if (item.path === '/configuracion') return hasPermission('verConfiguracion');
+      if (item.path === '/usuarios') return user?.role === 'ceo'; // Only CEO
       return true;
     });
   };
@@ -117,6 +119,16 @@ const Navbar = () => {
                       </Link>
                     );
                   })}
+                </div>
+
+                <div className="px-2 py-2 border-b border-gray-200">
+                  <Link
+                    to="/perfil"
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-800 transition-all"
+                  >
+                    <User className="h-4 w-4" />
+                    <span>Mi Perfil</span>
+                  </Link>
                 </div>
 
                 {/* Opción de cerrar sesión */}

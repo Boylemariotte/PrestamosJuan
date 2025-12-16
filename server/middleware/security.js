@@ -6,7 +6,13 @@ import rateLimit from 'express-rate-limit';
  * Configuración de CORS
  */
 export const corsOptions = {
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: [
+    process.env.CLIENT_URL,
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5175',
+    'http://localhost:3000'
+  ].filter(Boolean),
   credentials: true,
   optionsSuccessStatus: 200
 };
@@ -27,8 +33,8 @@ export const limiter = rateLimit({
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 5, // máximo 5 intentos de login por IP
-  message: 'Demasiados intentos de autenticación, intenta de nuevo más tarde.',
+  max: 50, // Aumentado para desarrollo
+  message: { message: 'Demasiados intentos de autenticación, intenta de nuevo más tarde.' },
   standardHeaders: true,
   legacyHeaders: false,
 });

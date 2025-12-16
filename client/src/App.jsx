@@ -19,6 +19,8 @@ import FlujoCajas from './pages/FlujoCajas';
 import Alertas from './pages/Alertas';
 import Papeleria from './pages/Papeleria';
 import Visitas from './pages/Visitas';
+import GestionUsuarios from './pages/GestionUsuarios';
+import Perfil from './pages/Perfil';
 
 function App() {
   return (
@@ -85,12 +87,38 @@ function App() {
               }
             />
 
+
+
             <Route
               path="/creditos-finalizados"
               element={
                 <ProtectedRoute>
                   <Layout>
                     <CreditosFinalizados />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+
+
+
+            <Route
+              path="/usuarios"
+              element={
+                <ProtectedRoute requiredRole="ceo">
+                  <Layout>
+                    <GestionUsuarios />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/perfil"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Perfil />
                   </Layout>
                 </ProtectedRoute>
               }

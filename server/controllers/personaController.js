@@ -8,19 +8,19 @@ import Persona from '../models/Persona.js';
 export const getPersonas = async (req, res, next) => {
   try {
     const { role, activo, page = 1, limit = 50 } = req.query;
-    
+
     const query = {};
-    
+
     if (role) {
       query.role = role;
     }
-    
+
     if (activo !== undefined) {
       query.activo = activo === 'true';
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+
     const personas = await Persona.find(query)
       .select('-password')
       .sort({ fechaCreacion: -1 })
@@ -149,7 +149,7 @@ export const createPersona = async (req, res, next) => {
  */
 export const updatePersona = async (req, res, next) => {
   try {
-    const { nombre, email, role, activo } = req.body;
+    const { nombre, email, role, activo, password } = req.body;
     const personaId = req.params.id;
 
     // Verificar que la persona existe
@@ -177,6 +177,23 @@ export const updatePersona = async (req, res, next) => {
       });
     }
 
+    // Solo CEO puede cambiar la contraseña de otros usuarios sin saber la anterior
+    if (password) {
+      if (req.user.role !== 'ceo' && req.user._id.toString() !== personaId) {
+        return res.status(403).json({
+          success: false,
+          error: 'No tienes permisos para cambiar la contraseña de este usuario'
+        });
+      }
+      if (password.length < 6) {
+        return res.status(400).json({
+          success: false,
+          error: 'La contraseña debe tener al menos 6 caracteres'
+        });
+      }
+      persona.password = password;
+    }
+
     // Verificar si el email ya existe (si se está actualizando)
     if (email && email.toLowerCase() !== persona.email) {
       const emailExistente = await Persona.findOne({ email: email.toLowerCase() });
@@ -186,6 +203,27 @@ export const updatePersona = async (req, res, next) => {
           error: 'El correo electrónico ya está registrado'
         });
       }
+    }
+
+    // Verificar si el username ya existe (si se está actualizando)
+    const { username } = req.body;
+    if (username && username.toLowerCase() !== persona.username) {
+      // Solo el CEO puede cambiar el nombre de usuario
+      if (req.user.role !== 'ceo') {
+        return res.status(403).json({
+          success: false,
+          error: 'No tienes permisos para cambiar el nombre de usuario'
+        });
+      }
+
+      const usernameExistente = await Persona.findOne({ username: username.toLowerCase() });
+      if (usernameExistente) {
+        return res.status(400).json({
+          success: false,
+          error: 'El nombre de usuario ya está en uso'
+        });
+      }
+      persona.username = username.toLowerCase();
     }
 
     // Actualizar campos
