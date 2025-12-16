@@ -23,22 +23,24 @@ const Login = () => {
     setError('');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    // Simular un pequeño delay para mejor UX
-    setTimeout(() => {
-      const result = login(formData.username, formData.password);
+    try {
+      const result = await login(formData.username, formData.password);
       
       if (result.success) {
         navigate('/');
       } else {
         setError(result.error);
       }
+    } catch (err) {
+      setError('Error de conexión con el servidor');
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   };
 
   return (
@@ -131,24 +133,6 @@ const Login = () => {
             )}
           </button>
         </form>
-
-        {/* Información de usuarios de prueba */}
-        <div className="mt-8 pt-6 border-t border-gray-200">
-          <p className="text-xs text-gray-500 text-center mb-3">
-            Usuarios de prueba:
-          </p>
-          <div className="space-y-2 text-xs text-gray-600">
-            <div className="bg-blue-50 p-2 rounded">
-              <span className="font-semibold">Domiciliario:</span> domiciliario / dom123
-            </div>
-            <div className="bg-green-50 p-2 rounded">
-              <span className="font-semibold">Administrador:</span> admin / admin123
-            </div>
-            <div className="bg-purple-50 p-2 rounded">
-              <span className="font-semibold">CEO:</span> ceo / ceo123
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
