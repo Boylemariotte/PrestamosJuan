@@ -92,8 +92,10 @@ const notaSchema = new mongoose.Schema({
 }, { _id: false });
 
 const creditoSchema = new mongoose.Schema({
+  // Permitir _id personalizado (String) para migración
+  _id: { type: String, required: true },
   cliente: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: String, // Cambiado de ObjectId a String para coincidir con el _id de Cliente
     ref: 'Cliente',
     required: true
   },
@@ -180,4 +182,3 @@ creditoSchema.index({ renovado: 1 });
 const Credito = mongoose.model('Credito', creditoSchema);
 
 export default Credito;
-

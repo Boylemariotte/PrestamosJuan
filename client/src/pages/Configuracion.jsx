@@ -5,21 +5,29 @@ import { useApp } from '../context/AppContext';
 const Configuracion = () => {
   const { exportarDatos, importarDatos, limpiarDatos, clientes } = useApp();
   const [mensaje, setMensaje] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleExportar = () => {
-    exportarDatos();
-    setMensaje({ tipo: 'success', texto: 'Datos exportados correctamente' });
+  const handleExportar = async () => {
+    setLoading(true);
+    try {
+      await exportarDatos();
+      setMensaje({ tipo: 'success', texto: 'Datos exportados correctamente' });
+    } catch (error) {
+      setMensaje({ tipo: 'error', texto: 'Error al exportar los datos' });
+    }
+    setLoading(false);
     setTimeout(() => setMensaje(null), 3000);
   };
 
-  const handleImportar = (e) => {
+  const handleImportar = async (e) => {
     const file = e.target.files[0];
     if (file) {
+      setLoading(true);
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         try {
           const jsonData = JSON.parse(event.target.result);
-          const success = importarDatos(jsonData);
+          const success = await importarDatos(jsonData);
           if (success) {
             setMensaje({ tipo: 'success', texto: 'Datos importados correctamente' });
             setTimeout(() => {
@@ -31,34 +39,33 @@ const Configuracion = () => {
             setTimeout(() => setMensaje(null), 3000);
           }
         } catch (error) {
-          setMensaje({ tipo: 'error', texto: 'Archivo JSON inválido' });
+          console.error('Error importando:', error);
+          setMensaje({ tipo: 'error', texto: 'Archivo JSON inválido o error en el servidor' });
           setTimeout(() => setMensaje(null), 3000);
         }
+        setLoading(false);
       };
       reader.readAsText(file);
     }
   };
 
-  const handleLimpiar = () => {
+  const handleLimpiar = async () => {
     if (confirm('¿Estás seguro de eliminar TODOS los datos? Esta acción no se puede deshacer.')) {
       if (confirm('Esta acción eliminará todos los clientes y créditos. ¿Continuar?')) {
-        limpiarDatos();
-        setMensaje({ tipo: 'success', texto: 'Todos los datos han sido eliminados' });
-        setTimeout(() => {
-          setMensaje(null);
-          window.location.reload();
-        }, 2000);
+        setLoading(true);
+        try {
+          await limpiarDatos();
+          setMensaje({ tipo: 'success', texto: 'Todos los datos han sido eliminados' });
+          setTimeout(() => {
+            setMensaje(null);
+            window.location.reload();
+          }, 2000);
+        } catch (error) {
+          setMensaje({ tipo: 'error', texto: 'Error al eliminar los datos' });
+        }
+        setLoading(false);
       }
     }
-  };
-
-  const calcularTamañoStorage = () => {
-    const data = localStorage.getItem('creditos_app_data');
-    if (!data) return '0 KB';
-    const bytes = new Blob([data]).size;
-    if (bytes < 1024) return `${bytes} bytes`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   };
 
   return (
@@ -72,11 +79,10 @@ const Configuracion = () => {
 
       {/* Mensaje de notificación */}
       {mensaje && (
-        <div className={`mb-6 p-4 rounded-lg flex items-center ${
-          mensaje.tipo === 'success' 
-            ? 'bg-green-50 text-green-800 border border-green-200' 
-            : 'bg-red-50 text-red-800 border border-red-200'
-        }`}>
+        <div className={`mb-6 p-4 rounded-lg flex items-center ${mensaje.tipo === 'success'
+          ? 'bg-green-50 text-green-800 border border-green-200'
+          : 'bg-red-50 text-red-800 border border-red-200'
+          }`}>
           {mensaje.tipo === 'success' ? (
             <CheckCircle className="h-5 w-5 mr-3" />
           ) : (
@@ -102,13 +108,9 @@ const Configuracion = () => {
               {clientes.reduce((sum, c) => sum + (c.creditos?.length || 0), 0)}
             </span>
           </div>
-          <div className="flex justify-between py-2 border-b">
-            <span className="text-gray-600">Espacio utilizado:</span>
-            <span className="font-semibold text-gray-900">{calcularTamañoStorage()}</span>
-          </div>
           <div className="flex justify-between py-2">
             <span className="text-gray-600">Almacenamiento:</span>
-            <span className="font-semibold text-gray-900">LocalStorage (Navegador)</span>
+            <span className="font-semibold text-green-600">Base de Datos (MongoDB)</span>
           </div>
         </div>
       </div>
@@ -204,14 +206,13 @@ const Configuracion = () => {
           <AlertCircle className="h-5 w-5 text-blue-600 mr-3 mt-0.5 flex-shrink-0" />
           <div>
             <h4 className="font-semibold text-blue-900 mb-2">
-              Sobre el almacenamiento local
+              Sobre el almacenamiento
             </h4>
             <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Los datos se guardan en el navegador (LocalStorage)</li>
-              <li>• No se envía información a ningún servidor externo</li>
-              <li>• Si limpias los datos del navegador, perderás la información</li>
+              <li>• Los datos se guardan en la Base de Datos (MongoDB)</li>
+              <li>• Los datos están disponibles desde cualquier dispositivo</li>
               <li>• Recomendamos exportar backups regularmente</li>
-              <li>• Los datos solo están disponibles en este navegador y dispositivo</li>
+              <li>• Los backups se descargan en formato JSON</li>
             </ul>
           </div>
         </div>
