@@ -1,10 +1,34 @@
 import mongoose from 'mongoose';
 
 const movimientoCajaSchema = new mongoose.Schema({
+  id: {
+    type: String,
+    index: true,
+    unique: true,
+    sparse: true,
+    trim: true
+  },
   tipo: {
     type: String,
-    enum: ['ingreso', 'egreso', 'prestamo'],
+    enum: ['inicioCaja', 'gasto', 'prestamo', 'retiroPapeleria', 'ingreso', 'egreso'],
     required: true
+  },
+  tipoMovimiento: {
+    type: String,
+    default: 'flujoCaja',
+    trim: true
+  },
+  concepto: {
+    type: String,
+    trim: true
+  },
+  categoria: {
+    type: String,
+    trim: true
+  },
+  caja: {
+    type: Number,
+    default: null,
   },
   valor: {
     type: Number,

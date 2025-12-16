@@ -7,21 +7,28 @@ import MovimientoCaja from '../models/MovimientoCaja.js';
  */
 export const getMovimientosCaja = async (req, res, next) => {
   try {
-    const { tipo, fechaInicio, fechaFin, page = 1, limit = 100 } = req.query;
+    const { tipo, tipoMovimiento, fechaInicio, fechaFin, page = 1, limit = 100 } = req.query;
     
     const query = {};
     
     if (tipo) {
       query.tipo = tipo;
     }
+    if (tipoMovimiento) {
+      query.tipoMovimiento = tipoMovimiento;
+    }
     
     if (fechaInicio || fechaFin) {
       query.fecha = {};
       if (fechaInicio) {
-        query.fecha.$gte = new Date(fechaInicio);
+        const inicio = new Date(fechaInicio);
+        inicio.setHours(0, 0, 0, 0);
+        query.fecha.$gte = inicio;
       }
       if (fechaFin) {
-        query.fecha.$lte = new Date(fechaFin);
+        const fin = new Date(fechaFin);
+        fin.setHours(23, 59, 59, 999);
+        query.fecha.$lte = fin;
       }
     }
 
@@ -89,7 +96,31 @@ export const getMovimientoCaja = async (req, res, next) => {
  */
 export const createMovimientoCaja = async (req, res, next) => {
   try {
-    const movimiento = await MovimientoCaja.create(req.body);
+    const movimientoData = { ...req.body };
+
+    // Normalizar valores numéricos y de fecha
+    if (movimientoData.valor !== undefined) {
+      movimientoData.valor = Number(movimientoData.valor);
+    }
+    if (movimientoData.papeleria !== undefined) {
+      movimientoData.papeleria = Number(movimientoData.papeleria);
+    }
+    if (movimientoData.montoEntregado !== undefined) {
+      movimientoData.montoEntregado = Number(movimientoData.montoEntregado);
+    }
+    if (movimientoData.caja !== undefined) {
+      movimientoData.caja = Number(movimientoData.caja);
+    }
+    if (movimientoData.fecha) {
+      const fecha = new Date(movimientoData.fecha);
+      fecha.setHours(0, 0, 0, 0);
+      movimientoData.fecha = fecha;
+    }
+    if (!movimientoData.tipoMovimiento) {
+      movimientoData.tipoMovimiento = 'flujoCaja';
+    }
+
+    const movimiento = await MovimientoCaja.create(movimientoData);
 
     res.status(201).json({
       success: true,

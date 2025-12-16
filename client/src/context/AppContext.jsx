@@ -545,7 +545,7 @@ export const AppProvider = ({ children }) => {
         // Helper to trigger download
         const dataStr = JSON.stringify(response, null, 2);
         const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-        const exportFileDefaultName = `backup_prestamos_${new Date().toISOString().slice(0, 10)}.json`;
+        const exportFileDefaultName = `creditos_backup_${new Date().toISOString().slice(0, 10)}.json`;
         const linkElement = document.createElement('a');
         linkElement.setAttribute('href', dataUri);
         linkElement.setAttribute('download', exportFileDefaultName);
