@@ -109,16 +109,44 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
       }
     } else if (initialData) {
       // Si vienen datos iniciales (ej. desde Visitas)
+      const barrioCliente = initialData.barrio || '';
+      const esOtroBarrio = barrioCliente && !BARRIOS_TULUA.includes(barrioCliente);
+
+      const barrioFiador = initialData.fiador?.barrio || '';
+      const esOtroBarrioFiador = barrioFiador && !BARRIOS_TULUA.includes(barrioFiador);
+
       setFormData(prev => ({
         ...prev,
-        ...initialData,
+        nombre: initialData.nombre || '',
+        documento: initialData.documento || '',
+        telefono: initialData.telefono || '',
+        direccion: initialData.direccion || '',
+        barrio: esOtroBarrio ? 'Otro' : barrioCliente,
+        direccionTrabajo: initialData.direccionTrabajo || '',
+        correo: initialData.correo || '',
         cartera: carteraPredefinida || initialData.cartera || 'K1',
         tipoPago: tipoPagoPredefinido || '',
-        tipoPagoEsperado: initialData.tipoPagoEsperado || ''
+        tipoPagoEsperado: initialData.tipoPagoEsperado || '',
+        fiador: {
+          nombre: initialData.fiador?.nombre || '',
+          documento: initialData.fiador?.documento || '',
+          telefono: initialData.fiador?.telefono || '',
+          direccion: initialData.fiador?.direccion || '',
+          barrio: esOtroBarrioFiador ? 'Otro' : barrioFiador,
+          direccionTrabajo: initialData.fiador?.direccionTrabajo || ''
+        }
       }));
-      // Inicializar búsqueda con el barrio actual si existe
-      if (cliente.barrio) {
-        setBarrioSearch(cliente.barrio);
+
+      setUsarOtroBarrio(esOtroBarrio);
+      setOtroBarrio(esOtroBarrio ? barrioCliente : '');
+      if (!esOtroBarrio && barrioCliente) {
+        setBarrioSearch(barrioCliente);
+      }
+
+      setUsarOtroBarrioFiador(esOtroBarrioFiador);
+      setOtroBarrioFiador(esOtroBarrioFiador ? barrioFiador : '');
+      if (!esOtroBarrioFiador && barrioFiador) {
+        setBarrioSearchFiador(barrioFiador);
       }
     } else if (carteraPredefinida) {
       // Si es un nuevo cliente con cartera predefinida

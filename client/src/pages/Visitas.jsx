@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Save, Printer, UserPlus, X, Briefcase, Trash2, PlusCircle, Search } from 'lucide-react';
 import { BARRIOS_TULUA } from '../constants/barrios';
+import api from '../services/api';
 
 const Visitas = () => {
     const navigate = useNavigate();
@@ -23,11 +24,8 @@ const Visitas = () => {
     const barriosRefFiadorCasa = useRef(null);
     const barriosRefFiadorTrabajo = useRef(null);
 
-    // Inicializar estado desde localStorage
-    const [visitas, setVisitas] = useState(() => {
-        const saved = localStorage.getItem('visitas');
-        return saved ? JSON.parse(saved) : [];
-    });
+    const [visitas, setVisitas] = useState([]);
+    const [loading, setLoading] = useState(true);
     
     // Cerrar dropdowns al hacer clic fuera
     useEffect(() => {
@@ -135,10 +133,24 @@ const Visitas = () => {
         }
     };
 
-    // Guardar en localStorage cuando cambia
+    // Cargar visitas desde el backend
     useEffect(() => {
-        localStorage.setItem('visitas', JSON.stringify(visitas));
-    }, [visitas]);
+        const fetchVisitas = async () => {
+            try {
+                setLoading(true);
+                const response = await api.get('/visitas?limit=1000');
+                if (response.success) {
+                    setVisitas(response.data);
+                }
+            } catch (error) {
+                console.error('Error cargando visitas:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchVisitas();
+    }, []);
 
     const initialFormState = {
         fechaAgendamiento: new Date().toISOString().split('T')[0],
@@ -188,25 +200,41 @@ const Visitas = () => {
         }
     };
 
-    const handleAddVisit = (e) => {
+    const handleAddVisit = async (e) => {
         e.preventDefault();
-        const newVisit = {
-            ...formData,
-            id: Date.now(),
-            completada: false
-        };
-        setVisitas([...visitas, newVisit]);
-        setFormData(initialFormState);
-        // Limpiar las búsquedas de barrios
-        setBarrioSearchSolicitanteCasa('');
-        setBarrioSearchSolicitanteTrabajo('');
-        setBarrioSearchFiadorCasa('');
-        setBarrioSearchFiadorTrabajo('');
+        try {
+            const visitaData = {
+                ...formData,
+                completada: false
+            };
+
+            const response = await api.post('/visitas', visitaData);
+            if (response.success) {
+                setVisitas([...visitas, response.data]);
+                setFormData(initialFormState);
+                // Limpiar las búsquedas de barrios
+                setBarrioSearchSolicitanteCasa('');
+                setBarrioSearchSolicitanteTrabajo('');
+                setBarrioSearchFiadorCasa('');
+                setBarrioSearchFiadorTrabajo('');
+            }
+        } catch (error) {
+            console.error('Error creando visita:', error);
+            alert('Error al crear la visita. Por favor intenta de nuevo.');
+        }
     };
 
-    const handleDeleteVisit = (id) => {
+    const handleDeleteVisit = async (id) => {
         if (window.confirm('¿Estás seguro de eliminar esta visita?')) {
-            setVisitas(visitas.filter(v => v.id !== id));
+            try {
+                const response = await api.delete(`/visitas/${id}`);
+                if (response.success) {
+                    setVisitas(visitas.filter(v => v._id !== id && v.id !== id));
+                }
+            } catch (error) {
+                console.error('Error eliminando visita:', error);
+                alert('Error al eliminar la visita. Por favor intenta de nuevo.');
+            }
         }
     };
 
@@ -230,6 +258,7 @@ const Visitas = () => {
                 documento: selectedVisit.fiador.cc,
                 telefono: selectedVisit.fiador.telefono,
                 direccion: selectedVisit.fiador.direccionCasa,
+                barrio: selectedVisit.fiador.barrioCasa,
                 direccionTrabajo: selectedVisit.fiador.direccionTrabajo
             }
         };
@@ -594,14 +623,20 @@ const Visitas = () => {
             <div className="space-y-6 print:space-y-3 print:text-xs">
                 <h2 className="text-2xl font-bold text-gray-800 text-center no-print">Visitas Agendadas ({visitas.length})</h2>
 
-                {visitas.length === 0 ? (
+                {loading ? (
+                    <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300 no-print">
+                        <p className="text-gray-500 text-lg">Cargando visitas...</p>
+                    </div>
+                ) : visitas.length === 0 ? (
                     <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300 no-print">
                         <p className="text-gray-500 text-lg">No hay visitas agendadas para imprimir.</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 gap-8 print:gap-4">
-                        {visitas.map((visit, index) => (
-                            <div key={visit.id} className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200 break-inside-avoid print:shadow-none print:border print:mb-2 print:page-break-inside-avoid">
+                        {visitas.map((visit, index) => {
+                            const visitId = visit._id || visit.id;
+                            return (
+                            <div key={visitId} className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200 break-inside-avoid print:shadow-none print:border print:mb-2 print:page-break-inside-avoid">
                                 {/* Encabezado similar al formulario */}
                                 <div className="px-8 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center print:px-4 print:py-2">
                                     <h3 className="text-lg font-bold text-gray-700 flex items-center gap-2">
@@ -617,7 +652,7 @@ const Visitas = () => {
                                             <UserPlus size={20} />
                                         </button>
                                         <button
-                                            onClick={() => handleDeleteVisit(visit.id)}
+                                            onClick={() => handleDeleteVisit(visitId)}
                                             className="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors"
                                             title="Eliminar"
                                         >
@@ -633,13 +668,13 @@ const Visitas = () => {
                                         <div className="flex flex-col">
                                             <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Fecha Agendamiento</label>
                                             <div className="border-b-2 border-gray-300 py-2 text-gray-800">
-                                                {visit.fechaAgendamiento}
+                                                {visit.fechaAgendamiento ? (typeof visit.fechaAgendamiento === 'string' ? visit.fechaAgendamiento : new Date(visit.fechaAgendamiento).toISOString().split('T')[0]) : ''}
                                             </div>
                                         </div>
                                         <div className="flex flex-col">
                                             <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Fecha de la Visita</label>
                                             <div className="border-b-2 border-gray-300 py-2 text-gray-800">
-                                                {visit.fechaVisita}
+                                                {visit.fechaVisita ? (typeof visit.fechaVisita === 'string' ? visit.fechaVisita : new Date(visit.fechaVisita).toISOString().split('T')[0]) : ''}
                                             </div>
                                         </div>
                                     </div>
@@ -741,7 +776,8 @@ const Visitas = () => {
                                     </div>
                                 </div>
                             </div>
-                        ))}
+                        );
+                        })}
                     </div>
                 )}
             </div>

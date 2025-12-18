@@ -5,6 +5,7 @@ import clienteRoutes from './clienteRoutes.js';
 import creditoRoutes from './creditoRoutes.js';
 import movimientoCajaRoutes from './movimientoCajaRoutes.js';
 import alertaRoutes from './alertaRoutes.js';
+import visitaRoutes from './visitaRoutes.js';
 import backupRoutes from './backupRoutes.js';
 
 const router = express.Router();
@@ -18,6 +19,7 @@ router.use('/clientes', clienteRoutes);
 router.use('/creditos', creditoRoutes);
 router.use('/movimientos-caja', movimientoCajaRoutes);
 router.use('/alertas', alertaRoutes);
+router.use('/visitas', visitaRoutes);
 router.use('/backup', backupRoutes);
 
 // Ruta de salud del servidor
