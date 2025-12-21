@@ -668,17 +668,14 @@ const FlujoCajas = () => {
         let fechaNormalizada = mov.fecha;
         
         if (mov.fecha) {
-            // Convertir a objeto Date
-            const fechaObj = new Date(mov.fecha);
-            
-            // Si es una fecha válida, la formateamos usando la zona horaria local
-            // Esto corrige el problema de visualización cuando la fecha UTC es del día anterior
-            // pero la fecha local es la correcta.
-            if (!isNaN(fechaObj.getTime())) {
-                fechaNormalizada = format(fechaObj, 'yyyy-MM-dd');
-            } else if (typeof mov.fecha === 'string' && mov.fecha.length >= 10) {
-                 // Fallback para strings ISO puros si new Date falla
-                 fechaNormalizada = mov.fecha.substring(0, 10);
+            // Estrategia: Usar siempre la fecha UTC del servidor (YYYY-MM-DD)
+            // Esto evita que la conversión a hora local cambie el día visualizado
+            // independientemente de la hora a la que se guardó.
+            if (typeof mov.fecha === 'string' && mov.fecha.length >= 10) {
+                fechaNormalizada = mov.fecha.substring(0, 10);
+            } else if (mov.fecha instanceof Date) {
+                // Si ya es objeto Date, formatearlo a ISO y cortar
+                fechaNormalizada = mov.fecha.toISOString().substring(0, 10);
             }
         }
 
@@ -984,21 +981,22 @@ const FlujoCajas = () => {
     }
   }, [cajaSeleccionada, fechaFormato, agregarMovimientoCaja, handleCerrarModal, datosCajas]);
 
-  const handleEliminarMovimiento = useCallback((movimientoId) => {
+  const handleEliminarMovimiento = useCallback(async (movimientoId) => {
     if (window.confirm('¿Estás seguro de eliminar este movimiento?')) {
       // Buscar el movimiento para ver su tipo
       const movimiento = movimientosCaja.find(mov => mov.id === movimientoId);
 
       // Si se encuentra el movimiento, verificar si tiene una transacción de papelería asociada
       if (movimiento) {
-        const transacciones = getPapeleriaTransactions();
+        // Ahora getPapeleriaTransactions es async
+        const transacciones = await getPapeleriaTransactions();
         const transaccionRelacionada = transacciones.find(
           tx => tx.movimientoId === movimientoId
         );
 
         // Eliminar la transacción de papelería si existe
         if (transaccionRelacionada) {
-          deletePapeleriaTransaction(transaccionRelacionada.id);
+          await deletePapeleriaTransaction(transaccionRelacionada.id);
         }
       }
 
