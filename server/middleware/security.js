@@ -12,7 +12,7 @@ export const corsOptions = {
     'http://localhost:5174',
     'http://localhost:5175',
     'http://localhost:3000',
-    'prestamos-juan-clone.vercel.app'
+    'https://prestamos-juan-clone.vercel.app'
   ].filter(Boolean),
   credentials: true,
   optionsSuccessStatus: 200
