@@ -97,6 +97,7 @@ export const BARRIOS_TULUA = [
   "Laguito",
   "Las Acacias",
   "Las Américas",
+  "Las Veraneras",
   "Brisas de San Antonio",
   "Las Colinas",
   "Las Delicias",

@@ -32,7 +32,21 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
   const { registrarPago, cancelarPago, editarFechaCuota, agregarNota, eliminarNota, agregarMulta, eliminarMulta, agregarAbono, editarAbono, eliminarAbono, agregarDescuento, eliminarDescuento, asignarEtiquetaCredito, renovarCredito, eliminarCredito, obtenerCredito } = useApp();
 
   // Obtener el crédito actualizado del contexto
-  const credito = obtenerCredito(clienteId, creditoInicial.id) || creditoInicial;
+  const creditoDesdeContext = obtenerCredito(clienteId, creditoInicial.id);
+  const credito = creditoDesdeContext || creditoInicial;
+
+  // Si el crédito desaparece del contexto (p. ej. fue eliminado), cerrar el modal automáticamente
+  useEffect(() => {
+    if (!creditoDesdeContext) {
+      // Llamamos a onClose para evitar error visual cuando el crédito fue borrado externamente
+      try {
+        onClose();
+      } catch (e) {
+        // noop
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [creditoDesdeContext]);
 
   // Estados para el formulario
   const [formData, setFormData] = useState({
@@ -185,7 +199,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
     setNuevaFecha('');
   };
 
-  const handleEliminarCredito = () => {
+  const handleEliminarCredito = async () => {
     const confirmacion = window.confirm(
       `¿Estás seguro de eliminar este crédito?\n\n` +
       `Crédito ID: ${credito.id}\n` +
@@ -195,8 +209,14 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
     );
 
     if (confirmacion) {
-      eliminarCredito(clienteId, credito.id);
-      onClose();
+      try {
+        await eliminarCredito(clienteId, credito.id);
+      } catch (e) {
+        console.error('Error eliminando crédito desde UI:', e);
+      }
+      // onClose() puede ser llamado por el efecto cuando el contexto se actualice,
+      // pero lo llamamos también aquí para cerrar inmediatamente si la eliminación fue local.
+      try { onClose(); } catch (e) { /* noop */ }
     }
   };
 

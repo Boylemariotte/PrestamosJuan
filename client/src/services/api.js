@@ -34,10 +34,23 @@ const request = async (endpoint, options = {}) => {
   try {
     const response = await fetch(`${API_URL}${endpoint}`, config);
     
-    const data = await response.json();
+    let data;
+    const contentType = response.headers.get('content-type');
+    
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      // Si no es JSON, intentar leer texto o usar un objeto por defecto
+      const text = await response.text();
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        data = { error: text || response.statusText };
+      }
+    }
 
     if (!response.ok) {
-      throw new Error(data.error || 'Error en la petición');
+      throw new Error(data.error || data.message || 'Error en la petición');
     }
 
     return data;

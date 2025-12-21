@@ -120,7 +120,7 @@ export const AppProvider = ({ children }) => {
     try {
       const response = await api.put(`/clientes/${id}`, clienteData);
       if (response.success) {
-        setClientes(prev => prev.map(c => c.id === id ? response.data : c));
+        setClientes(prev => prev.map(c => (c?.id === id || c?._id === id) ? response.data : c));
         return response.data;
       }
     } catch (error) {
@@ -133,7 +133,7 @@ export const AppProvider = ({ children }) => {
     try {
       const response = await api.delete(`/clientes/${id}`);
       if (response.success) {
-        setClientes(prev => prev.filter(c => c.id !== id));
+        setClientes(prev => prev.filter(c => !(c?.id === id || c?._id === id)));
       }
     } catch (error) {
       console.error('Error eliminando cliente:', error);
@@ -142,7 +142,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const obtenerCliente = (id) => {
-    return clientes.find(cliente => cliente.id === id);
+    return clientes.find(cliente => cliente?.id === id || cliente?._id === id);
   };
 
   const actualizarCoordenadasGPS = async (clienteId, tipo, coordenadas, entidad = 'cliente') => {
@@ -154,7 +154,7 @@ export const AppProvider = ({ children }) => {
       });
       if (response.success) {
         // Actualización optimista o recarga pequeña
-        setClientes(prev => prev.map(c => c.id === clienteId ? response.data : c));
+        setClientes(prev => prev.map(c => (c?.id === clienteId || c?._id === clienteId) ? response.data : c));
       }
     } catch (error) {
       console.error('Error actualizando GPS:', error);
@@ -486,7 +486,7 @@ export const AppProvider = ({ children }) => {
   const eliminarMovimientoCaja = async (id) => {
     try {
       await api.delete(`/movimientos-caja/${id}`);
-      setMovimientosCaja(prev => prev.filter(m => m.id !== id));
+      setMovimientosCaja(prev => prev.filter(m => (m.id !== id && m._id !== id)));
     } catch (error) {
       console.error('Error eliminando caja:', error);
     }

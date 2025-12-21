@@ -21,10 +21,11 @@ const DiaDeCobro = () => {
   // Estado para visitas
   const [visitas, setVisitas] = useState([]);
 
-  // Estado para acordeones de barrios
-  const [barriosExpandidos, setBarriosExpandidos] = useState({});
+  // Estado para orden de cobro por fecha y cliente
+  // Estructura: { [fechaStr]: { [clienteId]: numeroOrden } }
+  const [ordenCobro, setOrdenCobro] = useState({});
 
-  // Cargar visitas desde localStorage
+  // Cargar visitas y orden de cobro desde localStorage
   useEffect(() => {
     const cargarVisitas = () => {
       const savedVisitas = localStorage.getItem('visitas');
@@ -38,13 +39,22 @@ const DiaDeCobro = () => {
     return () => window.removeEventListener('storage', cargarVisitas);
   }, []);
 
-  // Toggle barrio accordion
-  const toggleBarrio = (barrio) => {
-    setBarriosExpandidos(prev => ({
-      ...prev,
-      [barrio]: !prev[barrio]
-    }));
-  };
+  // Cargar orden de cobro al iniciar
+  useEffect(() => {
+    const savedOrden = localStorage.getItem('ordenCobro');
+    if (savedOrden) {
+      try {
+        setOrdenCobro(JSON.parse(savedOrden));
+      } catch (e) {
+        console.error('Error al parsear ordenCobro desde localStorage', e);
+      }
+    }
+  }, []);
+
+  // Guardar cambios de orden de cobro
+  useEffect(() => {
+    localStorage.setItem('ordenCobro', JSON.stringify(ordenCobro));
+  }, [ordenCobro]);
 
   // Filtrar visitas para el día seleccionado
   const visitasDelDia = useMemo(() => {
@@ -66,6 +76,27 @@ const DiaDeCobro = () => {
       localStorage.setItem('visitas', JSON.stringify(nuevasVisitas));
       toast.success('Visita marcada como completada');
     }
+  };
+
+  // Manejar cambio de número de orden para un cliente en la fecha seleccionada
+  const handleCambioOrdenCliente = (clienteId, nuevoOrden) => {
+    const numero = Number(nuevoOrden);
+    if (Number.isNaN(numero) || numero <= 0) return;
+
+    setOrdenCobro(prev => {
+      const fechaKey = fechaSeleccionadaStr;
+      const ordenFechaActual = prev[fechaKey] || {};
+
+      const nuevoOrdenFecha = {
+        ...ordenFechaActual,
+        [clienteId]: numero,
+      };
+
+      return {
+        ...prev,
+        [fechaKey]: nuevoOrdenFecha,
+      };
+    });
   };
 
   // Procesar cobros agrupados por BARRIO
@@ -249,6 +280,27 @@ const DiaDeCobro = () => {
     return { porBarrio: barriosOrdenados, stats };
   }, [clientes, fechaSeleccionadaStr]);
 
+  // Construir lista plana de cobros del día (sin agrupar por barrio)
+  const listaCobrosDia = useMemo(() => {
+    const items = [];
+    Object.values(datosCobro.porBarrio).forEach(arr => {
+      arr.forEach(item => items.push(item));
+    });
+
+    const ordenFecha = ordenCobro[fechaSeleccionadaStr] || {};
+
+    // Ordenar primero por número de orden asignado, luego por nombre de cliente
+    items.sort((a, b) => {
+      const ordenA = ordenFecha[a.clienteId] ?? Number.MAX_SAFE_INTEGER;
+      const ordenB = ordenFecha[b.clienteId] ?? Number.MAX_SAFE_INTEGER;
+
+      if (ordenA !== ordenB) return ordenA - ordenB;
+      return (a.clienteNombre || '').localeCompare(b.clienteNombre || '');
+    });
+
+    return items;
+  }, [datosCobro, ordenCobro, fechaSeleccionadaStr]);
+
   // Funciones de navegación de fecha
   const irAyer = () => setFechaSeleccionada(subDays(fechaSeleccionada, 1));
   const irHoy = () => setFechaSeleccionada(startOfDay(new Date()));
@@ -271,13 +323,15 @@ const DiaDeCobro = () => {
     }
   };
 
-  // Tabla de Cobros (Nuevo Componente)
-  const TablaCobros = ({ items }) => (
+  // Tabla de Cobros del día en lista única con numeración
+  const TablaCobrosLista = ({ items, onCambioOrden, ordenFecha }) => (
     <div className="overflow-x-auto">
       <table className="w-full text-sm text-left text-gray-500">
         <thead className="text-xs text-white uppercase bg-slate-800">
           <tr>
-            <th scope="col" className="px-4 py-3 w-16 text-center">Ref. Crédito</th>
+            <th scope="col" className="px-2 py-3 w-16 text-center">#</th>
+            <th scope="col" className="px-4 py-3 w-24 text-center">Orden</th>
+            <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
             <th scope="col" className="px-4 py-3">Cliente</th>
             <th scope="col" className="px-4 py-3">Crédito</th>
             <th scope="col" className="px-4 py-3 text-green-400">Valor Cuota</th>
@@ -289,69 +343,87 @@ const DiaDeCobro = () => {
           </tr>
         </thead>
         <tbody>
-          {items.map((item, index) => (
-            <tr key={`${item.clienteId}-${item.creditoId}-${index}`} className="bg-white border-b hover:bg-gray-50">
-              <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
-                #{item.creditoId}
-              </td>
-              <td className="px-4 py-4">
-                <div className="flex flex-col">
-                  <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
-                  <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
-                  <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
-                    <Phone className="h-3 w-3" />
-                    <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono}</span>
+          {items.map((item, index) => {
+            const numeroLista = index + 1;
+            const valorOrden = ordenFecha[item.clienteId] || numeroLista;
+
+            return (
+              <tr key={`${item.clienteId}-${item.creditoId}-${index}`} className="bg-white border-b hover:bg-gray-50">
+                <td className="px-2 py-4 font-bold text-gray-900 text-center text-base">
+                  {numeroLista}
+                </td>
+                <td className="px-4 py-4 text-center">
+                  <input
+                    type="number"
+                    min={1}
+                    max={items.length}
+                    className="w-16 text-center border border-gray-300 rounded-md text-sm py-1 px-1"
+                    value={valorOrden}
+                    onChange={(e) => onCambioOrden(item.clienteId, e.target.value)}
+                  />
+                </td>
+                <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
+                  #{item.creditoId}
+                </td>
+                <td className="px-4 py-4">
+                  <div className="flex flex-col">
+                    <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
+                    <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
+                    <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
+                      <Phone className="h-3 w-3" />
+                      <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
+                      <MapPin className="h-3 w-3" />
+                      {item.clienteBarrio || 'Sin barrio'}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
-                    <MapPin className="h-3 w-3" />
-                    {item.clienteBarrio || 'Sin barrio'}
-                  </div>
-                </div>
-              </td>
-              <td className="px-4 py-4 font-medium text-gray-900">
-                {formatearMoneda(item.creditoMonto)}
-              </td>
-              <td className="px-4 py-4 font-bold text-green-600 text-base">
-                {item.tipo === 'pendiente'
-                  ? formatearMoneda(item.valorMostrar)
-                  : item.tipo === 'cobrado'
-                    ? <span className="text-green-600">Pagado ({formatearMoneda(item.valorMostrar)})</span>
-                    : <span className="text-yellow-600">Abonado ({formatearMoneda(item.valorMostrar)})</span>
-                }
-              </td>
-              <td className="px-4 py-4 font-medium text-orange-600">
-                {item.tipo === 'cobrado' ? '-' : formatearMoneda(item.valorRealACobrar)}
-              </td>
-              <td className="px-4 py-4 font-medium text-gray-900">
-                {formatearMoneda(item.saldoTotalCredito)}
-              </td>
-              <td className="px-4 py-4">
-                {item.cuotasVencidasCount > 0 ? (
-                  <div className="text-red-600 font-bold">
-                    (SI) - <span className="text-xs">{formatearFechaCorta(item.primerCuotaVencidaFecha)}</span>
-                    {item.cuotasVencidasCount > 1 && (
-                      <div className="text-xs text-red-500 mt-0.5 font-normal">
-                        ({item.cuotasVencidasCount} cuotas)
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <span className="text-green-600 font-medium">Al día</span>
-                )}
-              </td>
-              <td className="px-4 py-4 capitalize">
-                {item.creditoTipo}
-              </td>
-              <td className="px-4 py-4 text-center">
-                <button
-                  onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
-                  className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
-                >
-                  Ver Detalle
-                </button>
-              </td>
-            </tr>
-          ))}
+                </td>
+                <td className="px-4 py-4 font-medium text-gray-900">
+                  {formatearMoneda(item.creditoMonto)}
+                </td>
+                <td className="px-4 py-4 font-bold text-green-600 text-base">
+                  {item.tipo === 'pendiente'
+                    ? formatearMoneda(item.valorMostrar)
+                    : item.tipo === 'cobrado'
+                      ? <span className="text-green-600">Pagado ({formatearMoneda(item.valorMostrar)})</span>
+                      : <span className="text-yellow-600">Abonado ({formatearMoneda(item.valorMostrar)})</span>
+                  }
+                </td>
+                <td className="px-4 py-4 font-medium text-orange-600">
+                  {item.tipo === 'cobrado' ? '-' : formatearMoneda(item.valorRealACobrar)}
+                </td>
+                <td className="px-4 py-4 font-medium text-gray-900">
+                  {formatearMoneda(item.saldoTotalCredito)}
+                </td>
+                <td className="px-4 py-4">
+                  {item.cuotasVencidasCount > 0 ? (
+                    <div className="text-red-600 font-bold">
+                      (SI) - <span className="text-xs">{formatearFechaCorta(item.primerCuotaVencidaFecha)}</span>
+                      {item.cuotasVencidasCount > 1 && (
+                        <div className="text-xs text-red-500 mt-0.5 font-normal">
+                          ({item.cuotasVencidasCount} cuotas)
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-green-600 font-medium">Al día</span>
+                  )}
+                </td>
+                <td className="px-4 py-4 capitalize">
+                  {item.creditoTipo}
+                </td>
+                <td className="px-4 py-4 text-center">
+                  <button
+                    onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
+                    className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
+                  >
+                    Ver Detalle
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -445,54 +517,21 @@ const DiaDeCobro = () => {
         </div>
       )}
 
-      {/* Lista de Barrios (Acordeones) */}
+      {/* Lista única de clientes del día con numeración */}
       <div className="space-y-4">
-        {Object.keys(datosCobro.porBarrio).length === 0 ? (
+        {listaCobrosDia.length === 0 ? (
           <div className="text-center py-12 text-gray-400">
             <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
             <p className="text-lg">No hay cobros para esta fecha</p>
           </div>
         ) : (
-          Object.entries(datosCobro.porBarrio).map(([barrio, items]) => {
-            const expandido = barriosExpandidos[barrio];
-            const totalBarrio = items.reduce((sum, item) => {
-              if (item.tipo === 'pendiente') return sum + (item.valorRealACobrar || 0);
-              return sum;
-            }, 0);
-            const clientesCount = items.length;
-
-            return (
-              <div key={barrio} className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">
-                <button
-                  onClick={() => toggleBarrio(barrio)}
-                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="bg-blue-100 p-2 rounded-full text-blue-600">
-                      <MapPin className="h-5 w-5" />
-                    </div>
-                    <div className="text-left">
-                      <h3 className="font-bold text-gray-800 text-lg">{barrio}</h3>
-                      <p className="text-xs text-gray-500">{clientesCount} {clientesCount === 1 ? 'cliente' : 'clientes'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right hidden sm:block">
-                      <p className="text-xs text-gray-500 font-bold uppercase">Pendiente</p>
-                      <p className="font-bold text-orange-600">{formatearMoneda(totalBarrio)}</p>
-                    </div>
-                    {expandido ? <ChevronUp className="h-5 w-5 text-gray-400" /> : <ChevronDown className="h-5 w-5 text-gray-400" />}
-                  </div>
-                </button>
-
-                {expandido && (
-                  <div className="border-t border-gray-100">
-                    <TablaCobros items={items} />
-                  </div>
-                )}
-              </div>
-            );
-          })
+          <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">
+            <TablaCobrosLista
+              items={listaCobrosDia}
+              onCambioOrden={handleCambioOrdenCliente}
+              ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
+            />
+          </div>
         )}
       </div>
 

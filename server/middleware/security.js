@@ -22,8 +22,8 @@ export const corsOptions = {
  */
 export const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100, // máximo 100 requests por IP en la ventana de tiempo
-  message: 'Demasiadas solicitudes desde esta IP, intenta de nuevo más tarde.',
+  max: 1000, // Aumentado para desarrollo
+  message: { error: 'Demasiadas solicitudes desde esta IP, intenta de nuevo más tarde.' },
   standardHeaders: true,
   legacyHeaders: false,
 });

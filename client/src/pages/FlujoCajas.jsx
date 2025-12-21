@@ -252,7 +252,7 @@ const ModalForm = ({
 };
 
 // Componente CajaSection optimizado
-const CajaSection = React.memo(({
+const CajaSection = ({
   titulo,
   color,
   numero,
@@ -652,7 +652,7 @@ const CajaSection = React.memo(({
       </div>
     </div>
   );
-});
+};
 
 const FlujoCajas = () => {
   const { movimientosCaja, agregarMovimientoCaja, eliminarMovimientoCaja } = useApp();
@@ -665,8 +665,23 @@ const FlujoCajas = () => {
   const movimientosFlujo = useMemo(() => {
     return movimientosCaja
       .map((mov) => {
-        const fechaObj = mov.fecha ? new Date(mov.fecha) : null;
-        const fechaNormalizada = fechaObj ? format(fechaObj, 'yyyy-MM-dd') : mov.fecha;
+        let fechaNormalizada = mov.fecha;
+        
+        if (mov.fecha) {
+            // Convertir a objeto Date
+            const fechaObj = new Date(mov.fecha);
+            
+            // Si es una fecha válida, la formateamos usando la zona horaria local
+            // Esto corrige el problema de visualización cuando la fecha UTC es del día anterior
+            // pero la fecha local es la correcta.
+            if (!isNaN(fechaObj.getTime())) {
+                fechaNormalizada = format(fechaObj, 'yyyy-MM-dd');
+            } else if (typeof mov.fecha === 'string' && mov.fecha.length >= 10) {
+                 // Fallback para strings ISO puros si new Date falla
+                 fechaNormalizada = mov.fecha.substring(0, 10);
+            }
+        }
+
         return {
           ...mov,
           fecha: fechaNormalizada,
@@ -732,16 +747,17 @@ const FlujoCajas = () => {
 
     // Procesar movimientos de la fecha seleccionada
     movimientosFecha.forEach(mov => {
-      if (mov.caja === 1) {
+      // Usar comparación flexible (==) para caja por seguridad de tipos
+      if (mov.caja == 1) {
         datos.caja1.movimientos.push(mov);
-      } else if (mov.caja === 2) {
+      } else if (mov.caja == 2) {
         datos.caja2.movimientos.push(mov);
       }
     });
 
     // Calcular saldo acumulado de días anteriores para cada caja
     movimientosAnteriores.forEach(mov => {
-      if (mov.caja === 1) {
+      if (mov.caja == 1) {
         if (mov.tipo === 'inicioCaja') {
           datos.caja1.saldoAnterior += parseFloat(mov.valor || 0);
         } else if (mov.tipo === 'gasto') {
@@ -750,7 +766,7 @@ const FlujoCajas = () => {
           const montoEntregado = mov.montoEntregado ?? calcularMontoEntregado(mov.valor || 0);
           datos.caja1.saldoAnterior -= parseFloat(montoEntregado || 0);
         }
-      } else if (mov.caja === 2) {
+      } else if (mov.caja == 2) {
         if (mov.tipo === 'inicioCaja') {
           datos.caja2.saldoAnterior += parseFloat(mov.valor || 0);
         } else if (mov.tipo === 'gasto') {
@@ -764,28 +780,28 @@ const FlujoCajas = () => {
 
     // Calcular ingresos acumulados por caja (solo inicios de caja)
     todosIniciosCaja.forEach(mov => {
-      if (mov.caja === 1) {
+      if (mov.caja == 1) {
         datos.caja1.ingresosAcumulados += parseFloat(mov.valor || 0);
-      } else if (mov.caja === 2) {
+      } else if (mov.caja == 2) {
         datos.caja2.ingresosAcumulados += parseFloat(mov.valor || 0);
       }
     });
 
     // Calcular papelería acumulada por caja
     todosPrestamos.forEach(mov => {
-      if (mov.caja === 1 && mov.papeleria) {
+      if (mov.caja == 1 && mov.papeleria) {
         datos.caja1.papeleriaAcumulada += parseFloat(mov.papeleria);
-      } else if (mov.caja === 2 && mov.papeleria) {
+      } else if (mov.caja == 2 && mov.papeleria) {
         datos.caja2.papeleriaAcumulada += parseFloat(mov.papeleria);
       }
     });
 
     // Restar retiros de papelería
     retirosPapeleria.forEach(mov => {
-      if (mov.caja === 1) {
+      if (mov.caja == 1) {
         datos.caja1.retirosPapeleria += parseFloat(mov.valor || 0);
         datos.caja1.papeleriaAcumulada -= parseFloat(mov.valor || 0);
-      } else if (mov.caja === 2) {
+      } else if (mov.caja == 2) {
         datos.caja2.retirosPapeleria += parseFloat(mov.valor || 0);
         datos.caja2.papeleriaAcumulada -= parseFloat(mov.valor || 0);
       }
@@ -802,8 +818,8 @@ const FlujoCajas = () => {
     // Sumar ingresos del día
     movimientosFecha.forEach(mov => {
       if (mov.tipo === 'inicioCaja') {
-        if (mov.caja === 1) datos.caja1.saldoAcumulado += parseFloat(mov.valor || 0);
-        if (mov.caja === 2) datos.caja2.saldoAcumulado += parseFloat(mov.valor || 0);
+        if (mov.caja == 1) datos.caja1.saldoAcumulado += parseFloat(mov.valor || 0);
+        if (mov.caja == 2) datos.caja2.saldoAcumulado += parseFloat(mov.valor || 0);
       }
     });
 
@@ -813,8 +829,8 @@ const FlujoCajas = () => {
         const montoEntregado = mov.tipo === 'prestamo'
           ? mov.montoEntregado ?? calcularMontoEntregado(mov.valor || 0)
           : mov.valor;
-        if (mov.caja === 1) datos.caja1.saldoAcumulado -= parseFloat(montoEntregado || 0);
-        if (mov.caja === 2) datos.caja2.saldoAcumulado -= parseFloat(montoEntregado || 0);
+        if (mov.caja == 1) datos.caja1.saldoAcumulado -= parseFloat(montoEntregado || 0);
+        if (mov.caja == 2) datos.caja2.saldoAcumulado -= parseFloat(montoEntregado || 0);
       }
     });
 
@@ -886,6 +902,10 @@ const FlujoCajas = () => {
     const esPrestamo = tipo === 'prestamo';
     const esRetiroPapeleria = tipo === 'retiroPapeleria';
 
+    // Preparar fecha para guardar: Usar mediodía (12:00) para evitar problemas de zona horaria
+    const fechaParaGuardar = new Date(fechaSeleccionada);
+    fechaParaGuardar.setHours(12, 0, 0, 0);
+
     // Calcular papelería automáticamente para préstamos (5,000 por cada 100,000)
     let papeleria = 0;
     if (esPrestamo) {
@@ -909,7 +929,7 @@ const FlujoCajas = () => {
             : `Préstamo - ${descripcion || 'Sin descripción'}`,
       valor: monto,
       descripcion: descripcion || '',
-      fecha: fechaFormato,
+      fecha: fechaParaGuardar.toISOString(),
       caja: cajaSeleccionada,
       categoria: esRetiroPapeleria
         ? 'Retiro de Papelería'

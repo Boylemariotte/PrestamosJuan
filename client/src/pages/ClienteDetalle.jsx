@@ -44,9 +44,9 @@ const ClienteDetalle = () => {
     }
   };
 
-  const handleAgregarCredito = (creditoData) => {
+  const handleAgregarCredito = async (creditoData) => {
     try {
-      agregarCredito(id, creditoData);
+      await agregarCredito(id, creditoData);
       setShowCreditoForm(false);
     } catch (e) {
       alert(e.message || 'No fue posible crear el crédito.');

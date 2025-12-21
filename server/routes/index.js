@@ -6,6 +6,7 @@ import creditoRoutes from './creditoRoutes.js';
 import movimientoCajaRoutes from './movimientoCajaRoutes.js';
 import alertaRoutes from './alertaRoutes.js';
 import visitaRoutes from './visitaRoutes.js';
+import papeleriaRoutes from './papeleriaRoutes.js';
 import backupRoutes from './backupRoutes.js';
 
 const router = express.Router();
@@ -20,6 +21,7 @@ router.use('/creditos', creditoRoutes);
 router.use('/movimientos-caja', movimientoCajaRoutes);
 router.use('/alertas', alertaRoutes);
 router.use('/visitas', visitaRoutes);
+router.use('/papeleria', papeleriaRoutes);
 router.use('/backup', backupRoutes);
 
 // Ruta de salud del servidor

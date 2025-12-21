@@ -1,62 +1,74 @@
-// Clave para el localStorage
-const STORAGE_KEY = 'papeleria_transactions';
+import api from '../services/api';
 
-// Obtener todas las transacciones
-export const getPapeleriaTransactions = () => {
+// Obtener todas las transacciones (Ahora retorna Promesa)
+export const getPapeleriaTransactions = async () => {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : [];
+    const response = await api.get('/papeleria');
+    return response.success ? response.data : [];
   } catch (error) {
     console.error('Error al obtener transacciones de papelería:', error);
     return [];
   }
 };
 
-// Guardar una nueva transacción
-export const savePapeleriaTransaction = (transaction) => {
+// Guardar una nueva transacción (Ahora retorna Promesa)
+export const savePapeleriaTransaction = async (transaction) => {
   try {
-    const transactions = getPapeleriaTransactions();
-    const newTransaction = {
-      ...transaction,
-      id: transaction.id || Date.now().toString(),
-      fecha: new Date(transaction.fecha).toISOString()
+    // Preparar fecha si es string
+    let fecha = transaction.fecha;
+    if (typeof fecha === 'string') {
+        const d = new Date(fecha);
+        // Si no tiene hora, poner mediodía para evitar UTC shift
+        if (!fecha.includes('T')) {
+            d.setHours(12, 0, 0, 0);
+        }
+        fecha = d;
+    }
+
+    const payload = {
+        ...transaction,
+        fecha: fecha,
+        cantidad: Number(transaction.cantidad)
     };
-    const updatedTransactions = [newTransaction, ...transactions];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedTransactions));
-    return newTransaction;
+    
+    // Si tiene id, es update, sino create. Pero papeleriaStorage original
+    // siempre hacía "save" como "add" (push al array), a menos que viniera lógica de update.
+    // FlujoCajas usa savePapeleriaTransaction para CREAR.
+    
+    const response = await api.post('/papeleria', payload);
+    return response.success ? response.data : null;
   } catch (error) {
     console.error('Error al guardar transacción de papelería:', error);
     return null;
   }
 };
 
-// Eliminar una transacción
-export const deletePapeleriaTransaction = (id) => {
+// Eliminar una transacción (Ahora retorna Promesa)
+export const deletePapeleriaTransaction = async (id) => {
   try {
-    const transactions = getPapeleriaTransactions();
-    const updatedTransactions = transactions.filter(tx => tx.id !== id);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedTransactions));
-    return true;
+    const response = await api.delete(`/papeleria/${id}`);
+    return response.success;
   } catch (error) {
     console.error('Error al eliminar transacción de papelería:', error);
     return false;
   }
 };
 
-// Filtrar transacciones
-export const filterPapeleriaTransactions = (filters = {}) => {
-  const { searchTerm = '', dateFilter = '', typeFilter = 'all' } = filters;
-  const transactions = getPapeleriaTransactions();
-
-  return transactions.filter(transaction => {
-    const matchesSearch = transaction.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (transaction.prestamoId && transaction.prestamoId.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    const transactionDate = new Date(transaction.fecha).toISOString().split('T')[0];
-    const matchesDate = !dateFilter || transactionDate === dateFilter;
-
-    const matchesType = typeFilter === 'all' || transaction.tipo === typeFilter;
-
-    return matchesSearch && matchesDate && matchesType;
-  });
+// Filtrar transacciones (Deprecada o requiere refactor masivo si se usa síncronamente)
+// FlujoCajas NO usa esta función. Solo usa save y delete.
+// Papeleria.jsx tenía su propia lógica de filtrado y ahora usa backend/local.
+export const filterPapeleriaTransactions = async (filters = {}) => {
+  // Esta función difícilmente se usará igual que antes de forma síncrona.
+  // La dejaré como wrapper de getPapeleria con params
+  try {
+      const params = new URLSearchParams();
+      if(filters.typeFilter && filters.typeFilter !== 'all') params.append('tipo', filters.typeFilter);
+      if(filters.searchTerm) params.append('search', filters.searchTerm);
+      if(filters.dateFilter) params.append('fechaInicio', filters.dateFilter); // Aprox
+      
+      const response = await api.get(`/papeleria?${params.toString()}`);
+      return response.success ? response.data : [];
+  } catch (error) {
+      return [];
+  }
 };

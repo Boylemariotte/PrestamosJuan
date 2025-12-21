@@ -1,10 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { FileText, Search, Calendar as CalendarIcon, Filter, Plus, FileDown, Trash2, Edit, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-
-// Clave para el localStorage
-const STORAGE_KEY = 'papeleria_transactions';
+import api from '../services/api';
 
 const Papeleria = () => {
   const [transactions, setTransactions] = useState([]);
@@ -20,35 +18,33 @@ const Papeleria = () => {
     tipo: 'ingreso',
     descripcion: '',
     cantidad: '',
-    unidad: 'unidades',
     fecha: format(new Date(), 'yyyy-MM-dd'),
     prestamoId: '',
   });
 
-  // Cargar transacciones del localStorage
-  useEffect(() => {
-    const savedTransactions = localStorage.getItem(STORAGE_KEY);
-    if (savedTransactions) {
-      try {
-        const parsed = JSON.parse(savedTransactions);
-        // Asegurarse de que las fechas sean objetos Date
-        const transactionsWithDates = parsed.map(tx => ({
+  // Cargar transacciones del backend
+  const fetchTransactions = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/papeleria');
+      if (response.success) {
+        // Asegurar que las fechas sean objetos Date
+        const transactionsWithDates = response.data.map(tx => ({
           ...tx,
           fecha: new Date(tx.fecha)
         }));
         setTransactions(transactionsWithDates);
-      } catch (error) {
-        console.error('Error al cargar transacciones:', error);
       }
+    } catch (error) {
+      console.error('Error al cargar transacciones:', error);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  // Guardar transacciones en el localStorage cuando cambian
   useEffect(() => {
-    if (transactions.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
-    }
-  }, [transactions]);
+    fetchTransactions();
+  }, [fetchTransactions]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -58,39 +54,52 @@ const Papeleria = () => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Preparar fecha (si es fecha pura, poner a mediodía para evitar UTC shift)
+    const fechaInput = new Date(formData.fecha);
+    fechaInput.setHours(12, 0, 0, 0);
+
     const newTransaction = {
       ...formData,
-      id: editingId || Date.now().toString(),
       cantidad: Number(formData.cantidad),
-      fecha: new Date(formData.fecha),
-      registradoPor: 'Usuario Actual',
+      fecha: fechaInput,
+      registradoPor: 'Usuario Actual', // El backend lo sobrescribirá con el user del token si existe
     };
 
-    if (editingId) {
-      // Actualizar transacción existente
-      setTransactions(transactions.map(tx => 
-        tx.id === editingId ? newTransaction : tx
-      ));
-      setEditingId(null);
-    } else {
-      // Agregar nueva transacción
-      setTransactions([newTransaction, ...transactions]);
-    }
+    try {
+      if (editingId) {
+        // Actualizar transacción existente
+        const response = await api.put(`/papeleria/${editingId}`, newTransaction);
+        if (response.success) {
+            setTransactions(prev => prev.map(tx => 
+                (tx.id === editingId || tx._id === editingId) ? { ...response.data, fecha: new Date(response.data.fecha) } : tx
+            ));
+        }
+        setEditingId(null);
+      } else {
+        // Agregar nueva transacción
+        const response = await api.post('/papeleria', newTransaction);
+        if (response.success) {
+             setTransactions(prev => [{ ...response.data, fecha: new Date(response.data.fecha) }, ...prev]);
+        }
+      }
 
-    // Limpiar el formulario
-    setFormData({
-      tipo: 'ingreso',
-      descripcion: '',
-      cantidad: '',
-      unidad: 'unidades',
-      fecha: format(new Date(), 'yyyy-MM-dd'),
-      prestamoId: '',
-    });
-    
-    setShowForm(false);
+      // Limpiar el formulario
+      setFormData({
+        tipo: 'ingreso',
+        descripcion: '',
+        cantidad: '',
+        fecha: format(new Date(), 'yyyy-MM-dd'),
+        prestamoId: '',
+      });
+      
+      setShowForm(false);
+    } catch (error) {
+        console.error("Error guardando transacción:", error);
+        alert("Error guardando transacción");
+    }
   };
 
   const handleEdit = (transaction) => {
@@ -98,7 +107,6 @@ const Papeleria = () => {
       tipo: transaction.tipo,
       descripcion: transaction.descripcion,
       cantidad: transaction.cantidad,
-      unidad: transaction.unidad || 'unidades',
       fecha: format(transaction.fecha, 'yyyy-MM-dd'),
       prestamoId: transaction.prestamoId || '',
     });
@@ -106,9 +114,17 @@ const Papeleria = () => {
     setShowForm(true);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('¿Estás seguro de eliminar esta transacción?')) {
-      setTransactions(transactions.filter(tx => tx.id !== id));
+      try {
+        const response = await api.delete(`/papeleria/${id}`);
+        if (response.success) {
+            setTransactions(prev => prev.filter(tx => (tx.id !== id && tx._id !== id)));
+        }
+      } catch (error) {
+        console.error("Error eliminando:", error);
+        alert("Error eliminando transacción");
+      }
     }
   };
 
@@ -205,7 +221,6 @@ const Papeleria = () => {
                 tipo: 'ingreso',
                 descripcion: '',
                 cantidad: '',
-                unidad: 'unidades',
                 fecha: format(new Date(), 'yyyy-MM-dd'),
                 prestamoId: '',
               });
@@ -315,7 +330,6 @@ const Papeleria = () => {
                     onChange={handleInputChange}
                     className="w-full p-2 border border-gray-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
                   >
-                    <option value="unidades">Unidades</option>
                     <option value="paquetes">Paquetes</option>
                     <option value="resmas">Resmas</option>
                     <option value="cajas">Cajas</option>
@@ -467,7 +481,7 @@ const Papeleria = () => {
                         {transaction.prestamoId || 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {transaction.cantidad} {transaction.unidad || 'unidades'}
+                        {transaction.cantidad}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button

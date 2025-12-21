@@ -1,13 +1,6 @@
 import mongoose from 'mongoose';
 
 const movimientoCajaSchema = new mongoose.Schema({
-  id: {
-    type: String,
-    index: true,
-    unique: true,
-    sparse: true,
-    trim: true
-  },
   tipo: {
     type: String,
     enum: ['inicioCaja', 'gasto', 'prestamo', 'retiroPapeleria', 'ingreso', 'egreso'],
@@ -59,7 +52,9 @@ const movimientoCajaSchema = new mongoose.Schema({
     default: Date.now
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 // Índices
