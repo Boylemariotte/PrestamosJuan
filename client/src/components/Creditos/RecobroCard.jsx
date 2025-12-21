@@ -3,8 +3,6 @@ import { Check, Plus, Edit2 } from 'lucide-react';
 import { formatearMoneda, formatearFechaCorta } from '../../utils/creditCalculations';
 
 const RecobroCard = ({ todasLasMultas, onNuevaMulta, onPagarMulta, onEditarMulta }) => {
-  console.log('RecobroCard - recibidas multas:', todasLasMultas);
-  
   return (
     <div key="recobro" className="border-2 border-blue-600 rounded-lg p-3 flex flex-col min-h-36 w-full print-grid-item">
       <div className="flex items-center justify-between mb-2">

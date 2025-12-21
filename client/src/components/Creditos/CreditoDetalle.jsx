@@ -51,7 +51,6 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
         setCargandoCredito(true);
         const response = await api.get(`/creditos/${creditoInicial.id}`);
         if (response.success && response.data) {
-          console.log('CreditoDetalle - Crédito cargado del backend:', response.data);
           setCreditoActualizado(response.data);
         }
       } catch (error) {
@@ -622,16 +621,6 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
                              creditoInicial?.multas ? creditoInicial : null;
     const multas = creditoConMultas?.multas || [];
     const abonosMulta = creditoConMultas?.abonosMulta || []; // Usar abonosMulta (independiente)
-    
-    console.log('CreditoDetalle - Calculando todasLasMultas:', {
-      creditoId: creditoConMultas?.id,
-      creditoActualizadoMultas: creditoActualizado?.multas?.length,
-      creditoMultas: credito?.multas?.length,
-      creditoInicialMultas: creditoInicial?.multas?.length,
-      multasCount: multas.length,
-      abonosMultaCount: abonosMulta.length,
-      multas: multas
-    });
     
     if (multas.length === 0) {
       return [];
