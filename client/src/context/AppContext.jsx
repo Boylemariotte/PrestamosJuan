@@ -370,17 +370,48 @@ export const AppProvider = ({ children }) => {
       const credito = obtenerCredito(clienteId, creditoId);
       if (!credito) return;
 
-      const fechaAnterior = new Date(credito.cuotas.find(c => c.nroCuota === nroCuota).fechaProgramada);
-      const fechaNueva = new Date(nuevaFecha);
+      // Extraer la fecha anterior y convertirla a fecha local
+      const cuotaAnterior = credito.cuotas.find(c => c.nroCuota === nroCuota);
+      if (!cuotaAnterior) return;
+
+      // Parsear fecha anterior: extraer YYYY-MM-DD y crear Date local
+      let fechaAnteriorStr = cuotaAnterior.fechaProgramada;
+      if (typeof fechaAnteriorStr === 'string' && fechaAnteriorStr.includes('T')) {
+        fechaAnteriorStr = fechaAnteriorStr.substring(0, 10); // YYYY-MM-DD
+      }
+      // Crear fecha local usando constructor Date(year, month, day) para evitar UTC
+      const [yearA, monthA, dayA] = fechaAnteriorStr.split('-').map(Number);
+      const fechaAnterior = new Date(yearA, monthA - 1, dayA, 12, 0, 0, 0);
+
+      // Parsear nueva fecha: extraer YYYY-MM-DD del ISO string recibido
+      let nuevaFechaStr = nuevaFecha;
+      if (typeof nuevaFechaStr === 'string' && nuevaFechaStr.includes('T')) {
+        nuevaFechaStr = nuevaFechaStr.substring(0, 10); // YYYY-MM-DD
+      }
+      // Crear fecha local usando constructor Date(year, month, day) para evitar UTC
+      const [yearN, monthN, dayN] = nuevaFechaStr.split('-').map(Number);
+      const fechaNueva = new Date(yearN, monthN - 1, dayN, 12, 0, 0, 0);
+
+      // Calcular diferencia en días usando fechas locales
       const diferenciaDias = Math.floor((fechaNueva - fechaAnterior) / (1000 * 60 * 60 * 24));
+
+      // Preparar la nueva fecha para guardar (usar la fecha recibida como ISO string)
+      // La fecha ya viene como ISO string desde handleGuardarFecha, así que la usamos directamente
+      const fechaNuevaISO = nuevaFecha;
 
       const nuevasCuotas = credito.cuotas.map(cuota => {
         if (cuota.nroCuota === nroCuota) {
-          return { ...cuota, fechaProgramada: nuevaFecha };
+          return { ...cuota, fechaProgramada: fechaNuevaISO };
         } else if (cuota.nroCuota > nroCuota) {
-          const f = new Date(cuota.fechaProgramada);
-          f.setDate(f.getDate() + diferenciaDias);
-          return { ...cuota, fechaProgramada: f.toISOString() };
+          // Para las cuotas posteriores, también usar constructor local para evitar desfase
+          let fechaCuotaStr = cuota.fechaProgramada;
+          if (typeof fechaCuotaStr === 'string' && fechaCuotaStr.includes('T')) {
+            fechaCuotaStr = fechaCuotaStr.substring(0, 10); // YYYY-MM-DD
+          }
+          const [yearC, monthC, dayC] = fechaCuotaStr.split('-').map(Number);
+          const fechaCuota = new Date(yearC, monthC - 1, dayC, 12, 0, 0, 0);
+          fechaCuota.setDate(fechaCuota.getDate() + diferenciaDias);
+          return { ...cuota, fechaProgramada: fechaCuota.toISOString() };
         }
         return cuota;
       });

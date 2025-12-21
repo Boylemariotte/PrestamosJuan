@@ -7,7 +7,8 @@ import {
   getColorEstado,
   formatearMoneda,
   calcularTotalMultasCredito,
-  aplicarAbonosAutomaticamente
+  aplicarAbonosAutomaticamente,
+  formatearFechaCorta
 } from '../../utils/creditCalculations';
 import { useApp } from '../../context/AppContext';
 import CowImage from '../../Icon/Cow.png';
@@ -180,12 +181,31 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
 
   const handleEditarFecha = (nroCuota, fechaActual) => {
     setMostrarEditorFecha(nroCuota);
-    setNuevaFecha(fechaActual);
+    // Extraer solo la parte de fecha (YYYY-MM-DD) del ISO string para el input type="date"
+    // Si viene como ISO string, tomar los primeros 10 caracteres
+    // Si ya es YYYY-MM-DD, usarlo directamente
+    let fechaFormateada = fechaActual;
+    if (typeof fechaActual === 'string' && fechaActual.includes('T')) {
+      fechaFormateada = fechaActual.substring(0, 10);
+    } else if (fechaActual instanceof Date) {
+      // Si es objeto Date, formatearlo a YYYY-MM-DD en hora local
+      const year = fechaActual.getFullYear();
+      const month = String(fechaActual.getMonth() + 1).padStart(2, '0');
+      const day = String(fechaActual.getDate()).padStart(2, '0');
+      fechaFormateada = `${year}-${month}-${day}`;
+    }
+    setNuevaFecha(fechaFormateada);
   };
 
   const handleGuardarFecha = () => {
     if (nuevaFecha && mostrarEditorFecha) {
-      editarFechaCuota(clienteId, credito.id, mostrarEditorFecha, nuevaFecha);
+      // Asegurar que la fecha se envía como mediodía local para evitar desfase UTC
+      // Crear fecha local a mediodía (12:00) del día seleccionado
+      // Usar formato YYYY-MM-DDTHH:mm:ss para crear fecha local explícitamente
+      const [year, month, day] = nuevaFecha.split('-').map(Number);
+      const fechaLocal = new Date(year, month - 1, day, 12, 0, 0, 0);
+      
+      editarFechaCuota(clienteId, credito.id, mostrarEditorFecha, fechaLocal.toISOString());
       // Pequeño delay para asegurar que el estado se actualice
       setTimeout(() => {
         setMostrarEditorFecha(null);
@@ -621,7 +641,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
                 <div className="flex flex-col items-center justify-center">
                   <span className="text-xs font-bold text-blue-600 uppercase mb-1">FECHA INICIO</span>
                   <span className="text-lg font-bold text-gray-800">
-                    {formData.fechaInicio ? formData.fechaInicio : '-'}
+                    {formData.fechaInicio ? formatearFechaCorta(formData.fechaInicio) : '-'}
                   </span>
                 </div>
                 <div className="flex flex-col items-center justify-center">
