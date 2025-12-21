@@ -472,18 +472,18 @@ const DiaDeCobro = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div className="bg-white/10 rounded-lg p-3">
+        <div className="grid grid-cols-3 gap-2 md:gap-4 text-center">
+          <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0 overflow-hidden">
             <p className="text-xs text-slate-400 uppercase font-bold mb-1">Por Cobrar</p>
-            <p className="text-xl md:text-2xl font-bold text-orange-300">{formatearMoneda(datosCobro.stats.pendiente)}</p>
+            <p className="text-[10px] sm:text-xs md:text-xl lg:text-2xl font-bold text-orange-300 break-words leading-tight">{formatearMoneda(datosCobro.stats.pendiente)}</p>
           </div>
-          <div className="bg-white/10 rounded-lg p-3">
+          <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0 overflow-hidden">
             <p className="text-xs text-slate-400 uppercase font-bold mb-1">Recogido</p>
-            <p className="text-xl md:text-2xl font-bold text-green-300">{formatearMoneda(datosCobro.stats.recogido)}</p>
+            <p className="text-[10px] sm:text-xs md:text-xl lg:text-2xl font-bold text-green-300 break-words leading-tight">{formatearMoneda(datosCobro.stats.recogido)}</p>
           </div>
-          <div className="bg-white/10 rounded-lg p-3">
+          <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0">
             <p className="text-xs text-slate-400 uppercase font-bold mb-1">Clientes</p>
-            <p className="text-xl md:text-2xl font-bold text-blue-300">{datosCobro.stats.clientesTotal}</p>
+            <p className="text-sm md:text-xl lg:text-2xl font-bold text-blue-300">{datosCobro.stats.clientesTotal}</p>
           </div>
         </div>
       </div>

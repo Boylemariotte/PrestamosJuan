@@ -56,10 +56,8 @@ const ListaCuotas = ({
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Detalle de Cuotas</h3>
       <div className="space-y-2 max-h-96 overflow-y-auto">
         {cuotasActualizadas.map((cuota) => {
-          // Calcular si la cuota está completamente pagada (manual o con abono)
-          const totalMultas = calcularTotalMultasCuota(cuota);
-          const multasPendientes = totalMultas - (cuota.multasCubiertas || 0);
-          const valorPendiente = (credito.valorCuota - (cuota.abonoAplicado || 0)) + multasPendientes;
+          // Calcular si la cuota está completamente pagada (manual o con abono, sin multas)
+          const valorPendiente = credito.valorCuota - (cuota.abonoAplicado || 0);
           const isPaid = cuota.pagado || (valorPendiente <= 0 && cuota.abonoAplicado > 0);
 
           const diasMora = !isPaid ? calcularDiasMora(cuota.fechaProgramada) : 0;
@@ -257,39 +255,7 @@ const ListaCuotas = ({
                 />
               )}
 
-              {/* Lista de multas existentes */}
-              {cuota.multas && cuota.multas.length > 0 && (
-                <div className="ml-14 space-y-2">
-                  {cuota.multas.map((multa) => (
-                    <div
-                      key={multa.id}
-                      className="flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-lg"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2">
-                          <DollarSign className="h-4 w-4 text-orange-600" />
-                          <span className="font-semibold text-orange-900">
-                            {formatearMoneda(multa.valor)}
-                          </span>
-                          <span className="text-sm text-gray-600">
-                            - {multa.motivo}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Aplicada el {formatearFechaCorta(multa.fecha.split('T')[0])}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => onEliminarMulta(cuota.nroCuota, multa.id)}
-                        className="text-red-500 hover:text-red-700 p-1"
-                        title="Eliminar multa"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {/* Las multas ahora son independientes y se muestran en una sección separada */}
             </div>
           );
         })}

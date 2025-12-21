@@ -323,63 +323,22 @@ export const aplicarAbonosAutomaticamente = (credito) => {
 
   let saldoAbonoGeneral = 0;
 
+  // Procesar solo abonos de cuotas (abonosMulta está completamente separado y se maneja en el backend)
   (credito.abonos || []).forEach(abono => {
-    // Detectar si es pago de multa
-    if (abono.tipo === 'multa') {
-      // PAGOS DE MULTAS (Solo cubren multas)
+    // PAGOS DE CUOTAS / GENERALES (Solo cubren capital)
+    const match = abono.descripcion && abono.descripcion.match(/(?:Cuota|cuota)\s*#(\d+)/);
+    const nroCuotaTarget = abono.nroCuota || (match ? parseInt(match[1]) : null);
 
-      // Intentar vincular a una cuota específica si se puede
-      const match = abono.descripcion && abono.descripcion.match(/(?:Cuota|cuota)\s*#(\d+)/);
-      const nroCuotaTarget = abono.nroCuota || (match ? parseInt(match[1]) : null);
-
-      if (nroCuotaTarget) {
-        const cuota = cuotasActualizadas.find(c => c.nroCuota === nroCuotaTarget);
-        if (cuota) {
-          // Solo aplicar a multas de esta cuota
-          const totalMultas = cuota.multas ? cuota.multas.reduce((sum, m) => sum + m.valor, 0) : 0;
-          const multasYaCubiertas = cuota.multasCubiertas || 0;
-          const multasPendientes = totalMultas - multasYaCubiertas;
-
-          if (multasPendientes > 0) {
-            const aporte = Math.min(abono.valor, multasPendientes);
-            cuota.multasCubiertas += aporte;
-          }
-          // El sobrante de un pago de multa NO se va a capital
-        }
-      } else {
-        // Pago de multa general (no especifica cuota) - Distribuir entre multas pendientes
-        // (Waterfall solo para MULTAS)
-        let saldoMulta = abono.valor;
-        for (let cuota of cuotasActualizadas) {
-          if (saldoMulta <= 0) break;
-          const totalMultas = cuota.multas ? cuota.multas.reduce((sum, m) => sum + m.valor, 0) : 0;
-          const pendiente = totalMultas - cuota.multasCubiertas;
-
-          if (pendiente > 0) {
-            const aporte = Math.min(saldoMulta, pendiente);
-            cuota.multasCubiertas += aporte;
-            saldoMulta -= aporte;
-          }
-        }
-      }
-
-    } else {
-      // PAGOS DE CUOTAS / GENERALES (Solo cubren capital)
-
-      const match = abono.descripcion && abono.descripcion.match(/(?:Cuota|cuota)\s*#(\d+)/);
-      const nroCuotaTarget = abono.nroCuota || (match ? parseInt(match[1]) : null);
-
-      if (nroCuotaTarget) {
-        const cuota = cuotasActualizadas.find(c => c.nroCuota === nroCuotaTarget);
-        if (cuota) {
-          // Solo aplicar a capital
-          cuota.abonoAplicado += abono.valor;
-        } else {
-          saldoAbonoGeneral += abono.valor;
-        }
+    if (nroCuotaTarget) {
+      const cuota = cuotasActualizadas.find(c => c.nroCuota === nroCuotaTarget);
+      if (cuota) {
+        // Solo aplicar a capital
+        cuota.abonoAplicado += abono.valor;
       } else {
         saldoAbonoGeneral += abono.valor;
       }
+    } else {
+      saldoAbonoGeneral += abono.valor;
     }
   });
 
@@ -430,22 +389,26 @@ export const formatearFechaCorta = (fecha) => {
   return format(parseISO(fecha), 'dd/MM/yyyy');
 };
 
-// Calcular total de multas de una cuota
+// Calcular total de multas de una cuota (Deprecado/Fallback)
 export const calcularTotalMultasCuota = (cuota) => {
-  if (!cuota.multas || cuota.multas.length === 0) return 0;
-  return cuota.multas.reduce((total, multa) => total + multa.valor, 0);
+  return 0; // Las multas ya no pertenecen a la cuota
 };
 
-// Calcular total de multas de un crédito
-export const calcularTotalMultasCredito = (cuotas) => {
+// Calcular total de multas de un crédito (Multas globales)
+export const calcularTotalMultasCredito = (cuotas, credito = null) => {
+  // Si se pasa el objeto crédito completo, sumar sus multas globales
+  if (credito && credito.multas) {
+    return credito.multas.reduce((total, multa) => total + multa.valor, 0);
+  }
+  // Fallback para estructura antigua (multas en cuotas)
   return cuotas.reduce((total, cuota) => {
-    return total + calcularTotalMultasCuota(cuota);
+    return total + (cuota.multas ? cuota.multas.reduce((sum, m) => sum + m.valor, 0) : 0);
   }, 0);
 };
 
-// Calcular valor total a pagar de una cuota (incluyendo multas)
+// Calcular valor total a pagar de una cuota (Solo capital, multas son aparte)
 export const calcularValorTotalCuota = (valorCuota, cuota) => {
-  return valorCuota + calcularTotalMultasCuota(cuota);
+  return valorCuota;
 };
 
 // Verificar si una fecha ha pasado
@@ -460,23 +423,13 @@ export const isFechaPasada = (fecha) => {
   }
 };
 
-// Calcular valor PENDIENTE de una cuota (valor cuota - abonos + multas pendientes)
-// Esta es la función que se usa para mostrar "Pendiente: $X" en el detalle
+// Calcular valor PENDIENTE de una cuota (valor cuota - abonos)
+// Las multas ya no se suman a la cuota
 export const calcularValorPendienteCuota = (valorCuota, cuota) => {
   if (cuota.pagado) return 0;
 
   // Valor de la cuota menos abonos aplicados
-  const valorPendiente = valorCuota - (cuota.abonoAplicado || 0);
-
-  // Calcular multas totales y multas cubiertas
-  const totalMultas = cuota.multas ? cuota.multas.reduce((acc, m) => acc + m.valor, 0) : 0;
-  const multasCubiertas = cuota.multasCubiertas || 0;
-  const multasPendientes = totalMultas - multasCubiertas;
-
-  // Valor pendiente real = (Capital - Abonos) + (Multas - MultasPagadas)
   const capitalPendiente = valorCuota - (cuota.abonoAplicado || 0);
 
-  const totalPendiente = Math.max(0, capitalPendiente) + Math.max(0, multasPendientes);
-
-  return totalPendiente;
+  return Math.max(0, capitalPendiente);
 };

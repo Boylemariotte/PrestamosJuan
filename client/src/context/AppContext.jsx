@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
+import { useAuth } from './AuthContext';
 import { obtenerFechaHoraLocal, obtenerFechaLocal } from '../utils/dateUtils';
 import {
   calcularTotalAPagar,
@@ -24,6 +25,7 @@ export const useApp = () => {
 };
 
 export const AppProvider = ({ children }) => {
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [clientes, setClientes] = useState([]);
   const [movimientosCaja, setMovimientosCaja] = useState([]);
   const [alertas, setAlertas] = useState([]);
@@ -31,6 +33,12 @@ export const AppProvider = ({ children }) => {
 
   // Función para cargar todos los datos
   const fetchData = useCallback(async () => {
+    // Solo cargar datos si el usuario está autenticado
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       // Cargar clientes (limit alto para traer todos)
@@ -51,16 +59,24 @@ export const AppProvider = ({ children }) => {
         setAlertas(alertasRes.data);
       }
     } catch (error) {
-      console.error('Error cargando datos iniciales:', error);
+      // Si es error de autenticación, no hacer nada (el usuario será redirigido)
+      if (error.message && error.message.includes('No autorizado')) {
+        console.warn('No autorizado para cargar datos');
+      } else {
+        console.error('Error cargando datos iniciales:', error);
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
-  // Cargar datos al montar
+  // Cargar datos cuando el usuario esté autenticado
   useEffect(() => {
+    // Esperar a que la autenticación termine de cargar
+    if (authLoading) return;
+    
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, authLoading]);
 
   // --- CLIENTES ---
 
@@ -326,14 +342,15 @@ export const AppProvider = ({ children }) => {
     return agregarAbono(clienteId, creditoId, valorAbono, 'Abono a cuota', fechaAbono, 'abono', nroCuota);
   };
 
-  const agregarAbono = async (clienteId, creditoId, valorAbono, descripcion, fechaAbono, tipo = 'abono', nroCuota = null) => {
+  const agregarAbono = async (clienteId, creditoId, valorAbono, descripcion, fechaAbono, tipo = 'abono', nroCuota = null, multaId = null) => {
     try {
       const payload = {
         valor: valorAbono,
         descripcion,
         fecha: fechaAbono,
         tipo,
-        nroCuota
+        nroCuota,
+        multaId
       };
       const response = await api.post(`/creditos/${creditoId}/abonos`, payload);
       if (response.success) await fetchData();
@@ -425,46 +442,49 @@ export const AppProvider = ({ children }) => {
 
   // --- MULTAS, DESCUENTOS, NOTAS ---
 
-  const agregarMulta = async (clienteId, creditoId, nroCuota, valorMulta, motivo) => {
+  const agregarMulta = async (clienteId, creditoId, valorMulta, motivo, nroCuota = null) => {
     try {
-      const response = await api.post(`/creditos/${creditoId}/multas`, { nroCuota, valor: valorMulta, motivo });
-      if (response.success) await fetchData();
+      // nroCuota es opcional, solo para referencia informativa
+      const response = await api.post(`/creditos/${creditoId}/multas`, { 
+        valor: valorMulta, 
+        motivo,
+        nroCuota: nroCuota || undefined
+      });
+      if (response.success) {
+        // Devolver el crédito actualizado de la respuesta
+        await fetchData();
+        return response.data;
+      }
     } catch (error) {
       console.error('Error agregando multa:', error);
       throw error;
     }
   };
 
-  const eliminarMulta = async (clienteId, creditoId, nroCuota, multaId) => {
+  const editarMulta = async (clienteId, creditoId, multaId, valor, fecha, motivo) => {
     try {
-      // Nota: El backend no tenía un endpoint específico DELETE /creditos/:id/multas/:multaId
-      // Pero para mantener consistencia, deberíamos agregarlo o usar updateCredito.
-      // Si asumimos que existe o lo crearemos:
-      // await api.delete(`/creditos/${creditoId}/multas/${multaId}`);
-
-      // Como solución rápida sin tocar backend routes si no existen, podemos actualizar el crédito removiendo la multa.
-      // Pero lo ideal es la ruta dedicada. Asumiré ruta dedicada por consistencia con Abonos.
-      // Si falla 404, fallback a update manual.
-
-      // Update: El usuario pidió que TODO funcionara. Voy a asumir que agregaré la ruta en backend si falta.
-      // Revisando controller backend anterior... NO VI ruta delete multa.
-      // Solo vi agregarMulta. 
-      // IMPLEMENTACIÓN MANUAL: Traer crédito, filtrar multa, guardar.
-
-      const credito = obtenerCredito(clienteId, creditoId);
-      if (!credito) return;
-
-      const nuevasCuotas = credito.cuotas.map(c => {
-        if (c.nroCuota === nroCuota && c.multas) {
-          return {
-            ...c,
-            multas: c.multas.filter(m => m.id !== multaId)
-          };
-        }
-        return c;
+      const response = await api.put(`/creditos/${creditoId}/multas/${multaId}`, {
+        valor,
+        fecha,
+        motivo
       });
+      if (response.success) {
+        await fetchData();
+        return response.data;
+      }
+    } catch (error) {
+      console.error('Error editando multa:', error);
+      throw error;
+    }
+  };
 
-      await actualizarCredito(clienteId, creditoId, { cuotas: nuevasCuotas });
+  const eliminarMulta = async (clienteId, creditoId, multaId) => {
+    try {
+      const response = await api.delete(`/creditos/${creditoId}/multas/${multaId}`);
+      if (response.success) {
+        await fetchData();
+        return response.data;
+      }
     } catch (error) {
       console.error('Error eliminando multa:', error);
       throw error;
@@ -618,6 +638,7 @@ export const AppProvider = ({ children }) => {
     movimientosCaja,
     alertas,
     loading,
+    fetchData,
     agregarCliente,
     actualizarCliente,
     eliminarCliente,
@@ -639,6 +660,7 @@ export const AppProvider = ({ children }) => {
     agregarDescuento,
     eliminarDescuento,
     agregarMulta,
+    editarMulta,
     eliminarMulta,
     agregarNota,
     eliminarNota,

@@ -1,5 +1,25 @@
 import mongoose from 'mongoose';
 
+const multaSchema = new mongoose.Schema({
+  id: String,
+  valor: {
+    type: Number,
+    required: true
+  },
+  motivo: {
+    type: String,
+    required: true
+  },
+  fecha: {
+    type: Date,
+    default: Date.now
+  },
+  pagada: {
+    type: Boolean,
+    default: false
+  }
+}, { _id: false });
+
 const cuotaSchema = new mongoose.Schema({
   nroCuota: {
     type: Number,
@@ -30,13 +50,7 @@ const cuotaSchema = new mongoose.Schema({
   tieneAbono: {
     type: Boolean,
     default: false
-  },
-  multas: [{
-    id: String,
-    valor: Number,
-    motivo: String,
-    fecha: Date
-  }]
+  }
 }, { _id: false });
 
 const abonoSchema = new mongoose.Schema({
@@ -53,12 +67,27 @@ const abonoSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
-  tipo: {
-    type: String,
-    enum: ['abono', 'multa'],
-    default: 'abono'
-  },
   nroCuota: Number
+}, { _id: false });
+
+const abonoMultaSchema = new mongoose.Schema({
+  id: String,
+  valor: {
+    type: Number,
+    required: true
+  },
+  descripcion: {
+    type: String,
+    default: 'Abono a multa'
+  },
+  fecha: {
+    type: Date,
+    default: Date.now
+  },
+  multaId: {
+    type: String,
+    required: true
+  }
 }, { _id: false });
 
 const descuentoSchema = new mongoose.Schema({
@@ -145,6 +174,8 @@ const creditoSchema = new mongoose.Schema({
   },
   cuotas: [cuotaSchema],
   abonos: [abonoSchema],
+  abonosMulta: [abonoMultaSchema],
+  multas: [multaSchema],
   descuentos: [descuentoSchema],
   notas: [notaSchema],
   etiqueta: {

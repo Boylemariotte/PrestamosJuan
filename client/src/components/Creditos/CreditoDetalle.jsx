@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { AlertCircle, Trash2, Award, Check, Calendar } from 'lucide-react';
+import { AlertCircle, Trash2, Award, Check, Calendar, Plus } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import RenovacionForm from './RenovacionForm';
 import {
@@ -11,6 +11,7 @@ import {
   formatearFechaCorta
 } from '../../utils/creditCalculations';
 import { useApp } from '../../context/AppContext';
+import api from '../../services/api';
 import CowImage from '../../Icon/Cow.png';
 
 // Componentes
@@ -30,11 +31,39 @@ import ListaNotas from './ListaNotas';
 import EditorFecha from './EditorFecha';
 
 const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }) => {
-  const { registrarPago, cancelarPago, editarFechaCuota, agregarNota, eliminarNota, agregarMulta, eliminarMulta, agregarAbono, editarAbono, eliminarAbono, agregarDescuento, eliminarDescuento, asignarEtiquetaCredito, renovarCredito, eliminarCredito, obtenerCredito } = useApp();
+  const { registrarPago, cancelarPago, editarFechaCuota, agregarNota, eliminarNota, agregarMulta, editarMulta, eliminarMulta, agregarAbono, editarAbono, eliminarAbono, agregarDescuento, eliminarDescuento, asignarEtiquetaCredito, renovarCredito, eliminarCredito, obtenerCredito } = useApp();
 
   // Obtener el crédito actualizado del contexto
   const creditoDesdeContext = obtenerCredito(clienteId, creditoInicial.id);
   const credito = creditoDesdeContext || creditoInicial;
+  
+  // Estado local para mantener el crédito actualizado (especialmente para multas)
+  const [creditoActualizado, setCreditoActualizado] = useState(credito);
+  const [cargandoCredito, setCargandoCredito] = useState(false);
+  
+  // Estado para forzar actualización cuando cambien las multas
+  const [multasVersion, setMultasVersion] = useState(0);
+  
+  // Cargar el crédito directamente del backend al montar para asegurar que tenga multas
+  useEffect(() => {
+    const cargarCreditoDelBackend = async () => {
+      try {
+        setCargandoCredito(true);
+        const response = await api.get(`/creditos/${creditoInicial.id}`);
+        if (response.success && response.data) {
+          console.log('CreditoDetalle - Crédito cargado del backend:', response.data);
+          setCreditoActualizado(response.data);
+        }
+      } catch (error) {
+        console.error('Error cargando crédito del backend:', error);
+      } finally {
+        setCargandoCredito(false);
+      }
+    };
+    
+    // Siempre cargar del backend para asegurar que tenga todos los datos actualizados (incluyendo multas)
+    cargarCreditoDelBackend();
+  }, [creditoInicial.id]);
 
   // Si el crédito desaparece del contexto (p. ej. fue eliminado), cerrar el modal automáticamente
   useEffect(() => {
@@ -48,6 +77,33 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [creditoDesdeContext]);
+  
+  // Actualizar creditoActualizado cuando cambie el crédito del contexto
+  // Pero solo si el crédito del contexto tiene multas (para evitar sobrescribir el del backend)
+  useEffect(() => {
+    const nuevoCredito = creditoDesdeContext || creditoInicial;
+    if (nuevoCredito && nuevoCredito.multas && nuevoCredito.multas.length > 0) {
+      const multasActuales = creditoActualizado.multas || [];
+      const multasNuevas = nuevoCredito.multas || [];
+      const multasActualesIds = multasActuales.map(m => m.id).sort().join(',');
+      const multasNuevasIds = multasNuevas.map(m => m.id).sort().join(',');
+      
+      // Solo actualizar si las multas son diferentes y el nuevo tiene más multas
+      if (multasNuevasIds !== multasActualesIds || multasNuevas.length > multasActuales.length) {
+        console.log('CreditoDetalle - Actualizando desde contexto:', nuevoCredito);
+        setCreditoActualizado(nuevoCredito);
+      }
+    }
+  }, [creditoDesdeContext, creditoInicial]);
+  
+  // Forzar actualización cuando cambien las multas del crédito
+  useEffect(() => {
+    if (creditoActualizado?.multas) {
+      const multasKey = creditoActualizado.multas.map(m => `${m.id}-${m.pagada}-${m.valor}`).join(',');
+      // Actualizar versión cuando cambien las multas
+      setMultasVersion(Date.now());
+    }
+  }, [creditoActualizado?.multas]);
 
   // Estados para el formulario
   const [formData, setFormData] = useState({
@@ -93,12 +149,14 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
 
   // Estados para el refactor de pagos/multas en grilla
   const [cuotaParaPagar, setCuotaParaPagar] = useState(null);
+  const [multaParaPagar, setMultaParaPagar] = useState(null);
   const [mostrarModalNuevaMulta, setMostrarModalNuevaMulta] = useState(false);
+  const [multaParaEditar, setMultaParaEditar] = useState(null);
 
   // Ref para el contenedor que se va a imprimir/exportar
   const formularioRef = useRef(null);
 
-  const estado = determinarEstadoCredito(credito.cuotas, credito);
+  const estado = determinarEstadoCredito(creditoActualizado.cuotas, creditoActualizado);
   const colorEstado = getColorEstado(estado);
 
   // Función para obtener el número de cuotas a mostrar
@@ -254,42 +312,150 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
     }
   };
 
-  const handleAgregarMulta = (nroCuota) => {
+  const handleAgregarMulta = async () => {
     if (!valorMulta || parseFloat(valorMulta) <= 0) {
       alert('Por favor ingresa un valor válido para la multa');
       return;
     }
-    agregarMulta(clienteId, credito.id, nroCuota, parseFloat(valorMulta), motivoMulta);
+    try {
+      const creditoActualizadoRespuesta = await agregarMulta(clienteId, credito.id, parseFloat(valorMulta), motivoMulta);
+      // Si la respuesta incluye el crédito actualizado, usarlo directamente
+      if (creditoActualizadoRespuesta && creditoActualizadoRespuesta.multas) {
+        console.log('CreditoDetalle - Usando crédito de respuesta:', creditoActualizadoRespuesta);
+        setCreditoActualizado(creditoActualizadoRespuesta);
+      } else {
+        // Si no, obtener directamente del backend
+        try {
+          const response = await api.get(`/creditos/${credito.id}`);
+          if (response.success && response.data) {
+            console.log('CreditoDetalle - Obtenido crédito del backend:', response.data);
+            setCreditoActualizado(response.data);
+          }
+        } catch (err) {
+          console.error('Error obteniendo crédito del backend:', err);
+          // Fallback: esperar un poco para que fetchData complete
+          setTimeout(() => {
+            const nuevoCredito = obtenerCredito(clienteId, credito.id);
+            if (nuevoCredito) {
+              setCreditoActualizado(nuevoCredito);
+            }
+          }, 1000);
+        }
+      }
+    } catch (error) {
+      console.error('Error agregando multa:', error);
+    }
     setMostrarFormularioMulta(null);
     setValorMulta('');
     setMotivoMulta('');
   };
 
-  const handleEliminarMulta = (nroCuota, multaId) => {
-    if (confirm('¿Estás seguro de eliminar esta multa?')) {
-      eliminarMulta(clienteId, credito.id, nroCuota, multaId);
-    }
+  const handleEditarMulta = (multa) => {
+    // Extraer el motivo sin la referencia a cuota para edición
+    const motivoSinRef = multa.motivo ? multa.motivo.replace(/\s*\(Ref\. Cuota #\d+\)/, '') : '';
+    const fechaBase = multa.fecha ? (multa.fecha.includes('T') ? multa.fecha.split('T')[0] : multa.fecha) : new Date().toISOString().split('T')[0];
+    
+    setMultaParaEditar({
+      ...multa,
+      motivo: motivoSinRef,
+      fecha: fechaBase
+    });
   };
 
-  const handlePagarMulta = async (multa) => {
-    const valorPendiente = multa.valor; // En este modelo simple, no trackeamos parciales de multa individualmente en el objeto multa, sino en cuota.multasCubiertas.
-    // Sin embargo, `todasLasMultas` calculado en useMemo no tiene el 'pendiente' exacto por multa individual fácilmente accesible si hay pagos parciales a la bolsa de multas.
-    // Pero la lógica de abono 'tipo: multa' distribuirá a la cuota.
-
-    // Simplificación: Pedir el monto total de la multa por defecto
-    const monto = prompt(`Ingrese el valor a pagar para la multa de la Cuota #${multa.nroCuota}:`, valorPendiente);
-
-    if (monto && parseFloat(monto) > 0) {
-      const descripcion = `Pago Multa Cuota #${multa.nroCuota}`;
-      const fecha = new Date().toISOString().split('T')[0];
-
-      // Pasar tipo = 'multa' y usar el nroCuota en la descripción para el targeting
-      // NOTA: agregarAbono no fue actualizado en la interface de useApp?
-      // Sí, updated in AppContext.jsx definition.
-      // Pero agregarAbono en this component calls context.
-
-      await agregarAbono(clienteId, credito.id, parseFloat(monto), descripcion, fecha, 'multa', multa.nroCuota);
+  const handleGuardarEdicionMulta = async (valor, fecha, motivo) => {
+    if (!multaParaEditar) return;
+    
+    try {
+      const creditoActualizadoRespuesta = await editarMulta(
+        clienteId, 
+        credito.id, 
+        multaParaEditar.id, 
+        parseFloat(valor), 
+        fecha, 
+        motivo
+      );
+      
+      if (creditoActualizadoRespuesta) {
+        setCreditoActualizado(creditoActualizadoRespuesta);
+      } else {
+        setTimeout(() => {
+          const nuevoCredito = obtenerCredito(clienteId, credito.id);
+          if (nuevoCredito) {
+            setCreditoActualizado(nuevoCredito);
+          }
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error editando multa:', error);
     }
+    
+    setMultaParaEditar(null);
+  };
+
+  const handleEliminarMulta = async (multaId) => {
+    if (confirm('¿Estás seguro de eliminar esta multa?')) {
+      try {
+        const creditoActualizadoRespuesta = await eliminarMulta(clienteId, credito.id, multaId);
+        if (creditoActualizadoRespuesta) {
+          setCreditoActualizado(creditoActualizadoRespuesta);
+        } else {
+          setTimeout(() => {
+            const nuevoCredito = obtenerCredito(clienteId, credito.id);
+            if (nuevoCredito) {
+              setCreditoActualizado(nuevoCredito);
+            }
+          }, 500);
+        }
+      } catch (error) {
+        console.error('Error eliminando multa:', error);
+      }
+    }
+    // Cerrar el modal de edición si está abierto
+    setMultaParaEditar(null);
+  };
+
+  const handlePagarMulta = (multa) => {
+    // Calcular saldo pendiente de la multa usando abonosMulta (independiente de abonos de cuotas)
+    const abonosMulta = (creditoActualizado.abonosMulta || []).filter(a => a.multaId === multa.id);
+    const totalAbonado = abonosMulta.reduce((sum, a) => sum + a.valor, 0);
+    const saldoPendiente = multa.valor - totalAbonado;
+    
+    setMultaParaPagar({
+      multa,
+      valorPendiente: saldoPendiente > 0 ? saldoPendiente : multa.valor
+    });
+  };
+
+  const handleConfirmarPagoMulta = async ({ valor, fecha, descripcion }) => {
+    if (!multaParaPagar) return;
+    const { multa } = multaParaPagar;
+    const valorNumerico = parseFloat(valor);
+
+    if (isNaN(valorNumerico) || valorNumerico <= 0) {
+      alert("Valor inválido");
+      return;
+    }
+
+    const descFinal = descripcion || `Pago Multa - ${multa.motivo}`;
+
+    // Pasar multaId para que el backend agregue el abono a abonosMulta (independiente de abonos de cuotas)
+    try {
+      await agregarAbono(clienteId, credito.id, valorNumerico, descFinal, fecha, 'multa', null, multa.id);
+      
+      // Obtener el crédito actualizado del backend
+      try {
+        const response = await api.get(`/creditos/${credito.id}`);
+        if (response.success && response.data) {
+          setCreditoActualizado(response.data);
+        }
+      } catch (err) {
+        console.error('Error obteniendo crédito del backend:', err);
+      }
+    } catch (error) {
+      console.error('Error agregando abono de multa:', error);
+    }
+
+    setMultaParaPagar(null);
   };
 
   const handleAgregarAbono = () => {
@@ -359,24 +525,26 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
     }
   };
 
-  const totalMultasCredito = calcularTotalMultasCredito(credito.cuotas);
-  const totalAbonos = (credito.abonos || []).reduce((total, abono) => total + abono.valor, 0);
-  const totalDescuentos = (credito.descuentos || []).reduce((total, descuento) => total + descuento.valor, 0);
+  // Calcular total de multas desde el array raíz del crédito
+  const totalMultasCredito = calcularTotalMultasCredito(creditoActualizado.cuotas || [], creditoActualizado);
+  const totalAbonos = (creditoActualizado.abonos || []).reduce((total, abono) => total + abono.valor, 0);
+  const totalDescuentos = (creditoActualizado.descuentos || []).reduce((total, descuento) => total + descuento.valor, 0);
   // Aplicar abonos automáticamente
-  const { cuotasActualizadas } = aplicarAbonosAutomaticamente(credito);
+  const { cuotasActualizadas } = aplicarAbonosAutomaticamente(creditoActualizado);
+
+  // Obtener multas independientes del crédito
+  const multasIndependientes = (creditoActualizado.multas || []).filter(m => !m.pagada);
 
   // Handlers para el nuevo sistema de pagos/multas en grilla
   const handleAbrirPago = (nroCuota) => {
     const cuota = cuotasActualizadas.find(c => c.nroCuota === nroCuota);
     if (!cuota) return;
 
-    const totalMultasCuota = cuota.multas ? cuota.multas.reduce((sum, m) => sum + m.valor, 0) : 0;
-    const multasCubiertas = cuota.multasCubiertas || 0;
-    const multasPendientes = totalMultasCuota - multasCubiertas;
+    // Ya no incluimos multas en el cálculo de la cuota, solo el capital
     const valorBaseCuota = credito.valorCuota || 0;
     const abonoYaAplicado = cuota.abonoAplicado || 0;
 
-    const valorRestante = (valorBaseCuota + multasPendientes) - abonoYaAplicado;
+    const valorRestante = valorBaseCuota - abonoYaAplicado;
 
     setCuotaParaPagar({
       nroCuota,
@@ -406,78 +574,112 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
     setCuotaParaPagar(null);
   };
 
-  const handleConfirmarMulta = ({ nroCuota, valor, fecha, motivo }) => {
-    // Se agrega la multa. Si el backend soporta fecha, genial. Si no, se agrega con fecha actual.
-    // Concatenamos fecha al motivo si se desea persistencia visual simple
+  const handleConfirmarMulta = async ({ valor, fecha, motivo }) => {
+    // Se agrega la multa independiente (sin nroCuota)
     const motivoFinal = fecha ? `${motivo} (${fecha})` : motivo;
-    // Asegurar enteros y floats correctos
-    agregarMulta(clienteId, credito.id, parseInt(nroCuota, 10), parseFloat(valor), motivoFinal);
+    try {
+      const creditoActualizadoRespuesta = await agregarMulta(clienteId, credito.id, parseFloat(valor), motivoFinal);
+      // Si la respuesta incluye el crédito actualizado, usarlo directamente
+      if (creditoActualizadoRespuesta) {
+        setCreditoActualizado(creditoActualizadoRespuesta);
+      } else {
+        // Si no, esperar un poco para que fetchData complete y luego actualizar
+        setTimeout(() => {
+          const nuevoCredito = obtenerCredito(clienteId, credito.id);
+          if (nuevoCredito) {
+            setCreditoActualizado(nuevoCredito);
+          }
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error agregando multa:', error);
+    }
     setMostrarModalNuevaMulta(false);
   };
 
+  // Actualizar creditoActualizado cuando cambie el crédito del contexto
+  // Pero solo si no acabamos de actualizarlo manualmente (para evitar sobrescribir)
+  useEffect(() => {
+    const nuevoCredito = creditoDesdeContext || creditoInicial;
+    if (nuevoCredito && nuevoCredito.id === creditoActualizado.id) {
+      // Solo actualizar si las multas son diferentes (para evitar loops)
+      const multasActuales = creditoActualizado.multas || [];
+      const multasNuevas = nuevoCredito.multas || [];
+      if (multasActuales.length !== multasNuevas.length || 
+          multasActuales.map(m => m.id).join(',') !== multasNuevas.map(m => m.id).join(',')) {
+        setCreditoActualizado(nuevoCredito);
+      }
+    } else if (nuevoCredito) {
+      setCreditoActualizado(nuevoCredito);
+    }
+  }, [creditoDesdeContext, creditoInicial]);
+
+  // Multas independientes del crédito (ya no están en cuotas)
   const todasLasMultas = useMemo(() => {
-    const lista = [];
-    (credito.cuotas || []).forEach((cuota) => {
-      // Buscar la cuota actualizada correspondiente
-      const cuotaActualizada = cuotasActualizadas.find(c => c.nroCuota === cuota.nroCuota);
-      let multasCubiertas = cuotaActualizada?.multasCubiertas || 0;
-
-      (cuota.multas || []).forEach((multa) => {
-        // Verificar si esta multa específica está pagada
-        // Lógica: Si la cuota está pagada manual, todas sus multas también.
-        // Si no, verificamos si el saldo de "multasCubiertas" alcanza para esta multa en orden secuencial.
-        let estaMultaPagada = false;
-
-        if (cuota.pagado) {
-          estaMultaPagada = true;
-        } else {
-          // Si hay saldo suficiente para cubrir esta multa
-          if (multasCubiertas >= multa.valor) {
-            estaMultaPagada = true;
-            multasCubiertas -= multa.valor; // Consumimos el saldo
-          } else {
-            // El saldo no alcanza o es 0, esta multa queda pendiente (o parcialmente pagada, pero la marcamos pendiente para simplificar UI)
-            estaMultaPagada = false;
-            // No restamos si no alcanza, o restamos lo que hay?
-            // Para "pagada" requerimos valor completo.
-            // Si multasCubiertas es 3000 y multa es 5000, no se paga.
-            // Y el saldo de 3000 ¿se debe guardar para la siguiente? NO, el waterfall es secuencial.
-            // Si no cubrimos esta, asumimos que el saldo se queda ahí (o parcial).
-            // Pero para simplificar el estado booleano:
-            if (multasCubiertas > 0) {
-              multasCubiertas = 0; // Ya usamos el remanente parcial aquí, no sigue a la siguiente
-            }
-          }
-        }
-
-        lista.push({
-          id: multa.id,
-          valor: multa.valor,
-          fecha: multa.fecha,
-          motivo: multa.motivo,
-          nroCuota: cuota.nroCuota,
-          pagada: estaMultaPagada
-        });
-      });
+    // Intentar usar creditoActualizado primero, luego credito, luego creditoInicial
+    const creditoConMultas = creditoActualizado?.multas ? creditoActualizado : 
+                             credito?.multas ? credito : 
+                             creditoInicial?.multas ? creditoInicial : null;
+    const multas = creditoConMultas?.multas || [];
+    const abonosMulta = creditoConMultas?.abonosMulta || []; // Usar abonosMulta (independiente)
+    
+    console.log('CreditoDetalle - Calculando todasLasMultas:', {
+      creditoId: creditoConMultas?.id,
+      creditoActualizadoMultas: creditoActualizado?.multas?.length,
+      creditoMultas: credito?.multas?.length,
+      creditoInicialMultas: creditoInicial?.multas?.length,
+      multasCount: multas.length,
+      abonosMultaCount: abonosMulta.length,
+      multas: multas
     });
-    return lista.sort((a, b) => {
+    
+    if (multas.length === 0) {
+      return [];
+    }
+    
+    return multas.map(multa => {
+      // Calcular abonos aplicados a esta multa usando abonosMulta (independiente de abonos de cuotas)
+      const abonosDeEstaMulta = abonosMulta.filter(a => a.multaId === multa.id);
+      const totalAbonado = abonosDeEstaMulta.reduce((sum, a) => sum + a.valor, 0);
+      const saldoPendiente = multa.valor - totalAbonado;
+      const pagada = saldoPendiente <= 0;
+      const parcialmentePagada = totalAbonado > 0 && saldoPendiente > 0;
+      
+      // Extraer nroCuota del motivo si existe (formato: "motivo (Ref. Cuota #X)")
+      let nroCuota = null;
+      const motivo = multa.motivo || '';
+      const match = motivo.match(/\(Ref\. Cuota #(\d+)\)/);
+      if (match) {
+        nroCuota = parseInt(match[1], 10);
+      }
+      
+      return {
+        id: multa.id,
+        valor: multa.valor,
+        fecha: multa.fecha,
+        motivo: motivo.replace(/\s*\(Ref\. Cuota #\d+\)/, ''), // Remover la referencia del motivo para mostrar
+        nroCuota,
+        pagada,
+        parcialmentePagada,
+        totalAbonado,
+        saldoPendiente: saldoPendiente > 0 ? saldoPendiente : 0
+      };
+    }).sort((a, b) => {
       const fechaA = a.fecha ? new Date(a.fecha) : new Date(0);
       const fechaB = b.fecha ? new Date(b.fecha) : new Date(0);
       return fechaB - fechaA;
     });
-  }, [credito.cuotas, cuotasActualizadas]);
+  }, [creditoActualizado, multasVersion]);
 
-  // Calcular progreso considerando cuotas pagadas con abonos
+  // Calcular progreso considerando cuotas pagadas con abonos (sin multas)
   const progreso = (() => {
     const totalCuotas = credito.cuotas.length;
     let cuotasPagadas = 0;
 
-    cuotasActualizadas.forEach((cuota, index) => {
+    cuotasActualizadas.forEach((cuota) => {
       // Verificar si está pagada manualmente O si el abono cubre completamente la cuota
-      const totalMultasCuota = cuota.multas ? cuota.multas.reduce((sum, m) => sum + m.valor, 0) : 0;
-      const multasCubiertas = cuota.multasCubiertas || 0;
-      const multasPendientes = totalMultasCuota - multasCubiertas;
-      const valorRestante = (credito.valorCuota - (cuota.abonoAplicado || 0)) + multasPendientes;
+      // Ya no incluimos multas en el cálculo del valor restante
+      const valorRestante = credito.valorCuota - (cuota.abonoAplicado || 0);
 
       const isPaid = cuota.pagado || (valorRestante <= 0 && cuota.abonoAplicado > 0);
 
@@ -527,15 +729,13 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
   };
 
   // Verificar si puede renovar
-  // Contar cuotas pagadas (tanto manualmente como con abonos)
+  // Contar cuotas pagadas (tanto manualmente como con abonos, sin considerar multas)
   const cuotasPagadas = (() => {
     let contador = 0;
     cuotasActualizadas.forEach((cuota) => {
       // Verificar si está pagada manualmente O si el abono cubre completamente la cuota
-      const totalMultasCuota = cuota.multas ? cuota.multas.reduce((sum, m) => sum + m.valor, 0) : 0;
-      const multasCubiertas = cuota.multasCubiertas || 0;
-      const multasPendientes = totalMultasCuota - multasCubiertas;
-      const valorRestante = (credito.valorCuota - (cuota.abonoAplicado || 0)) + multasPendientes;
+      // Ya no incluimos multas en el cálculo
+      const valorRestante = credito.valorCuota - (cuota.abonoAplicado || 0);
 
       const isPaid = cuota.pagado || (valorRestante <= 0 && cuota.abonoAplicado > 0);
 
@@ -692,6 +892,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
                   onEditarAbono={handleEditarAbono}
                   onEliminarAbono={handleEliminarAbono}
                   onPagarMulta={(multa) => handlePagarMulta(multa)}
+                  onEditarMulta={(multa) => handleEditarMulta(multa)}
                   sinContenedor={true}
                 />
               </div>
@@ -777,7 +978,23 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
         <ModalMulta
           onClose={() => setMostrarModalNuevaMulta(false)}
           onConfirm={handleConfirmarMulta}
-          maxCuotas={obtenerNumeroCuotas(formData.tipoPago)}
+        />
+      )}
+
+      {multaParaPagar && (
+        <ModalPagoMulta
+          multa={multaParaPagar}
+          onClose={() => setMultaParaPagar(null)}
+          onConfirm={handleConfirmarPagoMulta}
+        />
+      )}
+
+      {multaParaEditar && (
+        <ModalEditarMulta
+          multa={multaParaEditar}
+          onClose={() => setMultaParaEditar(null)}
+          onGuardar={handleGuardarEdicionMulta}
+          onEliminar={handleEliminarMulta}
         />
       )}
 
@@ -1009,16 +1226,90 @@ const ModalPago = ({ cuota, onClose, onConfirm }) => {
   );
 };
 
-const ModalMulta = ({ onClose, onConfirm, maxCuotas }) => {
+const ModalPagoMulta = ({ multa, onClose, onConfirm }) => {
+  const { multa: multaData, valorPendiente } = multa;
+  const [valor, setValor] = useState(valorPendiente || '');
+  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  const [descripcion, setDescripcion] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!valor || parseFloat(valor) <= 0) return alert('Ingrese un valor válido');
+    if (parseFloat(valor) > valorPendiente) {
+      return alert(`El valor a pagar no puede ser mayor al pendiente (${formatearMoneda(valorPendiente)})`);
+    }
+    onConfirm({ valor, fecha, descripcion });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+      <div className="bg-white rounded-lg p-6 w-96 shadow-2xl">
+        <h3 className="text-lg font-bold text-blue-600 mb-4">Pagar Multa</h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Pendiente: <span className="font-bold text-red-600">${formatearMoneda(valorPendiente)}</span>
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Valor a pagar</label>
+            <input
+              type="number"
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              className="w-full border rounded p-2"
+              autoFocus
+              min="0"
+              max={valorPendiente}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Fecha de pago</label>
+            <input
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className="w-full border rounded p-2"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Descripción (Opcional)</label>
+            <input
+              type="text"
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+              className="w-full border rounded p-2"
+              placeholder="Ej: Abono parcial"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold"
+            >
+              Confirmar Pago
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const ModalMulta = ({ onClose, onConfirm }) => {
   const [valor, setValor] = useState('');
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
-  const [nroCuota, setNroCuota] = useState(1);
   const [motivo, setMotivo] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!valor || valor <= 0) return alert('Ingrese un valor válido');
-    onConfirm({ valor, fecha, nroCuota, motivo });
+    onConfirm({ valor, fecha, motivo });
   };
 
   return (
@@ -1046,19 +1337,7 @@ const ModalMulta = ({ onClose, onConfirm, maxCuotas }) => {
             />
           </div>
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">Aplicar a Cuota #</label>
-            <select
-              value={nroCuota}
-              onChange={(e) => setNroCuota(e.target.value)}
-              className="w-full border rounded p-2"
-            >
-              {Array.from({ length: maxCuotas }, (_, i) => i + 1).map(num => (
-                <option key={num} value={num}>Cuota #{num}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">Motivo (Opcional)</label>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Motivo</label>
             <input
               type="text"
               value={motivo}
@@ -1080,6 +1359,89 @@ const ModalMulta = ({ onClose, onConfirm, maxCuotas }) => {
             >
               Crear Multa
             </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const ModalEditarMulta = ({ multa, onClose, onGuardar, onEliminar }) => {
+  const [valor, setValor] = useState(multa.valor || '');
+  const [fecha, setFecha] = useState(multa.fecha || new Date().toISOString().split('T')[0]);
+  const [motivo, setMotivo] = useState(multa.motivo || '');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!valor || parseFloat(valor) <= 0) return alert('Ingrese un valor válido');
+    onGuardar(valor, fecha, motivo);
+  };
+
+  const handleEliminar = () => {
+    if (confirm('¿Estás seguro de eliminar esta multa?')) {
+      onEliminar(multa.id);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+      <div className="bg-white rounded-lg p-6 w-96 shadow-2xl">
+        <h3 className="text-lg font-bold text-blue-600 mb-4">Editar Multa</h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Valor de la multa</label>
+            <input
+              type="number"
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              className="w-full border rounded p-2"
+              autoFocus
+              min="0"
+              step="0.01"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Fecha</label>
+            <input
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className="w-full border rounded p-2"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">Motivo</label>
+            <input
+              type="text"
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              className="w-full border rounded p-2"
+              placeholder="Ej: Retraso en pago"
+            />
+          </div>
+          <div className="flex justify-between gap-2 pt-2">
+            <button
+              type="button"
+              onClick={handleEliminar}
+              className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-bold"
+            >
+              Eliminar
+            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold"
+              >
+                Guardar
+              </button>
+            </div>
           </div>
         </form>
       </div>

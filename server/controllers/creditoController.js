@@ -118,6 +118,8 @@ export const createCredito = async (req, res, next) => {
       numCuotas: creditoData.numCuotas,
       cuotas: cuotasProcesadas,
       abonos: creditoData.abonos || [],
+      abonosMulta: creditoData.abonosMulta || [],
+      multas: creditoData.multas || [],
       descuentos: creditoData.descuentos || [],
       notas: creditoData.notas || [],
       etiqueta: creditoData.etiqueta || null,
@@ -158,6 +160,9 @@ const syncCreditoToCliente = async (creditoId) => {
 
     if (idx !== -1) {
       // Actualizar el crédito embebido
+      // Usar el totalAPagar ya calculado por recalcularCreditoCompleto (considera abonos parciales)
+      // No recalcular aquí para evitar duplicaciones
+
       cliente.creditos[idx] = {
         id: creditoId,
         monto: credito.monto,
@@ -166,11 +171,13 @@ const syncCreditoToCliente = async (creditoId) => {
         tipo: credito.tipo,
         tipoQuincenal: credito.tipoQuincenal,
         fechaInicio: credito.fechaInicio,
-        totalAPagar: credito.totalAPagar,
+        totalAPagar: credito.totalAPagar, // Usar el valor ya calculado por recalcularCreditoCompleto
         valorCuota: credito.valorCuota,
         numCuotas: credito.numCuotas,
         cuotas: credito.cuotas,
         abonos: credito.abonos,
+        abonosMulta: credito.abonosMulta || [],
+        multas: credito.multas,
         descuentos: credito.descuentos,
         notas: credito.notas,
         etiqueta: credito.etiqueta,
@@ -199,14 +206,7 @@ const syncCreditoToCliente = async (creditoId) => {
  */
 export const updateCredito = async (req, res, next) => {
   try {
-    const credito = await Credito.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      {
-        new: true,
-        runValidators: true
-      }
-    ).populate('cliente');
+    let credito = await Credito.findById(req.params.id);
 
     if (!credito) {
       return res.status(404).json({
@@ -215,8 +215,18 @@ export const updateCredito = async (req, res, next) => {
       });
     }
 
+    // Actualizar campos
+    Object.assign(credito, req.body);
+
+    // Recalcular totalAPagar si hay cambios en multas o cuotas
+    credito = recalcularCreditoCompleto(credito);
+
+    await credito.save();
+
     // Sincronizar con el embebido en cliente
     await syncCreditoToCliente(req.params.id);
+
+    const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
 
     res.status(200).json({
       success: true,
@@ -269,28 +279,43 @@ export const deleteCredito = async (req, res, next) => {
 const recalcularCreditoCompleto = (credito) => {
   // 1. Resetear el estado de todas las cuotas a valores iniciales
   credito.cuotas.forEach(cuota => {
-    const totalMultas = cuota.multas ? cuota.multas.reduce((sum, m) => sum + m.valor, 0) : 0;
-    cuota.saldoPendiente = credito.valorCuota + totalMultas;
-    cuota.multasCubiertas = 0; // Campo virtual/auxiliar útil si se persiste
+    // Ya no sumamos multas aquí, son independientes
+    cuota.saldoPendiente = credito.valorCuota;
     cuota.abonoAplicado = 0;   // Campo virtual/auxiliar
 
-    // Si fue pagado manualmente (flag forzado), se respeta temporalmente, 
-    // pero la lógica de abonos debería predominar si queremos consistencia total.
-    // Asumiremos que 'pagado' es resultado del cálculo, salvo que queramos un override.
-    // Para este requerimiento, recalcularemos 'pagado' basado en saldo <= 0.
+    // Reset flags
     cuota.pagado = false;
     cuota.tieneAbono = false;
 
-    // Limpiar abonosCuota embebidos para reconstruirlos (Single Source of Truth: credito.abonos)
+    // Limpiar abonosCuota embebidos
     cuota.abonosCuota = [];
   });
 
-  // 2. Ordenar abonos cronológicamente para aplicación correcta
+  // Resetear estado de multas y calcular saldo pendiente
+  if (credito.multas) {
+    credito.multas.forEach(m => {
+      m.pagada = false;
+      m.abonoAplicado = 0; // Campo auxiliar para calcular saldo
+    });
+  }
+
+  // 2. Procesar Abonos de Multas (completamente independientes de abonos de cuotas)
+  if (credito.abonosMulta && credito.abonosMulta.length > 0) {
+    credito.abonosMulta.forEach(abonoMulta => {
+      const multa = credito.multas ? credito.multas.find(m => m.id === abonoMulta.multaId) : null;
+      if (multa) {
+        // Acumular abonos a esta multa
+        multa.abonoAplicado = (multa.abonoAplicado || 0) + abonoMulta.valor;
+        // La multa está pagada solo si el abono aplicado >= valor de la multa
+        multa.pagada = (multa.abonoAplicado || 0) >= multa.valor;
+      }
+    });
+  }
+
+  // 3. Ordenar abonos de cuotas cronológicamente para aplicación correcta
   const abonosOrdenados = [...(credito.abonos || [])].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
-  // 3. Procesar Abonos
-  let saldoGeneral = 0;
-
+  // 4. Procesar Abonos de Cuotas (solo abonos, no multas)
   for (const abono of abonosOrdenados) {
     let montoDisponible = abono.valor;
     let nroCuotaTarget = abono.nroCuota;
@@ -302,18 +327,16 @@ const recalcularCreditoCompleto = (credito) => {
     }
 
     if (nroCuotaTarget) {
-      // A. Abono Específico
+      // A. Abono Específico a Cuota
       const cuota = credito.cuotas.find(c => c.nroCuota === nroCuotaTarget);
       if (cuota) {
-        // Registrar referencia en la cuota
         cuota.abonosCuota.push({
           id: abono.id,
           valor: montoDisponible,
           fecha: abono.fecha,
-          fechaCreacion: abono.fechaCreacion || new Date() // Fallback
+          fechaCreacion: abono.fechaCreacion || new Date()
         });
 
-        // Aplicar al saldo - TODO NO se separan multas ni capital aqui
         cuota.abonoAplicado = (cuota.abonoAplicado || 0) + montoDisponible;
         cuota.saldoPendiente -= montoDisponible;
       }
@@ -333,14 +356,10 @@ const recalcularCreditoCompleto = (credito) => {
 
   // 4. Finalizar Estados
   credito.cuotas.forEach(cuota => {
-    // Asegurar no negativos
     if (cuota.saldoPendiente < 0) cuota.saldoPendiente = 0;
-
-    // Determinar flags
-    cuota.pagado = cuota.saldoPendiente <= 10; // Tolerancia pequeña
+    cuota.pagado = cuota.saldoPendiente <= 10; 
     cuota.tieneAbono = cuota.abonoAplicado > 0;
 
-    // Fecha pago
     if (cuota.pagado && !cuota.fechaPago) {
       cuota.fechaPago = new Date();
     }
@@ -348,6 +367,22 @@ const recalcularCreditoCompleto = (credito) => {
       cuota.fechaPago = null;
     }
   });
+
+  // 5. Recalcular totalAPagar: incluir saldo pendiente de multas (considerando abonos parciales)
+  let totalMultasPendientes = 0;
+  if (credito.multas) {
+    credito.multas.forEach(multa => {
+      const abonoAplicado = multa.abonoAplicado || 0;
+      const saldoPendiente = multa.valor - abonoAplicado;
+      if (saldoPendiente > 0) {
+        totalMultasPendientes += saldoPendiente;
+      }
+    });
+  }
+  
+  // totalAPagar = (valorCuota * numCuotas) + saldoPendienteMultas
+  const totalCuotas = credito.valorCuota * credito.numCuotas;
+  credito.totalAPagar = totalCuotas + totalMultasPendientes;
 
   return credito;
 };
@@ -457,23 +492,41 @@ export const agregarNota = async (req, res, next) => {
  */
 export const agregarAbono = async (req, res, next) => {
   try {
-    const { valor, descripcion, fecha, tipo, nroCuota } = req.body;
+    const { valor, descripcion, fecha, tipo, nroCuota, multaId } = req.body;
     let credito = await Credito.findById(req.params.id);
 
     if (!credito) {
       return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
     }
 
-    const nuevoAbono = {
-      id: Date.now().toString(),
-      valor: parseFloat(valor),
-      descripcion,
-      fecha: fecha || new Date(),
-      tipo: tipo || 'abono',
-      nroCuota: nroCuota ? parseInt(nroCuota, 10) : null
-    };
+    // Si es un abono de multa, agregarlo a abonosMulta (completamente independiente)
+    if (multaId || tipo === 'multa') {
+      if (!multaId) {
+        return res.status(400).json({ success: false, error: 'multaId es requerido para abonos de multa' });
+      }
+      
+      const nuevoAbonoMulta = {
+        id: Date.now().toString(),
+        valor: parseFloat(valor),
+        descripcion: descripcion || 'Abono a multa',
+        fecha: fecha || new Date(),
+        multaId: multaId
+      };
 
-    credito.abonos.push(nuevoAbono);
+      credito.abonosMulta = credito.abonosMulta || [];
+      credito.abonosMulta.push(nuevoAbonoMulta);
+    } else {
+      // Abono de cuota (normal)
+      const nuevoAbono = {
+        id: Date.now().toString(),
+        valor: parseFloat(valor),
+        descripcion: descripcion || 'Abono al crédito',
+        fecha: fecha || new Date(),
+        nroCuota: nroCuota ? parseInt(nroCuota, 10) : null
+      };
+
+      credito.abonos.push(nuevoAbono);
+    }
 
     // Lógica Centralizada de Recálculo
     credito = recalcularCreditoCompleto(credito);
@@ -502,7 +555,15 @@ export const eliminarAbono = async (req, res, next) => {
     if (!credito) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
 
     const abonoId = req.params.abonoId;
-    credito.abonos = credito.abonos.filter(a => a.id !== abonoId);
+    
+    // Buscar en abonos de cuotas
+    const abonoEncontrado = credito.abonos.find(a => a.id === abonoId);
+    if (abonoEncontrado) {
+      credito.abonos = credito.abonos.filter(a => a.id !== abonoId);
+    } else {
+      // Buscar en abonos de multas
+      credito.abonosMulta = (credito.abonosMulta || []).filter(a => a.id !== abonoId);
+    }
 
     // Recalcular todo el estado del crédito tras eliminar abono
     credito = recalcularCreditoCompleto(credito);
@@ -566,22 +627,20 @@ export const editarAbono = async (req, res, next) => {
 export const agregarMulta = async (req, res, next) => {
   try {
     const { nroCuota, valor, motivo } = req.body;
-    const nroCuotaInt = parseInt(nroCuota, 10);
+    // nroCuota es opcional ahora, solo informativo o para referencia visual
     let credito = await Credito.findById(req.params.id);
     if (!credito) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
 
-    const cuota = credito.cuotas.find(c => c.nroCuota === nroCuotaInt);
-    if (!cuota) return res.status(404).json({ success: false, error: 'Cuota no encontrada' });
-
-    cuota.multas = cuota.multas || [];
-    cuota.multas.push({
+    credito.multas = credito.multas || [];
+    credito.multas.push({
       id: Date.now().toString(),
       valor: parseFloat(valor),
-      motivo,
-      fecha: new Date()
+      motivo: motivo + (nroCuota ? ` (Ref. Cuota #${nroCuota})` : ''),
+      fecha: new Date(),
+      pagada: false
     });
 
-    // Recalcular saldos (la multa aumenta el saldo pendiente)
+    // Recalcular saldos y totalAPagar (incluye multas pendientes)
     credito = recalcularCreditoCompleto(credito);
 
     await credito.save();
@@ -589,6 +648,78 @@ export const agregarMulta = async (req, res, next) => {
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
     res.status(201).json({ success: true, data: creditoActualizado });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Editar una multa
+ * @route   PUT /api/creditos/:id/multas/:multaId
+ * @access  Private
+ */
+export const editarMulta = async (req, res, next) => {
+  try {
+    const { multaId } = req.params;
+    const { valor, fecha, motivo } = req.body;
+    let credito = await Credito.findById(req.params.id);
+    if (!credito) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
+
+    const multa = credito.multas.find(m => m.id === multaId);
+    if (!multa) return res.status(404).json({ success: false, error: 'Multa no encontrada' });
+
+    // Actualizar valores si se proporcionan
+    if (valor !== undefined) {
+      multa.valor = parseFloat(valor);
+    }
+    if (fecha !== undefined) {
+      multa.fecha = new Date(fecha);
+    }
+    if (motivo !== undefined) {
+      // Preservar la referencia a cuota si existe
+      const match = multa.motivo.match(/\(Ref\. Cuota #(\d+)\)/);
+      const nroCuotaRef = match ? match[1] : null;
+      multa.motivo = motivo + (nroCuotaRef ? ` (Ref. Cuota #${nroCuotaRef})` : '');
+    }
+
+    // Recalcular saldos y totalAPagar
+    credito = recalcularCreditoCompleto(credito);
+
+    await credito.save();
+    await syncCreditoToCliente(req.params.id);
+
+    const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
+    res.status(200).json({ success: true, data: creditoActualizado });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Eliminar una multa
+ * @route   DELETE /api/creditos/:id/multas/:multaId
+ * @access  Private
+ */
+export const eliminarMulta = async (req, res, next) => {
+  try {
+    const { multaId } = req.params;
+    let credito = await Credito.findById(req.params.id);
+    if (!credito) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
+
+    // Eliminar la multa
+    credito.multas = credito.multas.filter(m => m.id !== multaId);
+
+    // Eliminar también todos los abonosMulta asociados a esta multa
+    credito.abonosMulta = (credito.abonosMulta || []).filter(a => a.multaId !== multaId);
+
+    // Recalcular saldos y totalAPagar (sin la multa eliminada y sus abonos)
+    credito = recalcularCreditoCompleto(credito);
+
+    await credito.save();
+    await syncCreditoToCliente(req.params.id);
+
+    const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
+    res.status(200).json({ success: true, data: creditoActualizado });
   } catch (error) {
     next(error);
   }

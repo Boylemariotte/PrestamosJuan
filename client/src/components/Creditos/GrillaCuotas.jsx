@@ -15,6 +15,7 @@ const GrillaCuotas = ({
   onEditarAbono,
   onEliminarAbono,
   onPagarMulta,
+  onEditarMulta,
   sinContenedor = false
 }) => {
   // Calcular distribución de abonos para visualización
@@ -27,10 +28,10 @@ const GrillaCuotas = ({
     // Estado temporal para simulación de waterfall
     const estadoCuotas = (credito.cuotas || []).map(c => ({
       ...c,
-      abonoAplicado: 0,
-      multasCubiertas: 0
+      abonoAplicado: 0
     }));
 
+    // Procesar solo abonos de cuotas (abonosMulta está completamente separado)
     (credito.abonos || []).forEach(abono => {
       // Detectar si es un abono específico
       const match = abono.descripcion && abono.descripcion.match(/(?:Cuota|cuota)\s*#(\d+)/);
@@ -51,39 +52,24 @@ const GrillaCuotas = ({
           cuota.abonoAplicado += monto;
         }
       } else {
-        // Abono general (Waterfall)
+        // Abono general (Waterfall) - Solo capital, sin multas
         let saldo = monto;
         for (let cuota of estadoCuotas) {
           if (saldo <= 0) break;
           if (cuota.pagado) continue;
 
-          const totalMultas = cuota.multas ? cuota.multas.reduce((s, m) => s + m.valor, 0) : 0;
-          const multasPend = totalMultas - cuota.multasCubiertas;
           const capitalPend = credito.valorCuota - cuota.abonoAplicado;
 
-          let consumo = 0;
-
-          // Cubrir multas
-          if (multasPend > 0) {
-            const aporte = Math.min(saldo, multasPend);
-            cuota.multasCubiertas += aporte;
-            saldo -= aporte;
-            consumo += aporte;
-          }
-
-          // Cubrir capital
+          // Solo cubrir capital (ya no multas)
           if (saldo > 0 && capitalPend > 0) {
             const aporte = Math.min(saldo, capitalPend);
             cuota.abonoAplicado += aporte;
             saldo -= aporte;
-            consumo += aporte;
-          }
 
-          if (consumo > 0) {
             if (!mapa[cuota.nroCuota]) mapa[cuota.nroCuota] = [];
             mapa[cuota.nroCuota].push({
               ...abono,
-              valorAplicado: consumo
+              valorAplicado: aporte
             });
           }
         }
@@ -125,6 +111,7 @@ const GrillaCuotas = ({
           todasLasMultas={todasLasMultas}
           onNuevaMulta={onNuevaMulta}
           onPagarMulta={onPagarMulta}
+          onEditarMulta={onEditarMulta}
         />
       </div>
     </>

@@ -28,43 +28,25 @@ const ResumenCredito = ({
   onMostrarFormularioRenovacion
 }) => {
   // Calcular saldo pendiente
+  // IMPORTANTE: credito.totalAPagar ya incluye las multas pendientes (calculado en el backend)
+  // El totalAPagar = (valorCuota * numCuotas) + saldoPendienteMultas
+  // Donde saldoPendienteMultas ya considera los abonos parciales a multas
+  // Por lo tanto, el saldo pendiente es simplemente totalAPagar menos los abonos aplicados a cuotas
   const calcularSaldoPendiente = () => {
-    if (totalMultasCredito === 0 && totalAbonos === 0 && totalDescuentos === 0 && progreso.cuotasPagadas === 0) {
-      return null;
+    // Calcular abonos aplicados a cuotas (sumar todos los abonoAplicado de las cuotas)
+    let totalAbonosAplicadosCuotas = 0;
+    if (cuotasActualizadas) {
+      cuotasActualizadas.forEach(cuota => {
+        totalAbonosAplicadosCuotas += (cuota.abonoAplicado || 0);
+      });
     }
+    
+    // NOTA: Los abonos a multas NO se restan aquí porque ya están considerados en el totalAPagar
+    // El totalAPagar incluye saldoPendienteMultas = suma de (multa.valor - multa.abonoAplicado)
+    // Por lo tanto, el totalAPagar ya refleja el saldo pendiente de multas correctamente
 
-    // Calcular cuánto se ha pagado realmente por cada cuota pagada
-    let totalPagadoReal = 0;
-
-    credito.cuotas.forEach(cuota => {
-      if (cuota.pagado) {
-        const valorCuota = credito.valorCuota;
-        const multasCuota = cuota.multas && cuota.multas.length > 0
-          ? cuota.multas.reduce((sum, m) => sum + m.valor, 0)
-          : 0;
-
-        const cuotaActualizada = cuotasActualizadas.find(c => c.nroCuota === cuota.nroCuota);
-        const abonoAplicado = cuotaActualizada?.abonoAplicado || 0;
-        const multasCubiertas = cuotaActualizada?.multasCubiertas || 0;
-
-        totalPagadoReal += valorCuota + multasCuota;
-      }
-    });
-
-    // Calcular abonos aplicados a cuotas pendientes (no pagadas)
-    let abonosEnCuotasPendientes = 0;
-    credito.cuotas.forEach(cuota => {
-      if (!cuota.pagado) {
-        const cuotaActualizada = cuotasActualizadas.find(c => c.nroCuota === cuota.nroCuota);
-        if (cuotaActualizada) {
-          abonosEnCuotasPendientes += (cuotaActualizada.abonoAplicado || 0);
-          abonosEnCuotasPendientes += (cuotaActualizada.multasCubiertas || 0);
-        }
-      }
-    });
-
-    // Saldo = Total a pagar + Multas - Descuentos - Total pagado real - Abonos en cuotas pendientes
-    const saldoPendiente = credito.totalAPagar + totalMultasCredito - totalDescuentos - totalPagadoReal - abonosEnCuotasPendientes;
+    // Saldo pendiente = Total a pagar (ya incluye multas pendientes) - Descuentos - Abonos aplicados a cuotas
+    const saldoPendiente = credito.totalAPagar - totalDescuentos - totalAbonosAplicadosCuotas;
     return formatearMoneda(Math.max(0, saldoPendiente));
   };
 

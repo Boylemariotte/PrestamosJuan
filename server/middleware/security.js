@@ -34,10 +34,14 @@ export const limiter = rateLimit({
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 50, // Aumentado para desarrollo
-  message: { message: 'Demasiados intentos de autenticación, intenta de nuevo más tarde.' },
+  max: 100, // Aumentado para evitar bloqueos durante desarrollo/pruebas
+  message: { error: 'Demasiados intentos de autenticación, intenta de nuevo más tarde.' },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // En desarrollo, permitir más intentos
+    return process.env.NODE_ENV === 'development';
+  }
 });
 
 /**

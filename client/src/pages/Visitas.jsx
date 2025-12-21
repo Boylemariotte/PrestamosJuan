@@ -152,8 +152,29 @@ const Visitas = () => {
         fetchVisitas();
     }, []);
 
+    // Función helper para obtener la fecha de hoy en formato YYYY-MM-DD (local)
+    const obtenerFechaHoyLocal = () => {
+        const hoy = new Date();
+        const year = hoy.getFullYear();
+        const month = String(hoy.getMonth() + 1).padStart(2, '0');
+        const day = String(hoy.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    // Función helper para formatear fecha visualmente (DD/MM/YYYY) sin desfase
+    const formatearFechaVisual = (fechaISO) => {
+        if (!fechaISO) return '';
+        // Si viene como string completo ISO (ej: 2025-12-21T12:00:00.000Z), cortamos en la T
+        // Esto asume que el servidor guardó la fecha "correcta" en UTC.
+        // Al guardar a las 12:00, 2025-12-21T12:00:00 local -> UTC 17:00 (aprox).
+        // Cortar el string UTC da "2025-12-21". Correcto.
+        const fechaStr = typeof fechaISO === 'string' ? fechaISO.split('T')[0] : new Date(fechaISO).toISOString().split('T')[0];
+        const [year, month, day] = fechaStr.split('-');
+        return `${day}/${month}/${year}`;
+    };
+
     const initialFormState = {
-        fechaAgendamiento: new Date().toISOString().split('T')[0],
+        fechaAgendamiento: obtenerFechaHoyLocal(),
         fechaVisita: '',
         tipoPrestamo: '',
         numeroCliente: '',
@@ -203,8 +224,32 @@ const Visitas = () => {
     const handleAddVisit = async (e) => {
         e.preventDefault();
         try {
+            // Preparar fechas forzando mediodía (12:00 PM) para evitar desfases de zona horaria
+            // Al convertir a ISO, las 12:00 PM local suelen caer en el mismo día UTC (ej: 17:00 UTC)
+            
+            let fechaAgendamientoISO = formData.fechaAgendamiento;
+            if (formData.fechaAgendamiento) {
+                const fecha = new Date(formData.fechaAgendamiento);
+                // Ajustar a mediodía local para seguridad
+                // new Date('2025-12-21') crea 2025-12-21T00:00:00 UTC (ojo, comportamiento estándar de Date.parse)
+                // Pero new Date(year, month, day) crea local.
+                // Mejor estrategia: Crear fecha local y poner horas 12.
+                const [year, month, day] = formData.fechaAgendamiento.split('-').map(Number);
+                const fechaLocal = new Date(year, month - 1, day, 12, 0, 0);
+                fechaAgendamientoISO = fechaLocal.toISOString();
+            }
+
+            let fechaVisitaISO = formData.fechaVisita;
+            if (formData.fechaVisita) {
+                const [year, month, day] = formData.fechaVisita.split('-').map(Number);
+                const fechaLocal = new Date(year, month - 1, day, 12, 0, 0);
+                fechaVisitaISO = fechaLocal.toISOString();
+            }
+
             const visitaData = {
                 ...formData,
+                fechaAgendamiento: fechaAgendamientoISO,
+                fechaVisita: fechaVisitaISO,
                 completada: false
             };
 
@@ -668,13 +713,13 @@ const Visitas = () => {
                                         <div className="flex flex-col">
                                             <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Fecha Agendamiento</label>
                                             <div className="border-b-2 border-gray-300 py-2 text-gray-800">
-                                                {visit.fechaAgendamiento ? (typeof visit.fechaAgendamiento === 'string' ? visit.fechaAgendamiento : new Date(visit.fechaAgendamiento).toISOString().split('T')[0]) : ''}
+                                                {formatearFechaVisual(visit.fechaAgendamiento)}
                                             </div>
                                         </div>
                                         <div className="flex flex-col">
                                             <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Fecha de la Visita</label>
                                             <div className="border-b-2 border-gray-300 py-2 text-gray-800">
-                                                {visit.fechaVisita ? (typeof visit.fechaVisita === 'string' ? visit.fechaVisita : new Date(visit.fechaVisita).toISOString().split('T')[0]) : ''}
+                                                {formatearFechaVisual(visit.fechaVisita)}
                                             </div>
                                         </div>
                                     </div>

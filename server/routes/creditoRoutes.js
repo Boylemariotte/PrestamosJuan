@@ -11,6 +11,8 @@ import {
   editarAbono,
   eliminarAbono,
   agregarMulta,
+  editarMulta,
+  eliminarMulta,
   agregarDescuento
 } from '../controllers/creditoController.js';
 import { protect, authorize } from '../middleware/auth.js';
@@ -45,6 +47,10 @@ router.route('/:id/abonos/:abonoId')
 
 router.route('/:id/multas')
   .post(authorize('registrarPagos'), agregarMulta);
+
+router.route('/:id/multas/:multaId')
+  .put(authorize('registrarPagos'), editarMulta)
+  .delete(authorize('registrarPagos'), eliminarMulta);
 
 router.route('/:id/descuentos')
   .post(authorize('registrarPagos'), agregarDescuento);

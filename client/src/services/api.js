@@ -2,7 +2,7 @@
  * Servicio de API para comunicación con el backend
  */
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = 'http://localhost:5000/api';
 
 /**
  * Obtener el token de autenticación desde localStorage
@@ -50,7 +50,13 @@ const request = async (endpoint, options = {}) => {
     }
 
     if (!response.ok) {
-      throw new Error(data.error || data.message || 'Error en la petición');
+      // Si es error 401, limpiar token y redirigir
+      if (response.status === 401) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_user');
+        // No redirigir aquí, dejar que el componente maneje la redirección
+      }
+      throw new Error(data.error || data.message || `Error en la petición (${response.status})`);
     }
 
     return data;
