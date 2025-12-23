@@ -124,6 +124,8 @@ const DiaDeCobro = () => {
 
       cliente.creditos.forEach(credito => {
         if (!credito.cuotas) return;
+        // Excluir créditos que ya fueron renovados de la ruta de cobro
+        if (credito.renovado) return;
 
         const { cuotasActualizadas } = aplicarAbonosAutomaticamente(credito);
         const estadoCredito = determinarEstadoCredito(credito.cuotas, credito);

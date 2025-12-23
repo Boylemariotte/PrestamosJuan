@@ -27,6 +27,10 @@ const ResumenCredito = ({
   onCancelarAbono,
   onMostrarFormularioRenovacion
 }) => {
+  const getEstadoLabel = () => {
+    if (estado === 'renovado') return 'Crédito Renovado';
+    return estado.charAt(0).toUpperCase() + estado.slice(1);
+  };
   // Calcular saldo pendiente
   // IMPORTANTE: credito.totalAPagar ya incluye las multas pendientes (calculado en el backend)
   // El totalAPagar = (valorCuota * numCuotas) + saldoPendienteMultas
@@ -59,7 +63,7 @@ const ResumenCredito = ({
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <span className={`px-3 py-1 rounded-full text-sm font-medium ${colorEstado}`}>
-              {estado.charAt(0).toUpperCase() + estado.slice(1)}
+              {getEstadoLabel()}
             </span>
 
             {/* Etiqueta actual */}

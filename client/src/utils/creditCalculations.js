@@ -240,6 +240,11 @@ export const determinarEstadoCredito = (cuotas, credito = null) => {
   const hoy = startOfDay(new Date());
   const progreso = calcularProgreso(cuotas, credito);
 
+  // Si el crédito fue renovado explícitamente, usar estado especial
+  if (credito && credito.renovado) {
+    return 'renovado';
+  }
+
   // Si todas las cuotas están pagadas
   if (progreso.cuotasPagadas === progreso.totalCuotas) {
     return 'finalizado';
