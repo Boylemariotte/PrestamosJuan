@@ -519,9 +519,14 @@ export const AppProvider = ({ children }) => {
 
   const agregarMovimientoCaja = async (movimientoData) => {
     try {
-      // Normalización
+      // Normalización: solo recalcular montoEntregado si no viene ya calculado correctamente
       if (movimientoData.tipo === 'prestamo' && movimientoData.papeleria !== undefined) {
-        movimientoData.montoEntregado = movimientoData.valor - (movimientoData.papeleria || 0);
+        // Si ya viene montoEntregado calculado (con valorCuotasPendientes), no sobrescribirlo
+        if (movimientoData.montoEntregado === undefined || movimientoData.montoEntregado === null) {
+          // Cálculo retrocompatible: solo restar papelería si no hay valorCuotasPendientes
+          const valorCuotasPendientes = movimientoData.valorCuotasPendientes || 0;
+          movimientoData.montoEntregado = Math.max(0, movimientoData.valor - (movimientoData.papeleria || 0) - valorCuotasPendientes);
+        }
       }
       const response = await api.post('/movimientos-caja', movimientoData);
       if (response.success) {

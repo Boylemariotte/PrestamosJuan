@@ -30,9 +30,6 @@ const Modal = ({ titulo, onClose, children, color = 'blue' }) => (
   </div>
 );
 
-// Montos disponibles para préstamos
-const MONTOS_PRESTAMO = [200000, 300000, 400000, 500000, 1000000];
-
 // Componente de formulario modal unificado
 const ModalForm = ({
   titulo,
@@ -53,6 +50,7 @@ const ModalForm = ({
 }) => {
   const [monto, setMonto] = useState('');
   const [descripcion, setDescripcion] = useState('');
+  const [valorCuotasPendientes, setValorCuotasPendientes] = useState('');
   const [papeleriaManual, setPapeleriaManual] = useState(0);
   const [usarPapeleriaManual, setUsarPapeleriaManual] = useState(false);
 
@@ -62,10 +60,11 @@ const ModalForm = ({
 
     if (!monto || parseFloat(monto) <= 0) return;
 
-    // Si es un préstamo, guardar también la papelería manual si se está usando
+    // Si es un préstamo, guardar también la papelería manual si se está usando y el valor de cuotas pendientes
     if (tipo === 'prestamo') {
       const datosAdicionales = {
-        papeleria: usarPapeleriaManual ? parseFloat(papeleriaManual) : null
+        papeleria: usarPapeleriaManual ? parseFloat(papeleriaManual) : null,
+        valorCuotasPendientes: parseFloat(valorCuotasPendientes) || 0
       };
       onSave(tipo, parseFloat(monto), descripcion, datosAdicionales);
     } else {
@@ -74,6 +73,7 @@ const ModalForm = ({
 
     setMonto('');
     setDescripcion('');
+    setValorCuotasPendientes('');
     setUsarPapeleriaManual(false);
     setPapeleriaManual(0);
     onClose(); // Cerrar el modal después de guardar
@@ -94,12 +94,23 @@ const ModalForm = ({
     }
   };
 
-  const handleMontoPreseleccionado = (montoPreseleccionado, e) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
+  const handleValorCuotasChange = (e) => {
+    const value = e.target.value.replace(/[^0-9.]/g, '');
+    const decimalCount = (value.match(/\./g) || []).length;
+    if (decimalCount <= 1) {
+      setValorCuotasPendientes(value);
     }
-    setMonto(montoPreseleccionado.toString());
+  };
+
+  const handleValorCuotasBlur = () => {
+    const num = parseFloat(valorCuotasPendientes);
+    if (!isNaN(num) && num >= 0) {
+      setValorCuotasPendientes(num.toFixed(2));
+    } else if (valorCuotasPendientes === '') {
+      setValorCuotasPendientes('');
+    } else {
+      setValorCuotasPendientes('0.00');
+    }
   };
 
   const colorClasses = {
@@ -110,35 +121,15 @@ const ModalForm = ({
 
   // Calcular papelería y monto entregado si es préstamo
   const montoNum = parseFloat(monto) || 0;
+  const valorCuotasNum = parseFloat(valorCuotasPendientes) || 0;
   const papeleriaCalculada = montoNum > 0 ? calcularPapeleria(montoNum) : 0;
   const papeleria = usarPapeleriaManual ? (parseFloat(papeleriaManual) || 0) : papeleriaCalculada;
-  const montoEntregado = montoNum > 0 ? (montoNum - (usarPapeleriaManual ? (parseFloat(papeleriaManual) || 0) : calcularPapeleria(montoNum))) : 0;
+  // Monto a entregar = Monto préstamo - Papelería - Valor cuotas pendientes
+  const montoEntregado = montoNum > 0 ? (montoNum - papeleria - valorCuotasNum) : 0;
 
   return (
     <Modal titulo={titulo} onClose={onClose} color={color}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {mostrarMontosPrestamo && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Seleccionar Monto:
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              {MONTOS_PRESTAMO.map((montoPreseleccionado) => (
-                <button
-                  key={montoPreseleccionado}
-                  type="button"
-                  onClick={() => handleMontoPreseleccionado(montoPreseleccionado)}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${parseFloat(monto) === montoPreseleccionado
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                >
-                  {formatearMoneda(montoPreseleccionado)}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             {labelMonto} *
@@ -151,11 +142,56 @@ const ModalForm = ({
             onBlur={handleMontoBlur}
             className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder={placeholderMonto}
-            autoFocus={!mostrarMontosPrestamo}
+            autoFocus
             required
           />
         </div>
-        {mostrarMontosPrestamo && montoNum > 0 && (
+        {tipo === 'prestamo' ? (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Valor total de cuotas pendientes
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={valorCuotasPendientes}
+                onChange={handleValorCuotasChange}
+                onBlur={handleValorCuotasBlur}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Descripción
+              </label>
+              <input
+                type="text"
+                value={descripcion}
+                onChange={(e) => setDescripcion(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Ej: Javier - Préstamo nuevo"
+              />
+            </div>
+          </>
+        ) : (
+          (labelDescripcion || placeholderDescripcion) && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {labelDescripcion || 'Descripción'}
+              </label>
+              <input
+                type="text"
+                value={descripcion}
+                onChange={(e) => setDescripcion(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder={placeholderDescripcion || 'Descripción'}
+              />
+            </div>
+          )
+        )}
+        {tipo === 'prestamo' && montoNum > 0 && (
           <div className="bg-gray-50 p-3 rounded-md space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Monto Préstamo:</span>
@@ -207,24 +243,16 @@ const ModalForm = ({
                 </div>
               )}
             </div>
+            {valorCuotasNum > 0 && (
+              <div className="flex justify-between text-sm border-t border-gray-300 pt-2">
+                <span className="text-gray-600">Valor cuotas pendientes:</span>
+                <span className="font-semibold text-red-600">- {formatearMoneda(valorCuotasNum)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-sm border-t border-gray-300 pt-2">
               <span className="text-gray-700 font-medium">Monto a Entregar:</span>
-              <span className="font-bold text-green-600">{formatearMoneda(montoEntregado)}</span>
+              <span className="font-bold text-green-600">{formatearMoneda(Math.max(0, montoEntregado))}</span>
             </div>
-          </div>
-        )}
-        {(labelDescripcion || placeholderDescripcion) && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {labelDescripcion || 'Descripción'}
-            </label>
-            <input
-              type="text"
-              value={descripcion}
-              onChange={(e) => setDescripcion(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder={placeholderDescripcion || 'Descripción'}
-            />
           </div>
         )}
         <div className={`mt-6 flex ${mostrarBotonCancelar ? 'justify-between' : 'justify-end'} space-x-3`}>
@@ -336,12 +364,17 @@ const CajaSection = ({
     }, 0);
     const totalE = filasMovimientos.reduce((sum, fila) => {
       if (fila.prestamo) {
-        // Calcular monto entregado igual que en la tabla: valor del préstamo menos la papelería efectiva
+        // Usar el montoEntregado guardado si existe, de lo contrario calcularlo
+        if (fila.prestamo.montoEntregado !== undefined && fila.prestamo.montoEntregado !== null) {
+          return sum + fila.prestamo.montoEntregado;
+        }
+        // Cálculo retrocompatible: valor del préstamo menos la papelería efectiva menos cuotas pendientes
         const valorPrestamo = fila.prestamo.valor || 0;
         const papeleria = fila.prestamo.papeleria !== undefined && fila.prestamo.papeleria !== null
           ? fila.prestamo.papeleria
           : calcularPapeleria(valorPrestamo);
-        const montoEntregado = valorPrestamo - papeleria;
+        const valorCuotasPendientes = fila.prestamo.valorCuotasPendientes || 0;
+        const montoEntregado = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
         return sum + montoEntregado;
       }
       return sum;
@@ -371,8 +404,17 @@ const CajaSection = ({
       } else if (mov.tipo === 'gasto') {
         saldoAcumulado -= parseFloat(mov.valor || 0);
       } else if (mov.tipo === 'prestamo') {
-        const montoEntregado = parseFloat(mov.montoEntregado || calcularMontoEntregado(mov.valor || 0));
-        saldoAcumulado -= montoEntregado;
+        // Usar montoEntregado guardado si existe, de lo contrario calcularlo considerando cuotas pendientes
+        let montoEntregado = mov.montoEntregado;
+        if (montoEntregado === undefined || montoEntregado === null) {
+          const valorPrestamo = mov.valor || 0;
+          const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+            ? mov.papeleria
+            : calcularPapeleria(valorPrestamo);
+          const valorCuotasPendientes = mov.valorCuotasPendientes || 0;
+          montoEntregado = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
+        }
+        saldoAcumulado -= parseFloat(montoEntregado || 0);
       } else if (mov.tipo === 'retiroPapeleria') {
         saldoAcumulado -= parseFloat(mov.valor || 0);
       }
@@ -488,10 +530,18 @@ const CajaSection = ({
                     : calcularPapeleria(prestamo.valor || 0))
                   : 0;
 
-                // Calcular el monto entregado basado en la papelería usada
-                const montoEntregado = prestamo
-                  ? (prestamo.valor || 0) - papeleria
-                  : 0;
+                // Calcular el monto entregado: usar el guardado si existe, de lo contrario calcularlo
+                let montoEntregado = 0;
+                if (prestamo) {
+                  if (prestamo.montoEntregado !== undefined && prestamo.montoEntregado !== null) {
+                    montoEntregado = prestamo.montoEntregado;
+                  } else {
+                    // Cálculo retrocompatible
+                    const valorPrestamo = prestamo.valor || 0;
+                    const valorCuotasPendientes = prestamo.valorCuotasPendientes || 0;
+                    montoEntregado = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
+                  }
+                }
 
                 return (
                   <tr
@@ -760,7 +810,16 @@ const FlujoCajas = () => {
         } else if (mov.tipo === 'gasto') {
           datos.caja1.saldoAnterior -= parseFloat(mov.valor || 0);
         } else if (mov.tipo === 'prestamo') {
-          const montoEntregado = mov.montoEntregado ?? calcularMontoEntregado(mov.valor || 0);
+          // Usar montoEntregado guardado si existe, de lo contrario calcularlo considerando cuotas pendientes
+          let montoEntregado = mov.montoEntregado;
+          if (montoEntregado === undefined || montoEntregado === null) {
+            const valorPrestamo = mov.valor || 0;
+            const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+              ? mov.papeleria
+              : calcularPapeleria(valorPrestamo);
+            const valorCuotasPendientes = mov.valorCuotasPendientes || 0;
+            montoEntregado = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
+          }
           datos.caja1.saldoAnterior -= parseFloat(montoEntregado || 0);
         }
       } else if (mov.caja == 2) {
@@ -769,7 +828,16 @@ const FlujoCajas = () => {
         } else if (mov.tipo === 'gasto') {
           datos.caja2.saldoAnterior -= parseFloat(mov.valor || 0);
         } else if (mov.tipo === 'prestamo') {
-          const montoEntregado = mov.montoEntregado ?? calcularMontoEntregado(mov.valor || 0);
+          // Usar montoEntregado guardado si existe, de lo contrario calcularlo considerando cuotas pendientes
+          let montoEntregado = mov.montoEntregado;
+          if (montoEntregado === undefined || montoEntregado === null) {
+            const valorPrestamo = mov.valor || 0;
+            const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+              ? mov.papeleria
+              : calcularPapeleria(valorPrestamo);
+            const valorCuotasPendientes = mov.valorCuotasPendientes || 0;
+            montoEntregado = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
+          }
           datos.caja2.saldoAnterior -= parseFloat(montoEntregado || 0);
         }
       }
@@ -823,11 +891,21 @@ const FlujoCajas = () => {
     // Restar gastos y préstamos del día
     movimientosFecha.forEach(mov => {
       if (mov.tipo === 'gasto' || mov.tipo === 'prestamo') {
-        const montoEntregado = mov.tipo === 'prestamo'
-          ? mov.montoEntregado ?? calcularMontoEntregado(mov.valor || 0)
-          : mov.valor;
-        if (mov.caja == 1) datos.caja1.saldoAcumulado -= parseFloat(montoEntregado || 0);
-        if (mov.caja == 2) datos.caja2.saldoAcumulado -= parseFloat(montoEntregado || 0);
+        let montoARestar = mov.valor;
+        if (mov.tipo === 'prestamo') {
+          // Usar montoEntregado guardado si existe, de lo contrario calcularlo considerando cuotas pendientes
+          montoARestar = mov.montoEntregado;
+          if (montoARestar === undefined || montoARestar === null) {
+            const valorPrestamo = mov.valor || 0;
+            const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+              ? mov.papeleria
+              : calcularPapeleria(valorPrestamo);
+            const valorCuotasPendientes = mov.valorCuotasPendientes || 0;
+            montoARestar = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
+          }
+        }
+        if (mov.caja == 1) datos.caja1.saldoAcumulado -= parseFloat(montoARestar || 0);
+        if (mov.caja == 2) datos.caja2.saldoAcumulado -= parseFloat(montoARestar || 0);
       }
     });
 
@@ -905,14 +983,18 @@ const FlujoCajas = () => {
 
     // Calcular papelería automáticamente para préstamos (5,000 por cada 100,000)
     let papeleria = 0;
+    let valorCuotasPendientes = 0;
     if (esPrestamo) {
       // Si se proporciona un valor manual, usarlo, de lo contrario calcularlo
       papeleria = datosAdicionales.papeleria !== undefined && datosAdicionales.papeleria !== null
         ? parseFloat(datosAdicionales.papeleria)
         : calcularPapeleria(monto);
+      // Obtener el valor de cuotas pendientes si existe
+      valorCuotasPendientes = datosAdicionales.valorCuotasPendientes || 0;
     }
 
-    const montoEntregado = esPrestamo ? (monto - papeleria) : 0;
+    // Monto a entregar = Monto préstamo - Papelería - Valor cuotas pendientes
+    const montoEntregado = esPrestamo ? Math.max(0, monto - papeleria - valorCuotasPendientes) : 0;
 
     const movimientoData = {
       tipo: esRetiroPapeleria ? 'retiroPapeleria' : (tipo === 'inicioCaja' ? 'inicioCaja' : tipo),
@@ -937,6 +1019,7 @@ const FlujoCajas = () => {
             : 'Préstamo',
       ...(esPrestamo ? {
         papeleria: papeleria,
+        valorCuotasPendientes: valorCuotasPendientes,
         montoEntregado: montoEntregado
       } : {})
     };
@@ -1138,14 +1221,11 @@ const FlujoCajas = () => {
         <ModalForm
           titulo={`Nuevo Préstamo/RF - Caja ${cajaSeleccionada}`}
           labelMonto="Monto del Préstamo/Renovación"
-          placeholderMonto="200000, 300000, 400000, 500000 o 1000000"
-          labelDescripcion="Cliente/Descripción"
-          placeholderDescripcion="Ej: Javier - Préstamo nuevo"
+          placeholderMonto="Ingrese el monto del préstamo"
           onClose={handleCerrarModal}
           onSave={handleGuardar}
           tipo="prestamo"
           color="green"
-          mostrarMontosPrestamo={true}
         />
       )}
 
