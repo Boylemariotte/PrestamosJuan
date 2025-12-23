@@ -415,6 +415,11 @@ const CajaSection = ({
           montoEntregado = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
         }
         saldoAcumulado -= parseFloat(montoEntregado || 0);
+        // Restar también la papelería del saldo final total
+        const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+          ? mov.papeleria
+          : calcularPapeleria(mov.valor || 0);
+        saldoAcumulado -= parseFloat(papeleria || 0);
       } else if (mov.tipo === 'retiroPapeleria') {
         saldoAcumulado -= parseFloat(mov.valor || 0);
       }
@@ -821,6 +826,11 @@ const FlujoCajas = () => {
             montoEntregado = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
           }
           datos.caja1.saldoAnterior -= parseFloat(montoEntregado || 0);
+          // Restar también la papelería del saldo anterior
+          const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+            ? mov.papeleria
+            : calcularPapeleria(mov.valor || 0);
+          datos.caja1.saldoAnterior -= parseFloat(papeleria || 0);
         }
       } else if (mov.caja == 2) {
         if (mov.tipo === 'inicioCaja') {
@@ -839,6 +849,11 @@ const FlujoCajas = () => {
             montoEntregado = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
           }
           datos.caja2.saldoAnterior -= parseFloat(montoEntregado || 0);
+          // Restar también la papelería del saldo anterior
+          const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+            ? mov.papeleria
+            : calcularPapeleria(mov.valor || 0);
+          datos.caja2.saldoAnterior -= parseFloat(papeleria || 0);
         }
       }
     });
@@ -890,22 +905,29 @@ const FlujoCajas = () => {
 
     // Restar gastos y préstamos del día
     movimientosFecha.forEach(mov => {
-      if (mov.tipo === 'gasto' || mov.tipo === 'prestamo') {
-        let montoARestar = mov.valor;
-        if (mov.tipo === 'prestamo') {
-          // Usar montoEntregado guardado si existe, de lo contrario calcularlo considerando cuotas pendientes
-          montoARestar = mov.montoEntregado;
-          if (montoARestar === undefined || montoARestar === null) {
-            const valorPrestamo = mov.valor || 0;
-            const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
-              ? mov.papeleria
-              : calcularPapeleria(valorPrestamo);
-            const valorCuotasPendientes = mov.valorCuotasPendientes || 0;
-            montoARestar = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
-          }
+      if (mov.tipo === 'gasto') {
+        if (mov.caja == 1) datos.caja1.saldoAcumulado -= parseFloat(mov.valor || 0);
+        if (mov.caja == 2) datos.caja2.saldoAcumulado -= parseFloat(mov.valor || 0);
+      } else if (mov.tipo === 'prestamo') {
+        // Restar el monto entregado del préstamo
+        let montoARestar = mov.montoEntregado;
+        if (montoARestar === undefined || montoARestar === null) {
+          const valorPrestamo = mov.valor || 0;
+          const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+            ? mov.papeleria
+            : calcularPapeleria(valorPrestamo);
+          const valorCuotasPendientes = mov.valorCuotasPendientes || 0;
+          montoARestar = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
         }
         if (mov.caja == 1) datos.caja1.saldoAcumulado -= parseFloat(montoARestar || 0);
         if (mov.caja == 2) datos.caja2.saldoAcumulado -= parseFloat(montoARestar || 0);
+        
+        // Restar también la papelería del saldo final
+        const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+          ? mov.papeleria
+          : calcularPapeleria(mov.valor || 0);
+        if (mov.caja == 1) datos.caja1.saldoAcumulado -= parseFloat(papeleria || 0);
+        if (mov.caja == 2) datos.caja2.saldoAcumulado -= parseFloat(papeleria || 0);
       }
     });
 
