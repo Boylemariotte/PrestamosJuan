@@ -20,23 +20,14 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
 
   // Calcular deuda pendiente del crédito anterior
   const cuotasPendientes = creditoAnterior.cuotas.filter(c => !c.pagado);
-  
-  // Calcular valor de cuotas pendientes (valor de cuota + multas de cada cuota)
-  const valorCuotasPendientes = cuotasPendientes.reduce((sum, cuota) => {
-    const multasCuota = (cuota.multas?.reduce((s, m) => s + m.valor, 0) || 0);
-    return sum + creditoAnterior.valorCuota + multasCuota;
+
+  // Deuda pendiente: solo el valor de las cuotas no pagadas
+  // (por ejemplo: 1 cuota pendiente de 45.000 => deudaPendiente = 45.000)
+  const valorCuotasPendientes = cuotasPendientes.reduce((sum) => {
+    return sum + creditoAnterior.valorCuota;
   }, 0);
-  
-  // Calcular total de multas del crédito
-  const totalMultas = creditoAnterior.cuotas.reduce((sum, cuota) => {
-    return sum + (cuota.multas?.reduce((s, m) => s + m.valor, 0) || 0);
-  }, 0);
-  
-  const totalAbonos = (creditoAnterior.abonos || []).reduce((sum, abono) => sum + abono.valor, 0);
-  const totalDescuentos = (creditoAnterior.descuentos || []).reduce((sum, desc) => sum + desc.valor, 0);
-  
-  // Deuda pendiente = valor de cuotas pendientes - abonos aplicados
-  const deudaPendiente = valorCuotasPendientes - totalAbonos;
+
+  const deudaPendiente = valorCuotasPendientes;
 
   // Cálculos del nuevo crédito
   const papeleria = calcularPapeleria(formData.monto);
@@ -104,14 +95,6 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
                   {formatearMoneda(valorCuotasPendientes)}
                 </span>
               </div>
-              {totalAbonos > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-orange-700">- Abonos aplicados:</span>
-                  <span className="font-semibold text-green-700">
-                    - {formatearMoneda(totalAbonos)}
-                  </span>
-                </div>
-              )}
               <div className="flex justify-between pt-2 border-t border-orange-300">
                 <span className="text-orange-800 font-bold">Deuda total:</span>
                 <span className="font-bold text-orange-900 text-lg">

@@ -281,6 +281,29 @@ export const AppProvider = ({ children }) => {
         creditoAnteriorId
       });
 
+      // 2.1 Registrar movimiento de caja considerando deuda pendiente del crédito anterior
+      // Usamos deudaPendiente calculada en el formulario de renovación para descontarla
+      // junto con la papelería al determinar el monto efectivamente entregado.
+      try {
+        const deudaPendiente = nuevoCreditoData.deudaPendiente || 0;
+        const valor = nuevoCreditoData.monto;
+        const papeleria = calcularPapeleria(valor);
+
+        await agregarMovimientoCaja({
+          tipo: 'prestamo',
+          valor,
+          papeleria,
+          valorCuotasPendientes: deudaPendiente,
+          clienteId,
+          creditoId: nuevoCredito?.id || nuevoCredito?._id,
+          fecha: obtenerFechaHoraLocal(),
+          descripcion: 'Renovación de crédito'
+        });
+      } catch (err) {
+        console.error('Error registrando movimiento de caja para renovación:', err);
+        // No interrumpir el flujo principal de renovación por un problema de caja
+      }
+
       // 3. Actualizar referencia en el viejo (opcional pero bueno para trazar)
       if (nuevoCredito && nuevoCredito.id) {
         await api.put(`/creditos/${creditoAnteriorId}`, {
