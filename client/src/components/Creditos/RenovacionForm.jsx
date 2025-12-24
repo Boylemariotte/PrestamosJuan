@@ -21,10 +21,13 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
   // Calcular deuda pendiente del crédito anterior
   const cuotasPendientes = creditoAnterior.cuotas.filter(c => !c.pagado);
 
-  // Deuda pendiente: solo el valor de las cuotas no pagadas
-  // (por ejemplo: 1 cuota pendiente de 45.000 => deudaPendiente = 45.000)
-  const valorCuotasPendientes = cuotasPendientes.reduce((sum) => {
-    return sum + creditoAnterior.valorCuota;
+  // Deuda pendiente: saldo real de cada cuota no pagada, considerando abonos parciales
+  // Ejemplo: valorCuota = 120, abonoAplicado = 100 => saldo cuota = 20
+  const valorCuotasPendientes = creditoAnterior.cuotas.reduce((sum, cuota) => {
+    if (cuota.pagado) return sum;
+    const abonoAplicado = cuota.abonoAplicado || 0;
+    const saldoCuota = Math.max(0, creditoAnterior.valorCuota - abonoAplicado);
+    return sum + saldoCuota;
   }, 0);
 
   const deudaPendiente = valorCuotasPendientes;

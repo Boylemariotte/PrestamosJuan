@@ -1006,7 +1006,9 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
       {/* Modal de Renovación */}
       {mostrarFormularioRenovacion && (
         <RenovacionForm
-          creditoAnterior={credito}
+          // Pasamos el crédito con cuotasActualizadas para que la deuda pendiente
+          // se calcule usando los abonos aplicados (abonoAplicado) por cuota
+          creditoAnterior={{ ...credito, cuotas: cuotasActualizadas }}
           onSubmit={handleRenovar}
           onClose={() => setMostrarFormularioRenovacion(false)}
         />
