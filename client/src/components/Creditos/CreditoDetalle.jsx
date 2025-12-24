@@ -55,14 +55,26 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
         }
       } catch (error) {
         console.error('Error cargando crédito del backend:', error);
+        // Si el crédito no existe (404 o mensaje de error), cerrar el modal automáticamente
+        const errorMessage = error.message || '';
+        if (errorMessage.includes('no encontrado') || errorMessage.includes('404') || errorMessage.includes('Crédito no encontrado')) {
+          if (onClose) {
+            onClose();
+          }
+        }
       } finally {
         setCargandoCredito(false);
       }
     };
     
     // Siempre cargar del backend para asegurar que tenga todos los datos actualizados (incluyendo multas)
-    cargarCreditoDelBackend();
-  }, [creditoInicial.id]);
+    if (creditoInicial && creditoInicial.id) {
+      cargarCreditoDelBackend();
+    } else if (onClose) {
+      // Si no hay ID válido, cerrar el modal
+      onClose();
+    }
+  }, [creditoInicial?.id, onClose]);
 
   // Si el crédito desaparece del contexto (p. ej. fue eliminado), cerrar el modal automáticamente
   useEffect(() => {

@@ -1,13 +1,14 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { Calendar, Users, ChevronLeft, ChevronRight, CheckCircle, Clock, MapPin, ChevronDown, ChevronUp, Phone } from 'lucide-react';
+import { Calendar, Users, ChevronLeft, ChevronRight, CheckCircle, Clock, MapPin, ChevronDown, ChevronUp, Phone, Search } from 'lucide-react';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { format, parseISO, startOfDay, addDays, subDays, isBefore } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatearMoneda, calcularTotalMultasCuota, aplicarAbonosAutomaticamente, determinarEstadoCredito, formatearFechaCorta } from '../utils/creditCalculations';
 import CreditoDetalle from '../components/Creditos/CreditoDetalle';
+import api from '../services/api';
 
 const DiaDeCobro = () => {
   const navigate = useNavigate();
@@ -21,9 +22,16 @@ const DiaDeCobro = () => {
   // Estado para visitas
   const [visitas, setVisitas] = useState([]);
 
+  // Estado para búsqueda
+  const [searchTerm, setSearchTerm] = useState('');
+
   // Estado para orden de cobro por fecha y cliente
   // Estructura: { [fechaStr]: { [clienteId]: numeroOrden } }
   const [ordenCobro, setOrdenCobro] = useState({});
+
+  // Estado para rastrear créditos inválidos (que no existen en el backend)
+  // Estructura: Set de strings con formato "clienteId-creditoId"
+  const [creditosInvalidos, setCreditosInvalidos] = useState(new Set());
 
   // Cargar visitas y orden de cobro desde localStorage
   useEffect(() => {
@@ -123,9 +131,20 @@ const DiaDeCobro = () => {
       if (!cliente.creditos || cliente.creditos.length === 0) return;
 
       cliente.creditos.forEach(credito => {
-        if (!credito.cuotas) return;
+        // Validar que el crédito tenga un ID válido y estructura completa
+        if (!credito || !credito.id) return;
+        // Validar que tenga las propiedades esenciales
+        if (!credito.cuotas || !Array.isArray(credito.cuotas) || credito.cuotas.length === 0) return;
+        if (!credito.monto || !credito.valorCuota || !credito.tipo) return;
         // Excluir créditos que ya fueron renovados de la ruta de cobro
         if (credito.renovado) return;
+        // Validar que el ID no sea un formato inválido o corrupto
+        // Los IDs válidos suelen ser ObjectIds de MongoDB o IDs generados por el sistema
+        // Si el ID parece ser un timestamp sin formato correcto, podría ser inválido
+        if (typeof credito.id !== 'string' || credito.id.trim() === '') return;
+        // Excluir créditos que han sido marcados como inválidos (no existen en el backend)
+        const creditoKey = `${cliente.id}-${credito.id}`;
+        if (creditosInvalidos.has(creditoKey)) return;
 
         const { cuotasActualizadas } = aplicarAbonosAutomaticamente(credito);
         const estadoCredito = determinarEstadoCredito(credito.cuotas, credito);
@@ -251,6 +270,8 @@ const DiaDeCobro = () => {
           clienteTelefono: cliente.telefono,
           clienteDireccion: cliente.direccion,
           clienteBarrio: cliente.barrio,
+          clienteCartera: cliente.cartera || 'K1',
+          clientePosicion: cliente.posicion,
           creditoId: credito.id,
           creditoMonto: credito.monto,
           creditoTipo: credito.tipo,
@@ -280,7 +301,7 @@ const DiaDeCobro = () => {
     }, {});
 
     return { porBarrio: barriosOrdenados, stats };
-  }, [clientes, fechaSeleccionadaStr]);
+  }, [clientes, fechaSeleccionadaStr, creditosInvalidos]);
 
   // Construir lista plana de cobros del día (sin agrupar por barrio)
   const listaCobrosDia = useMemo(() => {
@@ -300,8 +321,32 @@ const DiaDeCobro = () => {
       return (a.clienteNombre || '').localeCompare(b.clienteNombre || '');
     });
 
+    // Filtrar por término de búsqueda si existe
+    if (searchTerm.trim()) {
+      const termino = searchTerm.toLowerCase().trim();
+      return items.filter(item => {
+        // Buscar en ref. crédito (posición del cliente)
+        const refCredito = item.clientePosicion ? `#${item.clientePosicion}` : '';
+        if (refCredito.toLowerCase().includes(termino)) return true;
+        
+        // Buscar en nombre del cliente
+        if (item.clienteNombre?.toLowerCase().includes(termino)) return true;
+        
+        // Buscar en CC (documento)
+        if (item.clienteDocumento?.includes(termino)) return true;
+        
+        // Buscar en teléfono
+        if (item.clienteTelefono?.includes(termino)) return true;
+        
+        // Buscar en barrio
+        if (item.clienteBarrio?.toLowerCase().includes(termino)) return true;
+        
+        return false;
+      });
+    }
+
     return items;
-  }, [datosCobro, ordenCobro, fechaSeleccionadaStr]);
+  }, [datosCobro, ordenCobro, fechaSeleccionadaStr, searchTerm]);
 
   // Funciones de navegación de fecha
   const irAyer = () => setFechaSeleccionada(subDays(fechaSeleccionada, 1));
@@ -316,12 +361,31 @@ const DiaDeCobro = () => {
   const [creditoSeleccionado, setCreditoSeleccionado] = useState(null);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
 
-  const abrirDetalle = (clienteId, creditoId) => {
+  const abrirDetalle = async (clienteId, creditoId) => {
     const cliente = obtenerCliente(clienteId);
     const credito = obtenerCredito(clienteId, creditoId);
     if (cliente && credito) {
-      setClienteSeleccionado(cliente);
-      setCreditoSeleccionado(credito);
+      // Verificar que el crédito existe en el backend antes de abrirlo
+      try {
+        const response = await api.get(`/creditos/${creditoId}`);
+        if (response.success && response.data) {
+          setClienteSeleccionado(cliente);
+          setCreditoSeleccionado(credito);
+        } else {
+          // Si no existe, marcarlo como inválido
+          const creditoKey = `${clienteId}-${creditoId}`;
+          setCreditosInvalidos(prev => new Set([...prev, creditoKey]));
+          toast.error('Este crédito ya no existe en el sistema');
+        }
+      } catch (error) {
+        // Si hay un error (especialmente 404), marcar el crédito como inválido
+        const errorMessage = error.message || '';
+        if (errorMessage.includes('no encontrado') || errorMessage.includes('404') || errorMessage.includes('Crédito no encontrado')) {
+          const creditoKey = `${clienteId}-${creditoId}`;
+          setCreditosInvalidos(prev => new Set([...prev, creditoKey]));
+          toast.error('Este crédito ya no existe en el sistema');
+        }
+      }
     }
   };
 
@@ -349,8 +413,13 @@ const DiaDeCobro = () => {
             const numeroLista = index + 1;
             const valorOrden = ordenFecha[item.clienteId] || numeroLista;
 
+            // Determinar clase de color según la cartera del cliente
+            const carteraRowClass = item.clienteCartera === 'K2' 
+              ? 'bg-green-100 hover:bg-green-200 border-b' 
+              : 'bg-blue-100 hover:bg-blue-200 border-b';
+
             return (
-              <tr key={`${item.clienteId}-${item.creditoId}-${index}`} className="bg-white border-b hover:bg-gray-50">
+              <tr key={`${item.clienteId}-${item.creditoId}-${index}`} className={carteraRowClass}>
                 <td className="px-2 py-4 font-bold text-gray-900 text-center text-base">
                   {numeroLista}
                 </td>
@@ -365,7 +434,7 @@ const DiaDeCobro = () => {
                   />
                 </td>
                 <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
-                  #{item.creditoId}
+                  {item.clientePosicion ? `#${item.clientePosicion}` : `#${item.creditoId}`}
                 </td>
                 <td className="px-4 py-4">
                   <div className="flex flex-col">
@@ -518,6 +587,20 @@ const DiaDeCobro = () => {
           </div>
         </div>
       )}
+
+      {/* Barra de búsqueda */}
+      <div className="mb-6">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Buscar por ref. crédito, nombre, CC, teléfono o barrio..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+      </div>
 
       {/* Lista única de clientes del día con numeración */}
       <div className="space-y-4">
