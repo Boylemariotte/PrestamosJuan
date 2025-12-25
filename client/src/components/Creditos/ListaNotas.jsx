@@ -2,7 +2,7 @@ import React from 'react';
 import { StickyNote, Trash2 } from 'lucide-react';
 import { formatearFecha } from '../../utils/creditCalculations';
 
-const ListaNotas = ({ notas, nuevaNota, onNotaChange, onAgregarNota, onEliminarNota }) => {
+const ListaNotas = ({ notas, nuevaNota, onNotaChange, onAgregarNota, onEliminarNota, soloLectura = false }) => {
   return (
     <div className="border-t pt-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -10,24 +10,26 @@ const ListaNotas = ({ notas, nuevaNota, onNotaChange, onAgregarNota, onEliminarN
         Notas y Comentarios
       </h3>
 
-      <form onSubmit={onAgregarNota} className="mb-4">
-        <div className="flex space-x-2">
-          <input
-            type="text"
-            value={nuevaNota}
-            onChange={(e) => onNotaChange(e.target.value)}
-            placeholder="Agregar una nota..."
-            className="input-field flex-1"
-          />
-          <button
-            type="submit"
-            className="btn-primary"
-            disabled={!nuevaNota.trim()}
-          >
-            Agregar
-          </button>
-        </div>
-      </form>
+      {!soloLectura && onAgregarNota && (
+        <form onSubmit={onAgregarNota} className="mb-4">
+          <div className="flex space-x-2">
+            <input
+              type="text"
+              value={nuevaNota}
+              onChange={(e) => onNotaChange && onNotaChange(e.target.value)}
+              placeholder="Agregar una nota..."
+              className="input-field flex-1"
+            />
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={!nuevaNota.trim()}
+            >
+              Agregar
+            </button>
+          </div>
+        </form>
+      )}
 
       <div className="space-y-3 max-h-64 overflow-y-auto">
         {notas && notas.length > 0 ? (
@@ -43,12 +45,14 @@ const ListaNotas = ({ notas, nuevaNota, onNotaChange, onAgregarNota, onEliminarN
                     {formatearFecha(nota.fecha.split('T')[0])}
                   </p>
                 </div>
-                <button
-                  onClick={() => onEliminarNota(nota.id)}
-                  className="text-red-500 hover:text-red-700 ml-2"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                {!soloLectura && onEliminarNota && (
+                  <button
+                    onClick={() => onEliminarNota(nota.id)}
+                    className="text-red-500 hover:text-red-700 ml-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
           ))

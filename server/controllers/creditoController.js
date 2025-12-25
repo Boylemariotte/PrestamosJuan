@@ -190,7 +190,6 @@ const syncCreditoToCliente = async (creditoId) => {
         fechaCreacion: credito.fechaCreacion
       };
       await cliente.save();
-      console.log(`Sincronización exitosa para crédito ${creditoId} en cliente ${cliente._id}`);
     } else {
       console.warn(`No se encontró crédito ${creditoId} embebido en cliente ${cliente._id} para sincronizar.`);
     }

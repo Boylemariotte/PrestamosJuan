@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Users, TrendingUp, CheckCircle, BarChart3, Settings, LogOut, User, Calendar, ChevronDown, Wallet, Route, ClipboardList, UserPlus } from 'lucide-react'; // Added UserPlus
+import { Users, TrendingUp, CheckCircle, BarChart3, Settings, LogOut, User, Calendar, ChevronDown, Wallet, Route, ClipboardList, UserPlus, Archive } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
 
@@ -38,12 +38,12 @@ const Navbar = () => {
 
   const navItems = [
     { path: '/', label: 'Clientes', icon: Users },
+    { path: '/archivados', label: 'Archivados', icon: Archive },
     { path: '/dia-de-cobro', label: 'Día de Cobro', icon: Calendar },
     { path: '/caja', label: 'Caja', icon: Wallet },
     { path: '/visitas', label: 'Visitas', icon: ClipboardList },
     { path: '/papeleria', label: 'Papelería', icon: ClipboardList },
     { path: '/creditos-activos', label: 'Créditos Activos', icon: TrendingUp },
-    { path: '/creditos-finalizados', label: 'Finalizados', icon: CheckCircle },
     { path: '/usuarios', label: 'Gestión de usuarios', icon: UserPlus }, // New Item
     { path: '/estadisticas', label: 'Estadísticas', icon: BarChart3 },
     { path: '/configuracion', label: 'Configuración', icon: Settings },

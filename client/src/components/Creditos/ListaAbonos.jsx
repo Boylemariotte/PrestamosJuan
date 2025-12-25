@@ -2,7 +2,7 @@ import React from 'react';
 import { DollarSign, Trash2, Edit2 } from 'lucide-react';
 import { formatearMoneda, formatearFechaCorta } from '../../utils/creditCalculations';
 
-const ListaAbonos = ({ abonos, credito, cuotas, onEliminarAbono, onEditarAbono }) => {
+const ListaAbonos = ({ abonos, credito, cuotas, onEliminarAbono, onEditarAbono, soloLectura = false }) => {
   if (!abonos || abonos.length === 0) {
     return null;
   }
@@ -97,24 +97,28 @@ const ListaAbonos = ({ abonos, credito, cuotas, onEliminarAbono, onEditarAbono }
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                {onEditarAbono && (
-                  <button
-                    onClick={() => onEditarAbono(abono)}
-                    className="text-blue-500 hover:text-blue-700 p-1"
-                    title="Editar abono"
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </button>
-                )}
-                <button
-                  onClick={() => onEliminarAbono(abono.id)}
-                  className="text-red-500 hover:text-red-700 p-1"
-                  title="Eliminar abono"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
+              {!soloLectura && (
+                <div className="flex items-center gap-2">
+                  {onEditarAbono && (
+                    <button
+                      onClick={() => onEditarAbono(abono)}
+                      className="text-blue-500 hover:text-blue-700 p-1"
+                      title="Editar abono"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                  )}
+                  {onEliminarAbono && (
+                    <button
+                      onClick={() => onEliminarAbono(abono.id)}
+                      className="text-red-500 hover:text-red-700 p-1"
+                      title="Eliminar abono"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}

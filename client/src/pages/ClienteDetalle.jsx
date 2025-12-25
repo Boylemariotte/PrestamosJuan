@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Plus, User, Phone, MapPin, Mail, UserCheck, Loader2 } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Plus, User, Phone, MapPin, Mail, UserCheck, Loader2, Archive, Award, Check, Calendar, AlertCircle, Ban } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import ClienteForm from '../components/Clientes/ClienteForm';
 import CreditoCard from '../components/Creditos/CreditoCard';
@@ -11,10 +11,10 @@ import ActualizarUbicacion from '../components/Clientes/ActualizarUbicacion';
 import { determinarEstadoCredito } from '../utils/creditCalculations';
 import api from '../services/api';
 
-const ClienteDetalle = () => {
+const ClienteDetalle = ({ soloLectura = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { obtenerCliente, actualizarCliente, eliminarCliente, agregarCredito, actualizarCoordenadasGPS, loading, clientes } = useApp();
+  const { obtenerCliente, actualizarCliente, eliminarCliente, archivarCliente, agregarCredito, actualizarCoordenadasGPS, asignarEtiquetaCliente, loading, clientes } = useApp();
 
   const [showEditForm, setShowEditForm] = useState(false);
   const [showCreditoForm, setShowCreditoForm] = useState(false);
@@ -22,6 +22,41 @@ const ClienteDetalle = () => {
   const [clienteLocal, setClienteLocal] = useState(null);
   const [cargandoCliente, setCargandoCliente] = useState(true);
   const [clienteNoEncontrado, setClienteNoEncontrado] = useState(false);
+  const [mostrarSelectorEtiqueta, setMostrarSelectorEtiqueta] = useState(false);
+
+  // Definición de etiquetas
+  const ETIQUETAS = {
+    excelente: {
+      nombre: 'Excelente',
+      color: 'bg-green-100 text-green-800 border-green-300',
+      icono: Award
+    },
+    bueno: {
+      nombre: 'Bueno',
+      color: 'bg-blue-100 text-blue-800 border-blue-300',
+      icono: Check
+    },
+    atrasado: {
+      nombre: 'Atrasado',
+      color: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+      icono: Calendar
+    },
+    incompleto: {
+      nombre: 'Incompleto',
+      color: 'bg-red-100 text-red-800 border-red-300',
+      icono: AlertCircle
+    },
+    vetado: {
+      nombre: 'Vetado',
+      color: 'bg-gray-800 text-white border-gray-900',
+      icono: Ban
+    },
+    'sin-etiqueta': {
+      nombre: 'Sin etiqueta',
+      color: 'bg-gray-100 text-gray-800 border-gray-300',
+      icono: null
+    }
+  };
 
   // Intentar obtener el cliente del contexto primero
   const clienteDelContexto = obtenerCliente(id);
@@ -86,6 +121,7 @@ const ClienteDetalle = () => {
     return null;
   }, [cliente]);
 
+
   // Handlers - deben estar antes de los returns condicionales
   const handleActualizarCliente = (clienteData) => {
     actualizarCliente(id, clienteData);
@@ -99,12 +135,32 @@ const ClienteDetalle = () => {
     }
   };
 
+  const handleArchivarCliente = async () => {
+    if (confirm('¿Estás seguro de archivar este cliente? Se liberará su posición pero se mantendrá toda su información.')) {
+      try {
+        await archivarCliente(id);
+        navigate('/');
+      } catch (error) {
+        alert(error.response?.data?.error || 'No se pudo archivar el cliente.');
+      }
+    }
+  };
+
   const handleAgregarCredito = async (creditoData) => {
     try {
       await agregarCredito(id, creditoData);
       setShowCreditoForm(false);
     } catch (e) {
       alert(e.message || 'No fue posible crear el crédito.');
+    }
+  };
+
+  const handleAsignarEtiqueta = async (etiqueta) => {
+    try {
+      await asignarEtiquetaCliente(id, etiqueta);
+      setMostrarSelectorEtiqueta(false);
+    } catch (error) {
+      alert('No se pudo asignar la etiqueta al cliente.');
     }
   };
 
@@ -137,11 +193,11 @@ const ClienteDetalle = () => {
       {/* Header */}
       <div className="mb-8">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate(soloLectura ? '/archivados' : '/')}
           className="flex items-center text-gray-600 hover:text-gray-900 mb-4"
         >
           <ArrowLeft className="h-5 w-5 mr-2" />
-          Volver a Clientes
+          Volver {soloLectura ? 'a Archivados' : 'a Clientes'}
         </button>
 
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
@@ -150,27 +206,58 @@ const ClienteDetalle = () => {
               <User className="h-8 w-8 text-sky-600" />
             </div>
             <div className="ml-4">
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 break-all">{cliente.nombre}</h1>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 break-all">{cliente.nombre}</h1>
+                {/* Etiqueta del cliente */}
+                {cliente.etiqueta && ETIQUETAS[cliente.etiqueta] && (
+                  <span className={`px-3 py-1 rounded-lg text-sm font-medium border-2 flex items-center gap-1 ${ETIQUETAS[cliente.etiqueta].color}`}>
+                    {ETIQUETAS[cliente.etiqueta].icono && React.createElement(ETIQUETAS[cliente.etiqueta].icono, { className: 'h-4 w-4' })}
+                    {ETIQUETAS[cliente.etiqueta].nombre}
+                  </span>
+                )}
+                {/* Botón para asignar etiqueta (solo si no está en modo solo lectura) */}
+                {!soloLectura && (
+                  <button
+                    onClick={() => setMostrarSelectorEtiqueta(true)}
+                    className="px-3 py-1 rounded-lg text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 border-2 border-gray-300 flex items-center gap-1 transition-colors"
+                    title="Asignar etiqueta"
+                  >
+                    <Award className="h-4 w-4" />
+                    {cliente.etiqueta && cliente.etiqueta !== 'sin-etiqueta' ? 'Cambiar' : 'Etiquetar'}
+                  </button>
+                )}
+              </div>
               <p className="text-gray-600">CC: {cliente.documento}</p>
             </div>
           </div>
 
-          <div className="flex space-x-3 w-full md:w-auto justify-end">
-            <button
-              onClick={() => setShowEditForm(true)}
-              className="btn-secondary flex items-center justify-center flex-1 md:flex-none"
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Editar
-            </button>
-            <button
-              onClick={handleEliminarCliente}
-              className="btn-danger flex items-center justify-center flex-1 md:flex-none"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Eliminar
-            </button>
-          </div>
+          {!soloLectura && (
+            <div className="flex space-x-3 w-full md:w-auto justify-end">
+              <button
+                onClick={() => setShowEditForm(true)}
+                className="btn-secondary flex items-center justify-center flex-1 md:flex-none"
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Editar
+              </button>
+              {!cliente.esArchivado && (
+                <button
+                  onClick={handleArchivarCliente}
+                  className="btn-secondary flex items-center justify-center flex-1 md:flex-none bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  <Archive className="h-4 w-4 mr-2" />
+                  Archivar
+                </button>
+              )}
+              <button
+                onClick={handleEliminarCliente}
+                className="btn-danger flex items-center justify-center flex-1 md:flex-none"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Eliminar
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -327,13 +414,15 @@ const ClienteDetalle = () => {
       <div>
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-900">Créditos</h2>
-          <button
-            onClick={() => setShowCreditoForm(true)}
-            className="btn-primary flex items-center"
-          >
-            <Plus className="h-5 w-5 mr-2" />
-            Nuevo Crédito
-          </button>
+          {!soloLectura && (
+            <button
+              onClick={() => setShowCreditoForm(true)}
+              className="btn-primary flex items-center"
+            >
+              <Plus className="h-5 w-5 mr-2" />
+              Nuevo Crédito
+            </button>
+          )}
         </div>
 
         {cliente.creditos && cliente.creditos.length > 0 ? (
@@ -354,13 +443,15 @@ const ClienteDetalle = () => {
             <p className="text-gray-600 mb-6">
               Comienza agregando el primer crédito para este cliente
             </p>
-            <button
-              onClick={() => setShowCreditoForm(true)}
-              className="btn-primary inline-flex items-center"
-            >
-              <Plus className="h-5 w-5 mr-2" />
-              Agregar Crédito
-            </button>
+            {!soloLectura && (
+              <button
+                onClick={() => setShowCreditoForm(true)}
+                className="btn-primary inline-flex items-center"
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                Agregar Crédito
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -390,7 +481,45 @@ const ClienteDetalle = () => {
           clienteId={id}
           cliente={cliente}
           onClose={() => setCreditoSeleccionado(null)}
+          soloLectura={soloLectura}
         />
+      )}
+
+      {/* Modal para seleccionar etiqueta */}
+      {mostrarSelectorEtiqueta && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+              <Award className="h-5 w-5 mr-2 text-purple-600" />
+              Asignar Etiqueta a {cliente.nombre}
+            </h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Selecciona una etiqueta para clasificar el comportamiento del cliente:
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+              {Object.entries(ETIQUETAS).map(([key, etiqueta]) => (
+                <button
+                  key={key}
+                  onClick={() => handleAsignarEtiqueta(key)}
+                  className={`p-4 rounded-lg border-2 transition-all hover:scale-105 ${etiqueta.color} ${cliente.etiqueta === key ? 'ring-4 ring-purple-400' : ''}`}
+                >
+                  <div className="flex items-center justify-center mb-2">
+                    {etiqueta.icono && React.createElement(etiqueta.icono, { className: 'h-8 w-8' })}
+                  </div>
+                  <h5 className="font-bold text-center">{etiqueta.nombre}</h5>
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setMostrarSelectorEtiqueta(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

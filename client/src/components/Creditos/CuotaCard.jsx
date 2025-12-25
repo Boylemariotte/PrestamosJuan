@@ -12,7 +12,8 @@ const CuotaCard = ({
   onPagar,
   onEditDate,
   onEditarAbono,
-  onEliminarAbono
+  onEliminarAbono,
+  soloLectura = false
 }) => {
   // Verificar si está pagada manualmente O si el abono cubre completamente la cuota
   const abonoCuota = cuota?.abonoAplicado || 0;
@@ -121,7 +122,7 @@ const CuotaCard = ({
             <div className="w-full py-2 px-2 text-sm font-bold text-center rounded bg-green-200 text-green-800">
               Pagada
             </div>
-            {onEditarAbono && abonosIndividuales.length > 0 && (
+            {!soloLectura && onEditarAbono && abonosIndividuales.length > 0 && (
               <div className="flex gap-1">
                 <button
                   onClick={() => onEditarAbono(abonosIndividuales[abonosIndividuales.length - 1])}
@@ -133,17 +134,19 @@ const CuotaCard = ({
             )}
           </div>
         ) : (
-          <button
-            onClick={() => onPagar(nroCuota)}
-            className={`w-full py-2 px-2 text-sm font-bold text-center rounded transition-colors shadow-sm ${isOverdue
-              ? 'bg-red-600 hover:bg-red-700 text-white'
-              : hasPartialPayment
-                ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
-              }`}
-          >
-            Pagar
-          </button>
+          !soloLectura && onPagar && (
+            <button
+              onClick={() => onPagar(nroCuota)}
+              className={`w-full py-2 px-2 text-sm font-bold text-center rounded transition-colors shadow-sm ${isOverdue
+                ? 'bg-red-600 hover:bg-red-700 text-white'
+                : hasPartialPayment
+                  ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+            >
+              Pagar
+            </button>
+          )
         )}
       </div>
     </div >

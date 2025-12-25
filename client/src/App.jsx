@@ -9,8 +9,8 @@ import Layout from './components/Layout/Layout';
 import Login from './pages/Login';
 import Clientes from './pages/Clientes';
 import ClienteDetalle from './pages/ClienteDetalle';
+import ClientesArchivados from './pages/ClientesArchivados';
 import CreditosActivos from './pages/CreditosActivos';
-import CreditosFinalizados from './pages/CreditosFinalizados';
 import Estadisticas from './pages/Estadisticas';
 import Configuracion from './pages/Configuracion';
 import DiaDeCobro from './pages/DiaDeCobro';
@@ -55,6 +55,28 @@ function App() {
             />
 
             <Route
+              path="/archivados"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ClientesArchivados />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/archivados/cliente/:id"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ClienteDetalle soloLectura={true} />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
               path="/dia-de-cobro"
               element={
                 <ProtectedRoute>
@@ -89,16 +111,6 @@ function App() {
 
 
 
-            <Route
-              path="/creditos-finalizados"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <CreditosFinalizados />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
 
 
 

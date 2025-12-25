@@ -15,9 +15,15 @@ export const exportData = async (req, res, next) => {
         // Exportar clientes con créditos embebidos (estructura JSON original)
         const clientes = await Cliente.find().lean();
         const creditos = await Credito.find().lean();
-        const movimientosCaja = await MovimientoCaja.find().lean();
+        const movimientosCajaRaw = await MovimientoCaja.find().lean();
         const alertas = await Alerta.find().lean();
         const personas = await Persona.find().select('+password').lean();
+
+        // Transformar movimientos para incluir campo id
+        const movimientosCaja = movimientosCajaRaw.map(mov => ({
+            ...mov,
+            id: mov.id || mov._id?.toString() || mov._id
+        }));
 
         // Transformar clientes para que tengan la estructura JSON esperada
         const clientesExport = clientes.map(cliente => ({
@@ -243,7 +249,14 @@ const performImport = async (data) => {
         console.log(`Importando/merge de ${data.movimientosCaja.length} movimientosCaja...`);
         const movimientos = data.movimientosCaja.map(m => {
             const mov = { ...m };
-            mov.id = m.id || m._id || `MOV-${new mongoose.Types.ObjectId().toString()}`;
+            // Asegurar que tenemos un id válido
+            mov.id = m.id || m._id?.toString() || m._id || `MOV-${new mongoose.Types.ObjectId().toString()}`;
+            // Si no hay _id, usar el id como _id también
+            if (!mov._id) {
+                mov._id = mov.id;
+            } else if (typeof mov._id === 'object') {
+                mov._id = mov._id.toString();
+            }
             // Normalizar tipos
             if (mov.valor !== undefined) mov.valor = Number(mov.valor);
             if (mov.papeleria !== undefined) mov.papeleria = Number(mov.papeleria);
@@ -258,19 +271,42 @@ const performImport = async (data) => {
                 mov.fechaCreacion = new Date(mov.fechaCreacion);
             }
             if (!mov.tipoMovimiento) mov.tipoMovimiento = 'flujoCaja';
+            // Eliminar campos que no deben estar en el documento
+            delete mov.__v;
             return mov;
         });
         const opsMovs = movimientos.map(m => ({
             updateOne: {
                 filter: { id: m.id }, // usar campo id textual para upsert
-                update: { $set: m },
+                update: { 
+                    $set: {
+                        ...m,
+                        _id: m._id || m.id // Asegurar que _id esté presente
+                    }
+                },
                 upsert: true
             }
         }));
         try {
             const resMovs = await MovimientoCaja.bulkWrite(opsMovs, { ordered: false });
-            console.log(`Movimientos upsertados: ins=${resMovs.upsertedCount || 0}, mod=${resMovs.modifiedCount || 0}`);
-        } catch (e) { console.error('Error importando movimientos:', e); }
+            console.log(`Movimientos upsertados: ins=${resMovs.upsertedCount || 0}, mod=${resMovs.modifiedCount || 0}, matched=${resMovs.matchedCount || 0}`);
+        } catch (e) { 
+            console.error('Error importando movimientos:', e);
+            // Si falla por campo id único, intentar sin el campo id en el update
+            const opsMovsFallback = movimientos.map(m => ({
+                updateOne: {
+                    filter: { _id: m._id || m.id },
+                    update: { $set: m },
+                    upsert: true
+                }
+            }));
+            try {
+                const resMovsFallback = await MovimientoCaja.bulkWrite(opsMovsFallback, { ordered: false });
+                console.log(`Movimientos upsertados (fallback): ins=${resMovsFallback.upsertedCount || 0}, mod=${resMovsFallback.modifiedCount || 0}`);
+            } catch (e2) {
+                console.error('Error en fallback de importación de movimientos:', e2);
+            }
+        }
     }
 
     if (data.alertas?.length) {

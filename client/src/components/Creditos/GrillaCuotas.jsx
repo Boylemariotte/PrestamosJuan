@@ -16,7 +16,8 @@ const GrillaCuotas = ({
   onEliminarAbono,
   onPagarMulta,
   onEditarMulta,
-  sinContenedor = false
+  sinContenedor = false,
+  soloLectura = false
 }) => {
   // Calcular distribución de abonos para visualización
   const abonosPorCuota = useMemo(() => {
@@ -99,6 +100,7 @@ const GrillaCuotas = ({
                 onEditDate={onEditDate}
                 onEditarAbono={onEditarAbono}
                 onEliminarAbono={onEliminarAbono}
+                soloLectura={soloLectura}
               />
             </div>
           );
@@ -112,6 +114,7 @@ const GrillaCuotas = ({
           onNuevaMulta={onNuevaMulta}
           onPagarMulta={onPagarMulta}
           onEditarMulta={onEditarMulta}
+          soloLectura={soloLectura}
         />
       </div>
     </>

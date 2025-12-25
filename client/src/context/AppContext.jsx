@@ -157,6 +157,36 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const archivarCliente = async (id) => {
+    try {
+      const response = await api.put(`/clientes/${id}/archivar`);
+      if (response.success) {
+        // Remover el cliente de la lista actual (ya que está archivado)
+        setClientes(prev => prev.filter(c => !(c?.id === id || c?._id === id)));
+        return response.data;
+      }
+    } catch (error) {
+      console.error('Error archivando cliente:', error);
+      throw error;
+    }
+  };
+
+  const desarchivarCliente = async (id, posicion = null) => {
+    try {
+      const response = await api.put(`/clientes/${id}/desarchivar`, {
+        ...(posicion && { posicion })
+      });
+      if (response.success) {
+        // Recargar clientes para incluir el desarchivado
+        await fetchData();
+        return response.data;
+      }
+    } catch (error) {
+      console.error('Error desarchivando cliente:', error);
+      throw error;
+    }
+  };
+
   const obtenerCliente = (id) => {
     return clientes.find(cliente => cliente?.id === id || cliente?._id === id);
   };
@@ -261,6 +291,19 @@ export const AppProvider = ({ children }) => {
 
   const asignarEtiquetaCredito = async (clienteId, creditoId, etiqueta) => {
     await actualizarCredito(clienteId, creditoId, { etiqueta, fechaEtiqueta: new Date() });
+  };
+
+  const asignarEtiquetaCliente = async (clienteId, etiqueta) => {
+    try {
+      const response = await api.put(`/clientes/${clienteId}`, { etiqueta });
+      if (response.success) {
+        setClientes(prev => prev.map(c => (c?.id === clienteId || c?._id === clienteId) ? response.data : c));
+        return response.data;
+      }
+    } catch (error) {
+      console.error('Error asignando etiqueta al cliente:', error);
+      throw error;
+    }
   };
 
   const renovarCredito = async (clienteId, creditoAnteriorId, nuevoCreditoData) => {
@@ -670,6 +713,8 @@ export const AppProvider = ({ children }) => {
     agregarCliente,
     actualizarCliente,
     eliminarCliente,
+    archivarCliente,
+    desarchivarCliente,
     obtenerCliente,
     actualizarCoordenadasGPS,
     agregarCredito,
@@ -677,6 +722,7 @@ export const AppProvider = ({ children }) => {
     eliminarCredito,
     obtenerCredito,
     asignarEtiquetaCredito,
+    asignarEtiquetaCliente,
     renovarCredito,
     registrarPago,
     cancelarPago,

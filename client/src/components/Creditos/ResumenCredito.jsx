@@ -25,7 +25,8 @@ const ResumenCredito = ({
   onFechaAbonoChange,
   onAgregarAbono,
   onCancelarAbono,
-  onMostrarFormularioRenovacion
+  onMostrarFormularioRenovacion,
+  soloLectura = false
 }) => {
   const getEstadoLabel = () => {
     if (estado === 'renovado') return 'Crédito Renovado';
@@ -75,7 +76,7 @@ const ResumenCredito = ({
             )}
 
             {/* Botón para asignar etiqueta (solo si el crédito está finalizado) */}
-            {estado === 'finalizado' && (
+            {!soloLectura && estado === 'finalizado' && onMostrarSelectorEtiqueta && (
               <button
                 onClick={onMostrarSelectorEtiqueta}
                 className="px-3 py-1 rounded-lg text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 border-2 border-gray-300 flex items-center gap-1 transition-colors"
@@ -152,7 +153,7 @@ const ResumenCredito = ({
 
 
             {/* Botón de Renovación */}
-            {puedeRenovar && (
+            {!soloLectura && puedeRenovar && onMostrarFormularioRenovacion && (
               <button
                 onClick={onMostrarFormularioRenovacion}
                 className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold rounded-lg transition-all flex items-center justify-center shadow-lg"

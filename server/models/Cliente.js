@@ -189,6 +189,15 @@ const clienteSchema = new mongoose.Schema({
   coordenadasTrabajoActualizada: Date,
   // Créditos embebidos (copia completa para mantener estructura JSON original)
   creditos: [creditoEmbebidoSchema],
+  esArchivado: {
+    type: Boolean,
+    default: false
+  },
+  etiqueta: {
+    type: String,
+    enum: ['excelente', 'bueno', 'atrasado', 'incompleto', 'vetado', 'sin-etiqueta'],
+    default: 'sin-etiqueta'
+  },
   fechaCreacion: {
     type: Date,
     default: Date.now
@@ -197,6 +206,17 @@ const clienteSchema = new mongoose.Schema({
   timestamps: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
+});
+
+// Hook pre-save para asegurar que esArchivado y etiqueta siempre estén definidos
+clienteSchema.pre('save', function(next) {
+  if (this.esArchivado === undefined || this.esArchivado === null) {
+    this.esArchivado = false;
+  }
+  if (this.etiqueta === undefined || this.etiqueta === null) {
+    this.etiqueta = 'sin-etiqueta';
+  }
+  next();
 });
 
 // Índices para búsquedas rápidas

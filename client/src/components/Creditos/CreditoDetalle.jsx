@@ -30,7 +30,7 @@ import ListaAbonos from './ListaAbonos';
 import ListaNotas from './ListaNotas';
 import EditorFecha from './EditorFecha';
 
-const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }) => {
+const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, soloLectura = false }) => {
   const { registrarPago, cancelarPago, editarFechaCuota, agregarNota, eliminarNota, agregarMulta, editarMulta, eliminarMulta, agregarAbono, editarAbono, eliminarAbono, agregarDescuento, eliminarDescuento, asignarEtiquetaCredito, renovarCredito, eliminarCredito, obtenerCredito } = useApp();
 
   // Obtener el crédito actualizado del contexto
@@ -56,8 +56,9 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
       } catch (error) {
         console.error('Error cargando crédito del backend:', error);
         // Si el crédito no existe (404 o mensaje de error), cerrar el modal automáticamente
+        // PERO solo si NO estamos en modo soloLectura (permitir ver créditos archivados aunque fallen algunas validaciones)
         const errorMessage = error.message || '';
-        if (errorMessage.includes('no encontrado') || errorMessage.includes('404') || errorMessage.includes('Crédito no encontrado')) {
+        if (!soloLectura && (errorMessage.includes('no encontrado') || errorMessage.includes('404') || errorMessage.includes('Crédito no encontrado'))) {
           if (onClose) {
             onClose();
           }
@@ -70,15 +71,16 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
     // Siempre cargar del backend para asegurar que tenga todos los datos actualizados (incluyendo multas)
     if (creditoInicial && creditoInicial.id) {
       cargarCreditoDelBackend();
-    } else if (onClose) {
-      // Si no hay ID válido, cerrar el modal
+    } else if (!soloLectura && onClose) {
+      // Si no hay ID válido, cerrar el modal (solo si no estamos en modo soloLectura)
       onClose();
     }
-  }, [creditoInicial?.id, onClose]);
+  }, [creditoInicial?.id, onClose, soloLectura]);
 
   // Si el crédito desaparece del contexto (p. ej. fue eliminado), cerrar el modal automáticamente
+  // PERO solo si NO estamos en modo soloLectura (clientes archivados pueden no estar en el contexto)
   useEffect(() => {
-    if (!creditoDesdeContext) {
+    if (!soloLectura && !creditoDesdeContext) {
       // Llamamos a onClose para evitar error visual cuando el crédito fue borrado externamente
       try {
         onClose();
@@ -87,7 +89,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [creditoDesdeContext]);
+  }, [creditoDesdeContext, soloLectura]);
   
   // Actualizar creditoActualizado cuando cambie el crédito del contexto
   // Pero solo si el crédito del contexto tiene multas (para evitar sobrescribir el del backend)
@@ -887,14 +889,15 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
                   cuotasActualizadas={cuotasActualizadas}
                   todasLasMultas={todasLasMultas}
                   obtenerNumeroCuotas={obtenerNumeroCuotas}
-                  onPagar={handleAbrirPago}
-                  onNuevaMulta={() => setMostrarModalNuevaMulta(true)}
-                  onEditDate={handleEditarFecha}
-                  onEditarAbono={handleEditarAbono}
-                  onEliminarAbono={handleEliminarAbono}
-                  onPagarMulta={(multa) => handlePagarMulta(multa)}
-                  onEditarMulta={(multa) => handleEditarMulta(multa)}
+                  onPagar={soloLectura ? null : handleAbrirPago}
+                  onNuevaMulta={soloLectura ? null : () => setMostrarModalNuevaMulta(true)}
+                  onEditDate={soloLectura ? null : handleEditarFecha}
+                  onEditarAbono={soloLectura ? null : handleEditarAbono}
+                  onEliminarAbono={soloLectura ? null : handleEliminarAbono}
+                  onPagarMulta={soloLectura ? null : (multa) => handlePagarMulta(multa)}
+                  onEditarMulta={soloLectura ? null : (multa) => handleEditarMulta(multa)}
                   sinContenedor={true}
+                  soloLectura={soloLectura}
                 />
               </div>
             </div>
@@ -917,19 +920,20 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
               descripcionAbono={descripcionAbono}
               fechaAbono={fechaAbono}
               puedeRenovar={puedeRenovar}
-              onMostrarSelectorEtiqueta={() => setMostrarSelectorEtiqueta(!mostrarSelectorEtiqueta)}
-              onMostrarFormularioAbono={() => setMostrarFormularioAbono(true)}
-              onValorAbonoChange={(value) => setValorAbono(value)}
-              onDescripcionAbonoChange={(value) => setDescripcionAbono(value)}
-              onFechaAbonoChange={(value) => setFechaAbono(value)}
-              onAgregarAbono={handleAgregarAbono}
-              onCancelarAbono={() => {
+              onMostrarSelectorEtiqueta={soloLectura ? null : () => setMostrarSelectorEtiqueta(!mostrarSelectorEtiqueta)}
+              onMostrarFormularioAbono={soloLectura ? null : () => setMostrarFormularioAbono(true)}
+              onValorAbonoChange={soloLectura ? null : (value) => setValorAbono(value)}
+              onDescripcionAbonoChange={soloLectura ? null : (value) => setDescripcionAbono(value)}
+              onFechaAbonoChange={soloLectura ? null : (value) => setFechaAbono(value)}
+              onAgregarAbono={soloLectura ? null : handleAgregarAbono}
+              onCancelarAbono={soloLectura ? null : () => {
                 setMostrarFormularioAbono(false);
                 setValorAbono('');
                 setDescripcionAbono('');
                 setFechaAbono(new Date().toISOString().split('T')[0]);
               }}
-              onMostrarFormularioRenovacion={() => setMostrarFormularioRenovacion(true)}
+              onMostrarFormularioRenovacion={soloLectura ? null : () => setMostrarFormularioRenovacion(true)}
+              soloLectura={soloLectura}
             />
           </div>
 
@@ -938,106 +942,113 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose }
             <ListaNotas
               notas={credito.notas}
               nuevaNota={nuevaNota}
-              onNotaChange={(value) => setNuevaNota(value)}
-              onAgregarNota={handleAgregarNota}
-              onEliminarNota={handleEliminarNota}
+              onNotaChange={soloLectura ? null : (value) => setNuevaNota(value)}
+              onAgregarNota={soloLectura ? null : handleAgregarNota}
+              onEliminarNota={soloLectura ? null : handleEliminarNota}
+              soloLectura={soloLectura}
             />
           </div>
 
           {/* Zona de Peligro */}
-          <div className="border-t pt-6 mt-6">
-            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-red-900 mb-2 flex items-center">
-                <AlertCircle className="h-5 w-5 mr-2" />
-                Zona de Peligro
-              </h3>
-              <p className="text-sm text-red-700 mb-4">
-                Eliminar este crédito borrará permanentemente toda la información asociada, incluyendo pagos, multas, abonos y notas. Esta acción no se puede deshacer.
-              </p>
-              <button
-                onClick={handleEliminarCredito}
-                className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors flex items-center justify-center"
-              >
-                <Trash2 className="h-5 w-5 mr-2" />
-                Eliminar Crédito Permanentemente
-              </button>
+          {!soloLectura && (
+            <div className="border-t pt-6 mt-6">
+              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-red-900 mb-2 flex items-center">
+                  <AlertCircle className="h-5 w-5 mr-2" />
+                  Zona de Peligro
+                </h3>
+                <p className="text-sm text-red-700 mb-4">
+                  Eliminar este crédito borrará permanentemente toda la información asociada, incluyendo pagos, multas, abonos y notas. Esta acción no se puede deshacer.
+                </p>
+                <button
+                  onClick={handleEliminarCredito}
+                  className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors flex items-center justify-center"
+                >
+                  <Trash2 className="h-5 w-5 mr-2" />
+                  Eliminar Crédito Permanentemente
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Modales de Pago y Multa */}
-      {cuotaParaPagar && (
-        <ModalPago
-          cuota={cuotaParaPagar}
-          onClose={() => setCuotaParaPagar(null)}
-          onConfirm={handleConfirmarPago}
-        />
-      )}
-
-      {mostrarModalNuevaMulta && (
-        <ModalMulta
-          onClose={() => setMostrarModalNuevaMulta(false)}
-          onConfirm={handleConfirmarMulta}
-        />
-      )}
-
-      {multaParaPagar && (
-        <ModalPagoMulta
-          multa={multaParaPagar}
-          onClose={() => setMultaParaPagar(null)}
-          onConfirm={handleConfirmarPagoMulta}
-        />
-      )}
-
-      {multaParaEditar && (
-        <ModalEditarMulta
-          multa={multaParaEditar}
-          onClose={() => setMultaParaEditar(null)}
-          onGuardar={handleGuardarEdicionMulta}
-          onEliminar={handleEliminarMulta}
-        />
-      )}
-
-      {/* Modal para editar fecha */}
-      {mostrarEditorFecha && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-lg p-6 w-96 shadow-2xl">
-            <EditorFecha
-              cuota={cuotasActualizadas.find(c => c.nroCuota === mostrarEditorFecha)}
-              credito={credito}
-              nuevaFecha={nuevaFecha}
-              onFechaChange={setNuevaFecha}
-              onGuardar={handleGuardarFecha}
-              onCancelar={handleCancelarEdicionFecha}
+      {/* Modales de Pago y Multa - Solo si no está en modo solo lectura */}
+      {!soloLectura && (
+        <>
+          {cuotaParaPagar && (
+            <ModalPago
+              cuota={cuotaParaPagar}
+              onClose={() => setCuotaParaPagar(null)}
+              onConfirm={handleConfirmarPago}
             />
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* Modal de Renovación */}
-      {mostrarFormularioRenovacion && (
-        <RenovacionForm
-          // Pasamos el crédito con cuotasActualizadas para que la deuda pendiente
-          // se calcule usando los abonos aplicados (abonoAplicado) por cuota
-          creditoAnterior={{ ...credito, cuotas: cuotasActualizadas }}
-          onSubmit={handleRenovar}
-          onClose={() => setMostrarFormularioRenovacion(false)}
-        />
-      )}
+          {mostrarModalNuevaMulta && (
+            <ModalMulta
+              onClose={() => setMostrarModalNuevaMulta(false)}
+              onConfirm={handleConfirmarMulta}
+            />
+          )}
 
-      {/* Modal para editar abono (pago) */}
-      {abonoEnEdicion && (
-        <ModalEditarAbono
-          abono={abonoEnEdicion}
-          maxCuotas={obtenerNumeroCuotas(formData.tipoPago)}
-          onClose={() => setAbonoEnEdicion(null)}
-          onConfirm={handleGuardarEdicionAbono}
-          onDelete={() => {
-            handleEliminarAbono(abonoEnEdicion.id);
-            setAbonoEnEdicion(null);
-          }}
-        />
+          {multaParaPagar && (
+            <ModalPagoMulta
+              multa={multaParaPagar}
+              onClose={() => setMultaParaPagar(null)}
+              onConfirm={handleConfirmarPagoMulta}
+            />
+          )}
+
+          {multaParaEditar && (
+            <ModalEditarMulta
+              multa={multaParaEditar}
+              onClose={() => setMultaParaEditar(null)}
+              onGuardar={handleGuardarEdicionMulta}
+              onEliminar={handleEliminarMulta}
+            />
+          )}
+
+          {/* Modal para editar fecha */}
+          {mostrarEditorFecha && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+              <div className="bg-white rounded-lg p-6 w-96 shadow-2xl">
+                <EditorFecha
+                  cuota={cuotasActualizadas.find(c => c.nroCuota === mostrarEditorFecha)}
+                  credito={credito}
+                  nuevaFecha={nuevaFecha}
+                  onFechaChange={setNuevaFecha}
+                  onGuardar={handleGuardarFecha}
+                  onCancelar={handleCancelarEdicionFecha}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Modal de Renovación */}
+          {mostrarFormularioRenovacion && (
+            <RenovacionForm
+              // Pasamos el crédito con cuotasActualizadas para que la deuda pendiente
+              // se calcule usando los abonos aplicados (abonoAplicado) por cuota
+              creditoAnterior={{ ...credito, cuotas: cuotasActualizadas }}
+              onSubmit={handleRenovar}
+              onClose={() => setMostrarFormularioRenovacion(false)}
+            />
+          )}
+
+          {/* Modal para editar abono (pago) */}
+          {abonoEnEdicion && (
+            <ModalEditarAbono
+              abono={abonoEnEdicion}
+              maxCuotas={obtenerNumeroCuotas(formData.tipoPago)}
+              onClose={() => setAbonoEnEdicion(null)}
+              onConfirm={handleGuardarEdicionAbono}
+              onDelete={() => {
+                handleEliminarAbono(abonoEnEdicion.id);
+                setAbonoEnEdicion(null);
+              }}
+            />
+          )}
+        </>
       )}
     </div>
   );

@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import MovimientoCaja from '../models/MovimientoCaja.js';
 
 /**
@@ -71,7 +72,13 @@ export const getMovimientosCaja = async (req, res, next) => {
  */
 export const getMovimientoCaja = async (req, res, next) => {
   try {
-    const movimiento = await MovimientoCaja.findById(req.params.id);
+    // Buscar por id o _id
+    const movimiento = await MovimientoCaja.findOne({
+      $or: [
+        { _id: req.params.id },
+        { id: req.params.id }
+      ]
+    });
 
     if (!movimiento) {
       return res.status(404).json({
@@ -97,6 +104,15 @@ export const getMovimientoCaja = async (req, res, next) => {
 export const createMovimientoCaja = async (req, res, next) => {
   try {
     const movimientoData = { ...req.body };
+
+    // Generar ID único si no viene en los datos
+    if (!movimientoData.id && !movimientoData._id) {
+      movimientoData.id = `MOV-${new mongoose.Types.ObjectId().toString()}`;
+    } else if (movimientoData._id && !movimientoData.id) {
+      movimientoData.id = movimientoData._id.toString();
+    } else if (movimientoData.id && !movimientoData._id) {
+      movimientoData._id = movimientoData.id;
+    }
 
     // Normalizar valores numéricos y de fecha
     if (movimientoData.valor !== undefined) {
@@ -138,8 +154,14 @@ export const createMovimientoCaja = async (req, res, next) => {
  */
 export const updateMovimientoCaja = async (req, res, next) => {
   try {
-    const movimiento = await MovimientoCaja.findByIdAndUpdate(
-      req.params.id,
+    // Buscar por id o _id
+    const movimiento = await MovimientoCaja.findOneAndUpdate(
+      {
+        $or: [
+          { _id: req.params.id },
+          { id: req.params.id }
+        ]
+      },
       req.body,
       {
         new: true,
@@ -170,7 +192,13 @@ export const updateMovimientoCaja = async (req, res, next) => {
  */
 export const deleteMovimientoCaja = async (req, res, next) => {
   try {
-    const movimiento = await MovimientoCaja.findById(req.params.id);
+    // Buscar por id o _id
+    const movimiento = await MovimientoCaja.findOne({
+      $or: [
+        { _id: req.params.id },
+        { id: req.params.id }
+      ]
+    });
 
     if (!movimiento) {
       return res.status(404).json({
@@ -179,7 +207,12 @@ export const deleteMovimientoCaja = async (req, res, next) => {
       });
     }
 
-    await MovimientoCaja.findByIdAndDelete(req.params.id);
+    await MovimientoCaja.findOneAndDelete({
+      $or: [
+        { _id: req.params.id },
+        { id: req.params.id }
+      ]
+    });
 
     res.status(200).json({
       success: true,
