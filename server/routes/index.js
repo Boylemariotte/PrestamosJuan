@@ -8,6 +8,8 @@ import alertaRoutes from './alertaRoutes.js';
 import visitaRoutes from './visitaRoutes.js';
 import papeleriaRoutes from './papeleriaRoutes.js';
 import backupRoutes from './backupRoutes.js';
+import prorrogaRoutes from './prorrogaRoutes.js';
+import ordenCobroRoutes from './ordenCobroRoutes.js';
 
 const router = express.Router();
 
@@ -23,6 +25,8 @@ router.use('/alertas', alertaRoutes);
 router.use('/visitas', visitaRoutes);
 router.use('/papeleria', papeleriaRoutes);
 router.use('/backup', backupRoutes);
+router.use('/prorrogas', prorrogaRoutes);
+router.use('/ordenes-cobro', ordenCobroRoutes);
 
 // Ruta de salud del servidor
 router.get('/health', (req, res) => {

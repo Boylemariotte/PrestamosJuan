@@ -2,7 +2,7 @@
  * Servicio de API para comunicación con el backend
  */
 
-const API_URL = import.meta.env.VITE_API_URL ||'http://localhost:5000/api';
+const API_URL = 'http://localhost:5000/api';
 
 /**
  * Obtener el token de autenticación desde localStorage
@@ -16,7 +16,7 @@ const getToken = () => {
  */
 const request = async (endpoint, options = {}) => {
   const token = getToken();
-  
+
   const config = {
     headers: {
       'Content-Type': 'application/json',
@@ -33,10 +33,10 @@ const request = async (endpoint, options = {}) => {
 
   try {
     const response = await fetch(`${API_URL}${endpoint}`, config);
-    
+
     let data;
     const contentType = response.headers.get('content-type');
-    
+
     if (contentType && contentType.includes('application/json')) {
       data = await response.json();
     } else {
@@ -103,4 +103,49 @@ export const authService = {
 };
 
 export default api;
+
+/**
+ * Servicio de prórrogas de cuotas
+ */
+export const prorrogaService = {
+  // Obtener todas las prórrogas
+  obtenerTodas: async () => {
+    return await api.get('/prorrogas');
+  },
+
+  // Obtener prórrogas de un crédito
+  obtenerPorCredito: async (clienteId, creditoId) => {
+    return await api.get(`/prorrogas/creditos/${clienteId}/${creditoId}/prorrogas`);
+  },
+
+  // Guardar prórrogas para un crédito (bulk upsert)
+  guardar: async (clienteId, creditoId, prorrogas) => {
+    return await api.post(`/prorrogas/creditos/${clienteId}/${creditoId}/prorrogas`, { clienteId, creditoId, prorrogas });
+  },
+
+  // Eliminar una prórroga específica
+  eliminar: async (clienteId, creditoId, nroCuota) => {
+    return await api.delete(`/prorrogas/creditos/${clienteId}/${creditoId}/prorrogas/${nroCuota}`);
+  }
+};
+
+/**
+ * Servicio de órdenes de cobro
+ */
+export const ordenCobroService = {
+  // Obtener órdenes para una fecha específica
+  obtenerPorFecha: async (fecha) => {
+    return await api.get(`/ordenes-cobro/${fecha}`);
+  },
+
+  // Guardar órdenes para una fecha (bulk upsert)
+  guardar: async (fecha, ordenes) => {
+    return await api.post('/ordenes-cobro', { fecha, ordenes });
+  },
+
+  // Eliminar una orden específica
+  eliminar: async (fecha, clienteId) => {
+    return await api.delete(`/ordenes-cobro/${fecha}/${clienteId}`);
+  }
+};
 

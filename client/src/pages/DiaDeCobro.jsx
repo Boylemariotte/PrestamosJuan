@@ -8,7 +8,7 @@ import { format, parseISO, startOfDay, addDays, subDays, isBefore } from 'date-f
 import { es } from 'date-fns/locale';
 import { formatearMoneda, calcularTotalMultasCuota, aplicarAbonosAutomaticamente, determinarEstadoCredito, formatearFechaCorta } from '../utils/creditCalculations';
 import CreditoDetalle from '../components/Creditos/CreditoDetalle';
-import api from '../services/api';
+import api, { prorrogaService } from '../services/api';
 
 const DiaDeCobro = () => {
   const navigate = useNavigate();
@@ -68,22 +68,41 @@ const DiaDeCobro = () => {
     localStorage.setItem('ordenCobro', JSON.stringify(ordenCobro));
   }, [ordenCobro]);
 
-  // Cargar prórrogas de cuotas al iniciar
+  // Cargar prórrogas desde el BACKEND al iniciar
   useEffect(() => {
-    const savedProrrogas = localStorage.getItem('prorrogasCuotas');
-    if (savedProrrogas) {
+    const cargarProrrogas = async () => {
       try {
-        setProrrogasCuotas(JSON.parse(savedProrrogas));
-      } catch (e) {
-        console.error('Error al parsear prorrogasCuotas desde localStorage', e);
-      }
-    }
-  }, []);
+        const response = await prorrogaService.obtenerTodas();
+        if (response.success && Array.isArray(response.data)) {
+          const mapaProrrogas = {};
+          response.data.forEach(p => {
+            if (p.fechaProrroga) {
+              const key = `${p.clienteId}-${p.creditoId}-${p.nroCuota}`;
+              // Convertir fecha ISO a YYYY-MM-DD
+              const fechaStr = new Date(p.fechaProrroga).toISOString().split('T')[0];
+              mapaProrrogas[key] = fechaStr;
+            }
+          });
+          setProrrogasCuotas(mapaProrrogas);
+        }
+      } catch (error) {
+        console.error('Error al cargar prórrogas desde el servidor:', error);
+        toast.error('No se pudieron sincronizar las extensiones de fecha con el servidor');
 
-  // Guardar cambios de prórrogas
-  useEffect(() => {
-    localStorage.setItem('prorrogasCuotas', JSON.stringify(prorrogasCuotas));
-  }, [prorrogasCuotas]);
+        // Fallback: intentar cargar de localStorage si falla el servidor
+        const savedProrrogas = localStorage.getItem('prorrogasCuotas');
+        if (savedProrrogas) {
+          try {
+            setProrrogasCuotas(JSON.parse(savedProrrogas));
+          } catch (e) {
+            console.error('Error fallback localStorage:', e);
+          }
+        }
+      }
+    };
+
+    cargarProrrogas();
+  }, []);
 
   // Filtrar visitas para el día seleccionado
   const visitasDelDia = useMemo(() => {
@@ -377,19 +396,19 @@ const DiaDeCobro = () => {
         // Buscar en ref. crédito (posición del cliente)
         const refCredito = item.clientePosicion ? `#${item.clientePosicion}` : '';
         if (refCredito.toLowerCase().includes(termino)) return true;
-        
+
         // Buscar en nombre del cliente
         if (item.clienteNombre?.toLowerCase().includes(termino)) return true;
-        
+
         // Buscar en CC (documento)
         if (item.clienteDocumento?.includes(termino)) return true;
-        
+
         // Buscar en teléfono
         if (item.clienteTelefono?.includes(termino)) return true;
-        
+
         // Buscar en barrio
         if (item.clienteBarrio?.toLowerCase().includes(termino)) return true;
-        
+
         return false;
       });
     }
@@ -410,12 +429,14 @@ const DiaDeCobro = () => {
   const [creditoSeleccionado, setCreditoSeleccionado] = useState(null);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
 
-  const aplicarProrrogaCuotasDelDia = (clienteId, creditoId, nuevaFechaStr) => {
+  const aplicarProrrogaCuotasDelDia = async (clienteId, creditoId, nuevaFechaStr) => {
     const cliente = clientes.find(c => c.id === clienteId);
     if (!cliente) return;
     const credito = (cliente.creditos || []).find(c => c.id === creditoId);
     if (!credito || !Array.isArray(credito.cuotas)) return;
 
+    // Identificar cuotas afectadas
+    const cuotasParaActualizar = [];
     const nuevasProrrogas = { ...prorrogasCuotas };
 
     credito.cuotas.forEach(cuota => {
@@ -429,11 +450,34 @@ const DiaDeCobro = () => {
       if (fechaOriginalStr && fechaOriginalStr <= fechaSeleccionadaStr) {
         const key = `${clienteId}-${creditoId}-${cuota.nroCuota}`;
         nuevasProrrogas[key] = nuevaFechaStr;
+
+        cuotasParaActualizar.push({
+          nroCuota: cuota.nroCuota,
+          fechaProrroga: nuevaFechaStr
+        });
       }
     });
 
-    setProrrogasCuotas(nuevasProrrogas);
-    toast.success('Prórroga aplicada para este crédito en Día de Cobro');
+    if (cuotasParaActualizar.length === 0) {
+      toast.info('No hay cuotas pendientes para prorrogar en esta fecha');
+      return;
+    }
+
+    try {
+      // Guardar en Backend
+      const response = await prorrogaService.guardar(clienteId, creditoId, cuotasParaActualizar);
+
+      if (response.success) {
+        // Actualizar estado local solo si hubo éxito
+        setProrrogasCuotas(nuevasProrrogas);
+        toast.success('Prórroga aplicada y guardada correctamente');
+      } else {
+        toast.error('Error al guardar la prórroga en el servidor');
+      }
+    } catch (error) {
+      console.error('Error al guardar prórroga:', error);
+      toast.error('Error de conexión al guardar la prórroga');
+    }
   };
 
   const handleProrrogaDias = (clienteId, creditoId, dias) => {
@@ -509,8 +553,8 @@ const DiaDeCobro = () => {
               rawOrden === undefined || rawOrden === null ? '' : String(rawOrden);
 
             // Determinar clase de color según la cartera del cliente
-            const carteraRowClass = item.clienteCartera === 'K2' 
-              ? 'bg-green-100 hover:bg-green-200 border-b' 
+            const carteraRowClass = item.clienteCartera === 'K2'
+              ? 'bg-green-100 hover:bg-green-200 border-b'
               : 'bg-blue-100 hover:bg-blue-200 border-b';
 
             return (
