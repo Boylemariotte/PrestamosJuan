@@ -314,6 +314,9 @@ const recalcularCreditoCompleto = (credito) => {
   // 3. Ordenar abonos de cuotas cronológicamente para aplicación correcta
   const abonosOrdenados = [...(credito.abonos || [])].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
+  // Mapa para rastrear la fecha del último abono que completó el pago de cada cuota
+  const fechaPagoPorCuota = {};
+
   // 4. Procesar Abonos de Cuotas (solo abonos, no multas)
   for (const abono of abonosOrdenados) {
     let montoDisponible = abono.valor;
@@ -329,6 +332,8 @@ const recalcularCreditoCompleto = (credito) => {
       // A. Abono Específico a Cuota
       const cuota = credito.cuotas.find(c => c.nroCuota === nroCuotaTarget);
       if (cuota) {
+        const saldoAntes = cuota.saldoPendiente;
+        
         cuota.abonosCuota.push({
           id: abono.id,
           valor: montoDisponible,
@@ -338,6 +343,11 @@ const recalcularCreditoCompleto = (credito) => {
 
         cuota.abonoAplicado = (cuota.abonoAplicado || 0) + montoDisponible;
         cuota.saldoPendiente -= montoDisponible;
+        
+        // Si este abono completó el pago (saldo pendiente <= 10), guardar su fecha
+        if (saldoAntes > 10 && cuota.saldoPendiente <= 10) {
+          fechaPagoPorCuota[nroCuotaTarget] = abono.fecha;
+        }
       }
     } else {
       // B. Abono General (Waterfall) 
@@ -345,9 +355,16 @@ const recalcularCreditoCompleto = (credito) => {
         if (montoDisponible <= 0) break;
         if (cuota.saldoPendiente <= 0) continue;
 
+        const saldoAntes = cuota.saldoPendiente;
         const aplicar = Math.min(montoDisponible, cuota.saldoPendiente);
         cuota.saldoPendiente -= aplicar;
         cuota.abonoAplicado = (cuota.abonoAplicado || 0) + aplicar;
+        
+        // Si este abono completó el pago (saldo pendiente <= 10), guardar su fecha
+        if (saldoAntes > 10 && cuota.saldoPendiente <= 10) {
+          fechaPagoPorCuota[cuota.nroCuota] = abono.fecha;
+        }
+        
         montoDisponible -= aplicar;
       }
     }
@@ -359,10 +376,56 @@ const recalcularCreditoCompleto = (credito) => {
     cuota.pagado = cuota.saldoPendiente <= 10; 
     cuota.tieneAbono = cuota.abonoAplicado > 0;
 
-    if (cuota.pagado && !cuota.fechaPago) {
-      cuota.fechaPago = new Date();
-    }
-    if (!cuota.pagado) {
+    if (cuota.pagado) {
+      // Usar la fecha del abono que completó el pago, o la fecha más reciente de abonosCuota, o la fecha actual como fallback
+      if (fechaPagoPorCuota[cuota.nroCuota]) {
+        // Asegurar que la fecha se guarde correctamente sin problemas de zona horaria
+        const fechaAbono = fechaPagoPorCuota[cuota.nroCuota];
+        if (fechaAbono instanceof Date) {
+          // Si ya es un Date, extraer la fecha (año, mes, día) y crear uno nuevo en UTC
+          const year = fechaAbono.getUTCFullYear();
+          const month = fechaAbono.getUTCMonth();
+          const day = fechaAbono.getUTCDate();
+          cuota.fechaPago = new Date(Date.UTC(year, month, day, 12, 0, 0, 0));
+        } else if (typeof fechaAbono === 'string') {
+          // Si es string, normalizar a Date en UTC mediodía para evitar problemas de zona horaria
+          const partes = fechaAbono.split('T')[0].split('-');
+          if (partes.length === 3) {
+            cuota.fechaPago = new Date(Date.UTC(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]), 12, 0, 0, 0));
+          } else {
+            cuota.fechaPago = new Date(fechaAbono);
+          }
+        } else {
+          cuota.fechaPago = new Date(fechaAbono);
+        }
+      } else if (cuota.abonosCuota && cuota.abonosCuota.length > 0) {
+        // Si no hay fecha registrada, usar la fecha del último abono aplicado
+        const ultimoAbono = cuota.abonosCuota[cuota.abonosCuota.length - 1];
+        if (ultimoAbono.fecha) {
+          if (ultimoAbono.fecha instanceof Date) {
+            // Extraer la fecha (año, mes, día) y crear uno nuevo en UTC
+            const year = ultimoAbono.fecha.getUTCFullYear();
+            const month = ultimoAbono.fecha.getUTCMonth();
+            const day = ultimoAbono.fecha.getUTCDate();
+            cuota.fechaPago = new Date(Date.UTC(year, month, day, 12, 0, 0, 0));
+          } else if (typeof ultimoAbono.fecha === 'string') {
+            const partes = ultimoAbono.fecha.split('T')[0].split('-');
+            if (partes.length === 3) {
+              cuota.fechaPago = new Date(Date.UTC(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]), 12, 0, 0, 0));
+            } else {
+              cuota.fechaPago = new Date(ultimoAbono.fecha);
+            }
+          } else {
+            cuota.fechaPago = new Date(ultimoAbono.fecha);
+          }
+        } else {
+          cuota.fechaPago = new Date();
+        }
+      } else if (!cuota.fechaPago) {
+        // Fallback: usar fecha actual solo si no hay fecha previa
+        cuota.fechaPago = new Date();
+      }
+    } else {
       cuota.fechaPago = null;
     }
   });
@@ -413,12 +476,31 @@ export const registrarPago = async (req, res, next) => {
     const saldoPendiente = cuota.saldoPendiente;
 
     if (saldoPendiente > 0) {
-      // 2. Crear un abono por el valor exacto del saldo pendiente
+      // 2. Normalizar la fecha de pago para evitar problemas de zona horaria
+      let fechaPagoNormalizada = new Date();
+      if (fechaPago) {
+        if (typeof fechaPago === 'string') {
+          // Si viene como string YYYY-MM-DD, crear Date en UTC mediodía para evitar problemas de zona horaria
+          const partes = fechaPago.split('T')[0].split('-');
+          if (partes.length === 3) {
+            // Usar UTC para que la fecha se mantenga correcta independientemente de la zona horaria del servidor
+            fechaPagoNormalizada = new Date(Date.UTC(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]), 12, 0, 0, 0));
+          } else {
+            fechaPagoNormalizada = new Date(fechaPago);
+          }
+        } else if (fechaPago instanceof Date) {
+          fechaPagoNormalizada = fechaPago;
+        } else {
+          fechaPagoNormalizada = new Date(fechaPago);
+        }
+      }
+
+      // 3. Crear un abono por el valor exacto del saldo pendiente
       const nuevoAbono = {
         id: Date.now().toString(),
         valor: saldoPendiente,
         descripcion: `Pago total Cuota #${nroCuotaInt}`,
-        fecha: fechaPago || new Date(),
+        fecha: fechaPagoNormalizada,
         tipo: 'abono',
         nroCuota: nroCuotaInt
       };

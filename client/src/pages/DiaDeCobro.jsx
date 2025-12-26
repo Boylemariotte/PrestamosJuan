@@ -434,75 +434,115 @@ const DiaDeCobro = () => {
           // Normalizar fecha de pago para comparación
           let fechaPagoNormalizada = null;
           if (cuota.fechaPago) {
-            if (typeof cuota.fechaPago === 'string') {
-              fechaPagoNormalizada = cuota.fechaPago.split('T')[0];
-            } else if (cuota.fechaPago instanceof Date) {
-              fechaPagoNormalizada = format(cuota.fechaPago, 'yyyy-MM-dd');
-            } else if (typeof cuota.fechaPago === 'object' && cuota.fechaPago.toISOString) {
-              fechaPagoNormalizada = new Date(cuota.fechaPago).toISOString().split('T')[0];
+            try {
+              let fechaObj = null;
+              
+              if (typeof cuota.fechaPago === 'string') {
+                // Si es string, puede venir como ISO o YYYY-MM-DD
+                if (cuota.fechaPago.includes('T')) {
+                  // Extraer solo la parte de fecha (YYYY-MM-DD) del ISO string
+                  fechaPagoNormalizada = cuota.fechaPago.split('T')[0];
+                } else if (cuota.fechaPago.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                  fechaPagoNormalizada = cuota.fechaPago;
+                } else {
+                  // Intentar parsear como fecha y extraer solo la parte de fecha
+                  fechaObj = new Date(cuota.fechaPago);
+                  if (!isNaN(fechaObj.getTime())) {
+                    // Usar getFullYear, getMonth, getDate para evitar problemas de zona horaria
+                    const year = fechaObj.getFullYear();
+                    const month = String(fechaObj.getMonth() + 1).padStart(2, '0');
+                    const day = String(fechaObj.getDate()).padStart(2, '0');
+                    fechaPagoNormalizada = `${year}-${month}-${day}`;
+                  }
+                }
+              } else if (cuota.fechaPago instanceof Date) {
+                // Usar métodos de fecha local para evitar problemas de zona horaria
+                const year = cuota.fechaPago.getFullYear();
+                const month = String(cuota.fechaPago.getMonth() + 1).padStart(2, '0');
+                const day = String(cuota.fechaPago.getDate()).padStart(2, '0');
+                fechaPagoNormalizada = `${year}-${month}-${day}`;
+              } else if (typeof cuota.fechaPago === 'object') {
+                // Puede ser un objeto Date de MongoDB o un objeto con métodos de fecha
+                fechaObj = new Date(cuota.fechaPago);
+                if (!isNaN(fechaObj.getTime())) {
+                  // Usar métodos de fecha local para evitar problemas de zona horaria
+                  const year = fechaObj.getFullYear();
+                  const month = String(fechaObj.getMonth() + 1).padStart(2, '0');
+                  const day = String(fechaObj.getDate()).padStart(2, '0');
+                  fechaPagoNormalizada = `${year}-${month}-${day}`;
+                }
+              }
+            } catch (error) {
+              console.error('Error normalizando fecha de pago:', error, cuota.fechaPago);
             }
           }
 
-          const pagoCompletoHoy = cuota.pagado && fechaPagoNormalizada === fechaSeleccionadaStr;
+          // Si la cuota está pagada, solo mostrar en la fecha exacta de pago
+          if (cuota.pagado && fechaPagoNormalizada) {
+            // Solo mostrar si la fecha de pago coincide exactamente con la fecha seleccionada
+            if (fechaPagoNormalizada === fechaSeleccionadaStr) {
+              const item = {
+                clienteId: cliente.id,
+                clienteNombre: cliente.nombre,
+                clienteDocumento: cliente.documento,
+                clienteTelefono: cliente.telefono,
+                clienteBarrio: cliente.barrio,
+                clienteCartera: cliente.cartera || 'K1',
+                clientePosicion: cliente.posicion,
+                creditoId: credito.id,
+                creditoMonto: credito.monto,
+                creditoTipo: credito.tipo,
+                valorCuota: credito.valorCuota,
+                nroCuota: cuota.nroCuota,
+                montoPagado: credito.valorCuota,
+                tipoPago: 'completo'
+              };
 
-          // Buscar abonos de hoy en esta cuota
-          const abonosHoy = (cuota.abonosCuota || []).filter(a => {
-            const fechaAbono = typeof a.fecha === 'string' 
-              ? a.fecha.split('T')[0] 
-              : format(new Date(a.fecha), 'yyyy-MM-dd');
-            return fechaAbono === fechaSeleccionadaStr;
-          });
-
-          const montoAbonadoHoy = abonosHoy.reduce((sum, a) => sum + (a.valor || 0), 0);
-
-          // Si la cuota está completamente pagada hoy, mostrar solo el pago completo
-          if (pagoCompletoHoy) {
-            const item = {
-              clienteId: cliente.id,
-              clienteNombre: cliente.nombre,
-              clienteDocumento: cliente.documento,
-              clienteTelefono: cliente.telefono,
-              clienteBarrio: cliente.barrio,
-              clienteCartera: cliente.cartera || 'K1',
-              clientePosicion: cliente.posicion,
-              creditoId: credito.id,
-              creditoMonto: credito.monto,
-              creditoTipo: credito.tipo,
-              valorCuota: credito.valorCuota,
-              nroCuota: cuota.nroCuota,
-              montoPagado: credito.valorCuota,
-              tipoPago: 'completo'
-            };
-
-            if (cliente.cartera === 'K2') {
-              pagadosK2.push(item);
-            } else {
-              pagadosK1.push(item);
+              if (cliente.cartera === 'K2') {
+                pagadosK2.push(item);
+              } else {
+                pagadosK1.push(item);
+              }
             }
-          } 
-          // Si hay abonos parciales hoy (y la cuota NO está completamente pagada hoy)
-          else if (montoAbonadoHoy > 0) {
-            const item = {
-              clienteId: cliente.id,
-              clienteNombre: cliente.nombre,
-              clienteDocumento: cliente.documento,
-              clienteTelefono: cliente.telefono,
-              clienteBarrio: cliente.barrio,
-              clienteCartera: cliente.cartera || 'K1',
-              clientePosicion: cliente.posicion,
-              creditoId: credito.id,
-              creditoMonto: credito.monto,
-              creditoTipo: credito.tipo,
-              valorCuota: credito.valorCuota,
-              nroCuota: cuota.nroCuota,
-              montoPagado: montoAbonadoHoy,
-              tipoPago: 'parcial'
-            };
+            // Si la cuota está pagada pero en otra fecha, no mostrar nada (ya se mostró en su fecha)
+            return;
+          }
 
-            if (cliente.cartera === 'K2') {
-              pagadosK2.push(item);
-            } else {
-              pagadosK1.push(item);
+          // Si la cuota NO está pagada, buscar abonos parciales en la fecha seleccionada
+          if (!cuota.pagado) {
+            const abonosHoy = (cuota.abonosCuota || []).filter(a => {
+              const fechaAbono = typeof a.fecha === 'string' 
+                ? a.fecha.split('T')[0] 
+                : format(new Date(a.fecha), 'yyyy-MM-dd');
+              return fechaAbono === fechaSeleccionadaStr;
+            });
+
+            const montoAbonadoHoy = abonosHoy.reduce((sum, a) => sum + (a.valor || 0), 0);
+
+            // Solo mostrar abonos parciales si hay monto abonado en esta fecha
+            if (montoAbonadoHoy > 0) {
+              const item = {
+                clienteId: cliente.id,
+                clienteNombre: cliente.nombre,
+                clienteDocumento: cliente.documento,
+                clienteTelefono: cliente.telefono,
+                clienteBarrio: cliente.barrio,
+                clienteCartera: cliente.cartera || 'K1',
+                clientePosicion: cliente.posicion,
+                creditoId: credito.id,
+                creditoMonto: credito.monto,
+                creditoTipo: credito.tipo,
+                valorCuota: credito.valorCuota,
+                nroCuota: cuota.nroCuota,
+                montoPagado: montoAbonadoHoy,
+                tipoPago: 'parcial'
+              };
+
+              if (cliente.cartera === 'K2') {
+                pagadosK2.push(item);
+              } else {
+                pagadosK1.push(item);
+              }
             }
           }
         });
@@ -924,6 +964,7 @@ const DiaDeCobro = () => {
                       <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
                       <th scope="col" className="px-4 py-3 text-center">Cuota</th>
                       <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                      <th scope="col" className="px-4 py-3 text-center">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -963,6 +1004,14 @@ const DiaDeCobro = () => {
                             {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
                           </span>
                         </td>
+                        <td className="px-4 py-4 text-center">
+                          <button
+                            onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
+                            className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
+                          >
+                            Ver Detalle
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -998,6 +1047,7 @@ const DiaDeCobro = () => {
                       <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
                       <th scope="col" className="px-4 py-3 text-center">Cuota</th>
                       <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                      <th scope="col" className="px-4 py-3 text-center">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -1036,6 +1086,14 @@ const DiaDeCobro = () => {
                           }`}>
                             {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
                           </span>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <button
+                            onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
+                            className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
+                          >
+                            Ver Detalle
+                          </button>
                         </td>
                       </tr>
                     ))}

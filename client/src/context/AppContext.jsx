@@ -365,9 +365,32 @@ export const AppProvider = ({ children }) => {
 
   const registrarPago = async (clienteId, creditoId, nroCuota, fechaPago = null) => {
     try {
+      // Normalizar la fecha: si viene como string YYYY-MM-DD, enviarla así; si es Date, convertir a string
+      let fechaEnviar = null;
+      if (fechaPago) {
+        if (typeof fechaPago === 'string') {
+          fechaEnviar = fechaPago;
+        } else if (fechaPago instanceof Date) {
+          // Convertir Date a string YYYY-MM-DD usando fecha local
+          const year = fechaPago.getFullYear();
+          const month = String(fechaPago.getMonth() + 1).padStart(2, '0');
+          const day = String(fechaPago.getDate()).padStart(2, '0');
+          fechaEnviar = `${year}-${month}-${day}`;
+        } else {
+          fechaEnviar = fechaPago;
+        }
+      } else {
+        // Si no hay fecha, usar fecha actual en formato YYYY-MM-DD
+        const hoy = new Date();
+        const year = hoy.getFullYear();
+        const month = String(hoy.getMonth() + 1).padStart(2, '0');
+        const day = String(hoy.getDate()).padStart(2, '0');
+        fechaEnviar = `${year}-${month}-${day}`;
+      }
+
       const response = await api.put(`/creditos/${creditoId}/pagos`, {
         nroCuota,
-        fechaPago: fechaPago || new Date()
+        fechaPago: fechaEnviar
       });
       if (response.success) {
         await fetchData(); // Actualizar estado general
