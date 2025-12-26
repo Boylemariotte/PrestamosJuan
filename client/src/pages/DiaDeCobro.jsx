@@ -33,6 +33,10 @@ const DiaDeCobro = () => {
   // Estructura: Set de strings con formato "clienteId-creditoId"
   const [creditosInvalidos, setCreditosInvalidos] = useState(new Set());
 
+  // Estado para prórrogas de cuotas, sin modificar la fecha original del crédito
+  // Estructura: { [`clienteId-creditoId-nroCuota`]: 'YYYY-MM-DD' }
+  const [prorrogasCuotas, setProrrogasCuotas] = useState({});
+
   // Cargar visitas y orden de cobro desde localStorage
   useEffect(() => {
     const cargarVisitas = () => {
@@ -64,6 +68,23 @@ const DiaDeCobro = () => {
     localStorage.setItem('ordenCobro', JSON.stringify(ordenCobro));
   }, [ordenCobro]);
 
+  // Cargar prórrogas de cuotas al iniciar
+  useEffect(() => {
+    const savedProrrogas = localStorage.getItem('prorrogasCuotas');
+    if (savedProrrogas) {
+      try {
+        setProrrogasCuotas(JSON.parse(savedProrrogas));
+      } catch (e) {
+        console.error('Error al parsear prorrogasCuotas desde localStorage', e);
+      }
+    }
+  }, []);
+
+  // Guardar cambios de prórrogas
+  useEffect(() => {
+    localStorage.setItem('prorrogasCuotas', JSON.stringify(prorrogasCuotas));
+  }, [prorrogasCuotas]);
+
   // Filtrar visitas para el día seleccionado
   const visitasDelDia = useMemo(() => {
     return visitas.filter(visita => {
@@ -88,6 +109,25 @@ const DiaDeCobro = () => {
 
   // Manejar cambio de número de orden para un cliente en la fecha seleccionada
   const handleCambioOrdenCliente = (clienteId, nuevoOrden) => {
+    // Permitir estado vacío mientras el usuario borra y escribe
+    if (nuevoOrden === '') {
+      setOrdenCobro(prev => {
+        const fechaKey = fechaSeleccionadaStr;
+        const ordenFechaActual = prev[fechaKey] || {};
+
+        const nuevoOrdenFecha = {
+          ...ordenFechaActual,
+          [clienteId]: '',
+        };
+
+        return {
+          ...prev,
+          [fechaKey]: nuevoOrdenFecha,
+        };
+      });
+      return;
+    }
+
     const numero = Number(nuevoOrden);
     if (Number.isNaN(numero) || numero <= 0) return;
 
@@ -160,6 +200,10 @@ const DiaDeCobro = () => {
           const cuotaOriginal = credito.cuotas[index];
           if (cuotaOriginal.pagado) return false;
 
+          const keyCuota = `${cliente.id}-${credito.id}-${cuota.nroCuota}`;
+          const fechaProrroga = prorrogasCuotas[keyCuota];
+          const fechaReferencia = fechaProrroga || cuotaOriginal.fechaProgramada;
+
           const abonoAplicado = cuota.abonoAplicado || 0;
           const valorCuotaPendiente = credito.valorCuota - abonoAplicado;
           const totalMultas = calcularTotalMultasCuota(cuota);
@@ -168,8 +212,8 @@ const DiaDeCobro = () => {
           const tieneSaldo = valorCuotaPendiente > 0 || multasPendientes > 0;
 
           // Check fecha
-          if (cuotaOriginal.fechaProgramada === fechaSeleccionadaStr) return tieneSaldo;
-          const fProg = new Date(cuotaOriginal.fechaProgramada);
+          if (fechaReferencia === fechaSeleccionadaStr) return tieneSaldo;
+          const fProg = new Date(fechaReferencia);
           const fSel = new Date(fechaSeleccionadaStr);
           return tieneSaldo && fProg <= fSel;
         });
@@ -301,7 +345,7 @@ const DiaDeCobro = () => {
     }, {});
 
     return { porBarrio: barriosOrdenados, stats };
-  }, [clientes, fechaSeleccionadaStr, creditosInvalidos]);
+  }, [clientes, fechaSeleccionadaStr, creditosInvalidos, prorrogasCuotas]);
 
   // Construir lista plana de cobros del día (sin agrupar por barrio)
   const listaCobrosDia = useMemo(() => {
@@ -314,8 +358,13 @@ const DiaDeCobro = () => {
 
     // Ordenar primero por número de orden asignado, luego por nombre de cliente
     items.sort((a, b) => {
-      const ordenA = ordenFecha[a.clienteId] ?? Number.MAX_SAFE_INTEGER;
-      const ordenB = ordenFecha[b.clienteId] ?? Number.MAX_SAFE_INTEGER;
+      const rawA = ordenFecha[a.clienteId];
+      const rawB = ordenFecha[b.clienteId];
+
+      const ordenA =
+        rawA === '' || rawA == null ? Number.MAX_SAFE_INTEGER : Number(rawA);
+      const ordenB =
+        rawB === '' || rawB == null ? Number.MAX_SAFE_INTEGER : Number(rawB);
 
       if (ordenA !== ordenB) return ordenA - ordenB;
       return (a.clienteNombre || '').localeCompare(b.clienteNombre || '');
@@ -361,6 +410,50 @@ const DiaDeCobro = () => {
   const [creditoSeleccionado, setCreditoSeleccionado] = useState(null);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
 
+  const aplicarProrrogaCuotasDelDia = (clienteId, creditoId, nuevaFechaStr) => {
+    const cliente = clientes.find(c => c.id === clienteId);
+    if (!cliente) return;
+    const credito = (cliente.creditos || []).find(c => c.id === creditoId);
+    if (!credito || !Array.isArray(credito.cuotas)) return;
+
+    const nuevasProrrogas = { ...prorrogasCuotas };
+
+    credito.cuotas.forEach(cuota => {
+      if (cuota.pagado) return;
+      const fechaOriginalStr = typeof cuota.fechaProgramada === 'string'
+        ? cuota.fechaProgramada.split('T')[0]
+        : '';
+
+      // Mover a la nueva fecha todas las cuotas pendientes cuya fecha original
+      // sea hoy o anterior al día que estás viendo en Día de Cobro
+      if (fechaOriginalStr && fechaOriginalStr <= fechaSeleccionadaStr) {
+        const key = `${clienteId}-${creditoId}-${cuota.nroCuota}`;
+        nuevasProrrogas[key] = nuevaFechaStr;
+      }
+    });
+
+    setProrrogasCuotas(nuevasProrrogas);
+    toast.success('Prórroga aplicada para este crédito en Día de Cobro');
+  };
+
+  const handleProrrogaDias = (clienteId, creditoId, dias) => {
+    const nuevaFecha = format(addDays(parseISO(fechaSeleccionadaStr), dias), 'yyyy-MM-dd');
+    aplicarProrrogaCuotasDelDia(clienteId, creditoId, nuevaFecha);
+  };
+
+  const handleProrrogaFecha = (clienteId, creditoId, nuevaFechaStr) => {
+    if (!nuevaFechaStr) return;
+
+    const valor = nuevaFechaStr.trim();
+    const regexFecha = /^\d{4}-\d{2}-\d{2}$/;
+    if (!regexFecha.test(valor)) {
+      toast.error('Formato de fecha no válido. Usa YYYY-MM-DD');
+      return;
+    }
+
+    aplicarProrrogaCuotasDelDia(clienteId, creditoId, valor);
+  };
+
   const abrirDetalle = async (clienteId, creditoId) => {
     const cliente = obtenerCliente(clienteId);
     const credito = obtenerCredito(clienteId, creditoId);
@@ -390,7 +483,7 @@ const DiaDeCobro = () => {
   };
 
   // Tabla de Cobros del día en lista única con numeración
-  const TablaCobrosLista = ({ items, onCambioOrden, ordenFecha }) => (
+  const TablaCobrosLista = ({ items, onCambioOrden, ordenFecha, onProrrogaDias, onProrrogaFecha }) => (
     <div className="overflow-x-auto">
       <table className="w-full text-sm text-left text-gray-500">
         <thead className="text-xs text-white uppercase bg-slate-800">
@@ -411,7 +504,9 @@ const DiaDeCobro = () => {
         <tbody>
           {items.map((item, index) => {
             const numeroLista = index + 1;
-            const valorOrden = ordenFecha[item.clienteId] || numeroLista;
+            const rawOrden = ordenFecha[item.clienteId];
+            const valorOrden =
+              rawOrden === undefined || rawOrden === null ? '' : String(rawOrden);
 
             // Determinar clase de color según la cartera del cliente
             const carteraRowClass = item.clienteCartera === 'K2' 
@@ -425,9 +520,7 @@ const DiaDeCobro = () => {
                 </td>
                 <td className="px-4 py-4 text-center">
                   <input
-                    type="number"
-                    min={1}
-                    max={items.length}
+                    type="text"
                     className="w-16 text-center border border-gray-300 rounded-md text-sm py-1 px-1"
                     value={valorOrden}
                     onChange={(e) => onCambioOrden(item.clienteId, e.target.value)}
@@ -485,12 +578,38 @@ const DiaDeCobro = () => {
                   {item.creditoTipo}
                 </td>
                 <td className="px-4 py-4 text-center">
-                  <button
-                    onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
-                    className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
-                  >
-                    Ver Detalle
-                  </button>
+                  <div className="flex flex-col items-center gap-1">
+                    <button
+                      onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
+                      className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
+                    >
+                      Ver Detalle
+                    </button>
+                    <div className="flex items-center gap-1 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const input = document.getElementById(`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`);
+                          if (input) {
+                            if (input.showPicker) {
+                              input.showPicker();
+                            } else {
+                              input.click();
+                            }
+                          }
+                        }}
+                        className="p-1 rounded-full border border-slate-300 bg-slate-50 hover:bg-slate-100"
+                      >
+                        <Calendar className="h-4 w-4 text-slate-700" />
+                      </button>
+                      <input
+                        id={`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`}
+                        type="date"
+                        className="hidden"
+                        onChange={(e) => onProrrogaFecha(item.clienteId, item.creditoId, e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </td>
               </tr>
             );
@@ -615,6 +734,8 @@ const DiaDeCobro = () => {
               items={listaCobrosDia}
               onCambioOrden={handleCambioOrdenCliente}
               ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
+              onProrrogaDias={handleProrrogaDias}
+              onProrrogaFecha={handleProrrogaFecha}
             />
           </div>
         )}
