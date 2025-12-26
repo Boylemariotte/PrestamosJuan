@@ -416,6 +416,110 @@ const DiaDeCobro = () => {
     return items;
   }, [datosCobro, ordenCobro, fechaSeleccionadaStr, searchTerm]);
 
+  // Obtener clientes que pagaron ese día, separados por cartera
+  const clientesPagados = useMemo(() => {
+    const pagadosK1 = [];
+    const pagadosK2 = [];
+
+    clientes.forEach(cliente => {
+      if (!cliente.creditos || cliente.creditos.length === 0) return;
+      if (!cliente.id) return;
+
+      cliente.creditos.forEach(credito => {
+        if (!credito || !credito.id || !credito.cuotas || !Array.isArray(credito.cuotas)) return;
+        if (credito.renovado) return;
+
+        // Procesar cada cuota para evitar duplicaciones
+        credito.cuotas.forEach(cuota => {
+          // Normalizar fecha de pago para comparación
+          let fechaPagoNormalizada = null;
+          if (cuota.fechaPago) {
+            if (typeof cuota.fechaPago === 'string') {
+              fechaPagoNormalizada = cuota.fechaPago.split('T')[0];
+            } else if (cuota.fechaPago instanceof Date) {
+              fechaPagoNormalizada = format(cuota.fechaPago, 'yyyy-MM-dd');
+            } else if (typeof cuota.fechaPago === 'object' && cuota.fechaPago.toISOString) {
+              fechaPagoNormalizada = new Date(cuota.fechaPago).toISOString().split('T')[0];
+            }
+          }
+
+          const pagoCompletoHoy = cuota.pagado && fechaPagoNormalizada === fechaSeleccionadaStr;
+
+          // Buscar abonos de hoy en esta cuota
+          const abonosHoy = (cuota.abonosCuota || []).filter(a => {
+            const fechaAbono = typeof a.fecha === 'string' 
+              ? a.fecha.split('T')[0] 
+              : format(new Date(a.fecha), 'yyyy-MM-dd');
+            return fechaAbono === fechaSeleccionadaStr;
+          });
+
+          const montoAbonadoHoy = abonosHoy.reduce((sum, a) => sum + (a.valor || 0), 0);
+
+          // Si la cuota está completamente pagada hoy, mostrar solo el pago completo
+          if (pagoCompletoHoy) {
+            const item = {
+              clienteId: cliente.id,
+              clienteNombre: cliente.nombre,
+              clienteDocumento: cliente.documento,
+              clienteTelefono: cliente.telefono,
+              clienteBarrio: cliente.barrio,
+              clienteCartera: cliente.cartera || 'K1',
+              clientePosicion: cliente.posicion,
+              creditoId: credito.id,
+              creditoMonto: credito.monto,
+              creditoTipo: credito.tipo,
+              valorCuota: credito.valorCuota,
+              nroCuota: cuota.nroCuota,
+              montoPagado: credito.valorCuota,
+              tipoPago: 'completo'
+            };
+
+            if (cliente.cartera === 'K2') {
+              pagadosK2.push(item);
+            } else {
+              pagadosK1.push(item);
+            }
+          } 
+          // Si hay abonos parciales hoy (y la cuota NO está completamente pagada hoy)
+          else if (montoAbonadoHoy > 0) {
+            const item = {
+              clienteId: cliente.id,
+              clienteNombre: cliente.nombre,
+              clienteDocumento: cliente.documento,
+              clienteTelefono: cliente.telefono,
+              clienteBarrio: cliente.barrio,
+              clienteCartera: cliente.cartera || 'K1',
+              clientePosicion: cliente.posicion,
+              creditoId: credito.id,
+              creditoMonto: credito.monto,
+              creditoTipo: credito.tipo,
+              valorCuota: credito.valorCuota,
+              nroCuota: cuota.nroCuota,
+              montoPagado: montoAbonadoHoy,
+              tipoPago: 'parcial'
+            };
+
+            if (cliente.cartera === 'K2') {
+              pagadosK2.push(item);
+            } else {
+              pagadosK1.push(item);
+            }
+          }
+        });
+      });
+    });
+
+    // Calcular totales
+    const totalK1 = pagadosK1.reduce((sum, item) => sum + item.montoPagado, 0);
+    const totalK2 = pagadosK2.reduce((sum, item) => sum + item.montoPagado, 0);
+
+
+    return {
+      K1: { items: pagadosK1, total: totalK1 },
+      K2: { items: pagadosK2, total: totalK2 }
+    };
+  }, [clientes, fechaSeleccionadaStr]);
+
   // Funciones de navegación de fecha
   const irAyer = () => setFechaSeleccionada(subDays(fechaSeleccionada, 1));
   const irHoy = () => setFechaSeleccionada(startOfDay(new Date()));
@@ -784,6 +888,164 @@ const DiaDeCobro = () => {
           </div>
         )}
       </div>
+
+      {/* Sección Pagados - Siempre visible si hay pagos */}
+      {(clientesPagados.K1.items.length > 0 || clientesPagados.K2.items.length > 0) && (
+        <div className="space-y-6 mt-8 pt-8 border-t-2 border-gray-300">
+          <div className="flex items-center gap-3 mb-4">
+            <CheckCircle className="h-6 w-6 text-green-600" />
+            <h2 className="text-2xl font-bold text-gray-900">Pagados</h2>
+          </div>
+          
+          {/* Card K1 */}
+          {clientesPagados.K1.items.length > 0 && (
+            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+              <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-2 rounded-lg">
+                    <Users className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Cartera K1</h3>
+                    <p className="text-blue-100 text-sm">{clientesPagados.K1.items.length} {clientesPagados.K1.items.length === 1 ? 'pago' : 'pagos'}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-blue-100 text-sm">Total Recogido</p>
+                  <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K1.total)}</p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-gray-500">
+                  <thead className="text-xs text-white uppercase bg-slate-800">
+                    <tr>
+                      <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
+                      <th scope="col" className="px-4 py-3">Cliente</th>
+                      <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
+                      <th scope="col" className="px-4 py-3 text-center">Cuota</th>
+                      <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {clientesPagados.K1.items.map((item, index) => (
+                      <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-blue-50 hover:bg-blue-100">
+                        <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
+                          {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
+                            <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
+                            <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
+                              <Phone className="h-3 w-3" />
+                              <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono || 'N/A'}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
+                              <MapPin className="h-3 w-3" />
+                              {item.clienteBarrio || 'Sin barrio'}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 font-bold text-green-600 text-base">
+                          {formatearMoneda(item.montoPagado)}
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <span className="bg-blue-200 text-blue-800 px-2 py-1 rounded font-medium">
+                            {item.nroCuota ? `#${item.nroCuota}` : 'General'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <span className={`px-2 py-1 rounded font-medium ${
+                            item.tipoPago === 'completo' 
+                              ? 'bg-green-200 text-green-800' 
+                              : 'bg-yellow-200 text-yellow-800'
+                          }`}>
+                            {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Card K2 */}
+          {clientesPagados.K2.items.length > 0 && (
+            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+              <div className="bg-green-600 text-white px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-2 rounded-lg">
+                    <Users className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Cartera K2</h3>
+                    <p className="text-green-100 text-sm">{clientesPagados.K2.items.length} {clientesPagados.K2.items.length === 1 ? 'pago' : 'pagos'}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-green-100 text-sm">Total Recogido</p>
+                  <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K2.total)}</p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-gray-500">
+                  <thead className="text-xs text-white uppercase bg-slate-800">
+                    <tr>
+                      <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
+                      <th scope="col" className="px-4 py-3">Cliente</th>
+                      <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
+                      <th scope="col" className="px-4 py-3 text-center">Cuota</th>
+                      <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {clientesPagados.K2.items.map((item, index) => (
+                      <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-green-50 hover:bg-green-100">
+                        <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
+                          {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
+                            <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
+                            <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
+                              <Phone className="h-3 w-3" />
+                              <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono || 'N/A'}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
+                              <MapPin className="h-3 w-3" />
+                              {item.clienteBarrio || 'Sin barrio'}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 font-bold text-green-600 text-base">
+                          {formatearMoneda(item.montoPagado)}
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <span className="bg-green-200 text-green-800 px-2 py-1 rounded font-medium">
+                            {item.nroCuota ? `#${item.nroCuota}` : 'General'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <span className={`px-2 py-1 rounded font-medium ${
+                            item.tipoPago === 'completo' 
+                              ? 'bg-green-200 text-green-800' 
+                              : 'bg-yellow-200 text-yellow-800'
+                          }`}>
+                            {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal Detalle */}
       {creditoSeleccionado && clienteSeleccionado && (
