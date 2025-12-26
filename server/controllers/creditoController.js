@@ -586,11 +586,30 @@ export const agregarAbono = async (req, res, next) => {
         return res.status(400).json({ success: false, error: 'multaId es requerido para abonos de multa' });
       }
       
+      // Normalizar la fecha del abono de multa para evitar problemas de zona horaria
+      let fechaAbonoMulta = fecha || new Date();
+      if (fecha) {
+        if (typeof fecha === 'string') {
+          // Si viene como string YYYY-MM-DD, crear Date en UTC mediodía para evitar problemas de zona horaria
+          const partes = fecha.split('T')[0].split('-');
+          if (partes.length === 3) {
+            // Usar UTC para que la fecha se mantenga correcta independientemente de la zona horaria del servidor
+            fechaAbonoMulta = new Date(Date.UTC(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]), 12, 0, 0, 0));
+          } else {
+            fechaAbonoMulta = new Date(fecha);
+          }
+        } else if (fecha instanceof Date) {
+          fechaAbonoMulta = fecha;
+        } else {
+          fechaAbonoMulta = new Date(fecha);
+        }
+      }
+      
       const nuevoAbonoMulta = {
         id: Date.now().toString(),
         valor: parseFloat(valor),
         descripcion: descripcion || 'Abono a multa',
-        fecha: fecha || new Date(),
+        fecha: fechaAbonoMulta,
         multaId: multaId
       };
 
@@ -671,21 +690,79 @@ export const editarAbono = async (req, res, next) => {
     if (!credito) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
 
     const abonoId = req.params.abonoId;
-    const abonoIndex = credito.abonos.findIndex(a => a.id === abonoId);
+    
+    // Buscar primero en abonos de cuotas
+    let abonoIndex = credito.abonos.findIndex(a => a.id === abonoId);
+    let esAbonoMulta = false;
+    
+    // Si no se encuentra, buscar en abonos de multas
+    if (abonoIndex === -1) {
+      abonoIndex = (credito.abonosMulta || []).findIndex(a => a.id === abonoId);
+      esAbonoMulta = abonoIndex !== -1;
+    }
 
     if (abonoIndex === -1) {
       return res.status(404).json({ success: false, error: 'Abono no encontrado' });
     }
 
-    // Actualizar campos del abono
-    credito.abonos[abonoIndex] = {
-      ...credito.abonos[abonoIndex],
-      valor: valor ? parseFloat(valor) : credito.abonos[abonoIndex].valor,
-      descripcion: descripcion !== undefined ? descripcion : credito.abonos[abonoIndex].descripcion,
-      fecha: fecha || credito.abonos[abonoIndex].fecha,
-      tipo: tipo || credito.abonos[abonoIndex].tipo,
-      nroCuota: nroCuota ? parseInt(nroCuota, 10) : (nroCuota === null ? null : credito.abonos[abonoIndex].nroCuota)
-    };
+    // Normalizar fecha si se proporciona
+    let fechaNormalizada = null;
+    if (fecha) {
+      if (typeof fecha === 'string') {
+        const partes = fecha.split('T')[0].split('-');
+        if (partes.length === 3) {
+          fechaNormalizada = new Date(Date.UTC(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]), 12, 0, 0, 0));
+        } else {
+          fechaNormalizada = new Date(fecha);
+        }
+      } else if (fecha instanceof Date) {
+        fechaNormalizada = fecha;
+      } else {
+        fechaNormalizada = new Date(fecha);
+      }
+    }
+
+    if (esAbonoMulta) {
+      // Actualizar abono de multa
+      const abonoOriginal = credito.abonosMulta[abonoIndex];
+      
+      // Crear una copia del objeto para asegurar que Mongoose detecte el cambio
+      const abonoActualizado = {
+        id: abonoOriginal.id || abonoId,
+        valor: valor !== undefined ? parseFloat(valor) : abonoOriginal.valor,
+        descripcion: descripcion !== undefined ? descripcion : abonoOriginal.descripcion,
+        fecha: fechaNormalizada || abonoOriginal.fecha,
+        multaId: abonoOriginal.multaId // Asegurar que multaId se mantenga
+      };
+      
+      // Usar set para actualizar el array completo y forzar que Mongoose detecte el cambio
+      const nuevosAbonosMulta = credito.abonosMulta.map((abono, idx) => 
+        idx === abonoIndex ? abonoActualizado : abono
+      );
+      credito.set('abonosMulta', nuevosAbonosMulta);
+      
+      console.log(`[editarAbono] Abono de multa actualizado:`, {
+        abonoId,
+        fechaAnterior: abonoOriginal.fecha,
+        fechaNueva: abonoActualizado.fecha,
+        valorAnterior: abonoOriginal.valor,
+        valorNuevo: abonoActualizado.valor,
+        fechaNormalizadaRecibida: fecha,
+        fechaNormalizadaProcesada: fechaNormalizada
+      });
+    } else {
+      // Actualizar abono de cuota
+      const abonoOriginal = credito.abonos[abonoIndex];
+      credito.abonos[abonoIndex] = {
+        ...abonoOriginal,
+        id: abonoOriginal.id || abonoId, // Asegurar que el ID siempre esté presente
+        valor: valor ? parseFloat(valor) : abonoOriginal.valor,
+        descripcion: descripcion !== undefined ? descripcion : abonoOriginal.descripcion,
+        fecha: fechaNormalizada || abonoOriginal.fecha,
+        tipo: tipo || abonoOriginal.tipo,
+        nroCuota: nroCuota ? parseInt(nroCuota, 10) : (nroCuota === null ? null : abonoOriginal.nroCuota)
+      };
+    }
 
     // Recalcular todo el estado del crédito tras editar abono
     credito = recalcularCreditoCompleto(credito);

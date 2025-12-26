@@ -171,6 +171,7 @@ export const BARRIOS_TULUA = [
   "San Lorenzo",
   "San Lucas",
   "San Luis",
+  "San Marino",
   "San Martín",
   "San Pedro",
   "San Pedro Claver",

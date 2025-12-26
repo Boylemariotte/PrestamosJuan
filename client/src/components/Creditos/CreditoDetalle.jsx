@@ -499,7 +499,46 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
   };
 
   const handleEditarAbono = (abono) => {
-    setAbonoEnEdicion(abono);
+    // Asegurarse de que el abono tenga el ID del abono original
+    let abonoConId = { ...abono };
+    
+    // Si el abono no tiene ID, buscarlo en abonos de cuotas o abonos de multas
+    if (!abonoConId.id) {
+      const fechaAbono = abono.fecha ? (typeof abono.fecha === 'string' ? abono.fecha.split('T')[0] : new Date(abono.fecha).toISOString().split('T')[0]) : null;
+      const valorAbono = abono.valor || abono.valorAplicado;
+      
+      // Buscar primero en abonos de cuotas
+      if (credito.abonos) {
+        const abonoOriginal = credito.abonos.find(a => {
+          if (!a.id) return false;
+          const fechaA = a.fecha ? (typeof a.fecha === 'string' ? a.fecha.split('T')[0] : new Date(a.fecha).toISOString().split('T')[0]) : null;
+          const fechaCoincide = fechaA === fechaAbono;
+          const valorCoincide = Math.abs(a.valor - valorAbono) < 0.01;
+          return fechaCoincide && valorCoincide;
+        });
+        
+        if (abonoOriginal && abonoOriginal.id) {
+          abonoConId.id = abonoOriginal.id;
+        }
+      }
+      
+      // Si no se encontró en abonos de cuotas, buscar en abonos de multas
+      if (!abonoConId.id && credito.abonosMulta) {
+        const abonoMultaOriginal = credito.abonosMulta.find(a => {
+          if (!a.id) return false;
+          const fechaA = a.fecha ? (typeof a.fecha === 'string' ? a.fecha.split('T')[0] : new Date(a.fecha).toISOString().split('T')[0]) : null;
+          const fechaCoincide = fechaA === fechaAbono;
+          const valorCoincide = Math.abs(a.valor - valorAbono) < 0.01;
+          return fechaCoincide && valorCoincide;
+        });
+        
+        if (abonoMultaOriginal && abonoMultaOriginal.id) {
+          abonoConId.id = abonoMultaOriginal.id;
+        }
+      }
+    }
+    
+    setAbonoEnEdicion(abonoConId);
   };
 
   const handleGuardarEdicionAbono = ({ valor, fecha, descripcion, nroCuota }) => {
@@ -510,11 +549,79 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
       return;
     }
 
-    editarAbono(clienteId, credito.id, abonoEnEdicion.id, {
+    // Normalizar la fecha a formato YYYY-MM-DD antes de enviarla al backend
+    let fechaNormalizada = fecha;
+    if (fecha) {
+      if (typeof fecha === 'string' && fecha.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        fechaNormalizada = fecha; // Ya está en formato correcto
+      } else if (typeof fecha === 'string') {
+        // Intentar extraer la fecha si viene en formato ISO
+        fechaNormalizada = fecha.split('T')[0];
+      } else if (fecha instanceof Date) {
+        const year = fecha.getFullYear();
+        const month = String(fecha.getMonth() + 1).padStart(2, '0');
+        const day = String(fecha.getDate()).padStart(2, '0');
+        fechaNormalizada = `${year}-${month}-${day}`;
+      }
+    }
+
+    // Si el abono no tiene id, intentar encontrarlo en abonos de cuotas o abonos de multas
+    let abonoId = abonoEnEdicion.id;
+    let esAbonoMulta = false;
+    
+    if (!abonoId) {
+      // Buscar primero en abonos de cuotas
+      const valorOriginal = abonoEnEdicion.valor || abonoEnEdicion.valorAplicado || valorNumerico;
+      const fechaOriginal = abonoEnEdicion.fecha ? (typeof abonoEnEdicion.fecha === 'string' ? abonoEnEdicion.fecha.split('T')[0] : new Date(abonoEnEdicion.fecha).toISOString().split('T')[0]) : null;
+      
+      // Buscar en abonos de cuotas
+      if (credito.abonos) {
+        const abonoEncontrado = credito.abonos.find(a => {
+          if (!a.id) return false;
+          const valorCoincide = Math.abs(a.valor - valorOriginal) < 0.01;
+          const fechaAbono = a.fecha ? (typeof a.fecha === 'string' ? a.fecha.split('T')[0] : new Date(a.fecha).toISOString().split('T')[0]) : null;
+          const fechaCoincide = !fechaOriginal || fechaAbono === fechaOriginal;
+          return valorCoincide && fechaCoincide;
+        });
+        
+        if (abonoEncontrado && abonoEncontrado.id) {
+          abonoId = abonoEncontrado.id;
+        }
+      }
+      
+      // Si no se encontró en abonos de cuotas, buscar en abonos de multas
+      if (!abonoId && credito.abonosMulta) {
+        const abonoMultaEncontrado = credito.abonosMulta.find(a => {
+          if (!a.id) return false;
+          const valorCoincide = Math.abs(a.valor - valorOriginal) < 0.01;
+          const fechaAbono = a.fecha ? (typeof a.fecha === 'string' ? a.fecha.split('T')[0] : new Date(a.fecha).toISOString().split('T')[0]) : null;
+          const fechaCoincide = !fechaOriginal || fechaAbono === fechaOriginal;
+          return valorCoincide && fechaCoincide;
+        });
+        
+        if (abonoMultaEncontrado && abonoMultaEncontrado.id) {
+          abonoId = abonoMultaEncontrado.id;
+          esAbonoMulta = true;
+        }
+      }
+    } else {
+      // Si ya tiene ID, verificar si es abono de multa buscando en abonosMulta
+      if (credito.abonosMulta && credito.abonosMulta.some(a => a.id === abonoId)) {
+        esAbonoMulta = true;
+      }
+    }
+
+    if (!abonoId) {
+      alert('No se pudo encontrar el abono para editar. Por favor, intente eliminar y crear un nuevo abono.');
+      return;
+    }
+
+    // Si es abono de multa, no enviar nroCuota
+    editarAbono(clienteId, credito.id, abonoId, {
       valor: valorNumerico,
-      fecha,
+      fecha: fechaNormalizada,
       descripcion,
-      nroCuota: nroCuota ? parseInt(nroCuota, 10) : null
+      nroCuota: esAbonoMulta ? null : (nroCuota ? parseInt(nroCuota, 10) : null)
     });
 
     setAbonoEnEdicion(null);

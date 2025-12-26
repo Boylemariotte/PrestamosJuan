@@ -46,6 +46,7 @@ const GrillaCuotas = ({
           if (!mapa[cuota.nroCuota]) mapa[cuota.nroCuota] = [];
           mapa[cuota.nroCuota].push({
             ...abono,
+            id: abono.id, // Asegurar que el ID esté presente
             valorAplicado: monto
           });
 
@@ -70,6 +71,7 @@ const GrillaCuotas = ({
             if (!mapa[cuota.nroCuota]) mapa[cuota.nroCuota] = [];
             mapa[cuota.nroCuota].push({
               ...abono,
+              id: abono.id, // Asegurar que el ID esté presente
               valorAplicado: aporte
             });
           }

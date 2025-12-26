@@ -420,6 +420,9 @@ const DiaDeCobro = () => {
   const clientesPagados = useMemo(() => {
     const pagadosK1 = [];
     const pagadosK2 = [];
+    
+    // Mapa para rastrear items por cliente-credito-cuota para combinar pagos de cuota y multa
+    const itemsMap = new Map();
 
     clientes.forEach(cliente => {
       if (!cliente.creditos || cliente.creditos.length === 0) return;
@@ -429,7 +432,7 @@ const DiaDeCobro = () => {
         if (!credito || !credito.id || !credito.cuotas || !Array.isArray(credito.cuotas)) return;
         if (credito.renovado) return;
 
-        // Procesar cada cuota para evitar duplicaciones
+        // 1. Procesar pagos de cuotas
         credito.cuotas.forEach(cuota => {
           // Normalizar fecha de pago para comparación
           let fechaPagoNormalizada = null;
@@ -438,17 +441,13 @@ const DiaDeCobro = () => {
               let fechaObj = null;
               
               if (typeof cuota.fechaPago === 'string') {
-                // Si es string, puede venir como ISO o YYYY-MM-DD
                 if (cuota.fechaPago.includes('T')) {
-                  // Extraer solo la parte de fecha (YYYY-MM-DD) del ISO string
                   fechaPagoNormalizada = cuota.fechaPago.split('T')[0];
                 } else if (cuota.fechaPago.match(/^\d{4}-\d{2}-\d{2}$/)) {
                   fechaPagoNormalizada = cuota.fechaPago;
                 } else {
-                  // Intentar parsear como fecha y extraer solo la parte de fecha
                   fechaObj = new Date(cuota.fechaPago);
                   if (!isNaN(fechaObj.getTime())) {
-                    // Usar getFullYear, getMonth, getDate para evitar problemas de zona horaria
                     const year = fechaObj.getFullYear();
                     const month = String(fechaObj.getMonth() + 1).padStart(2, '0');
                     const day = String(fechaObj.getDate()).padStart(2, '0');
@@ -456,16 +455,13 @@ const DiaDeCobro = () => {
                   }
                 }
               } else if (cuota.fechaPago instanceof Date) {
-                // Usar métodos de fecha local para evitar problemas de zona horaria
                 const year = cuota.fechaPago.getFullYear();
                 const month = String(cuota.fechaPago.getMonth() + 1).padStart(2, '0');
                 const day = String(cuota.fechaPago.getDate()).padStart(2, '0');
                 fechaPagoNormalizada = `${year}-${month}-${day}`;
               } else if (typeof cuota.fechaPago === 'object') {
-                // Puede ser un objeto Date de MongoDB o un objeto con métodos de fecha
                 fechaObj = new Date(cuota.fechaPago);
                 if (!isNaN(fechaObj.getTime())) {
-                  // Usar métodos de fecha local para evitar problemas de zona horaria
                   const year = fechaObj.getFullYear();
                   const month = String(fechaObj.getMonth() + 1).padStart(2, '0');
                   const day = String(fechaObj.getDate()).padStart(2, '0');
@@ -478,33 +474,27 @@ const DiaDeCobro = () => {
           }
 
           // Si la cuota está pagada, solo mostrar en la fecha exacta de pago
-          if (cuota.pagado && fechaPagoNormalizada) {
-            // Solo mostrar si la fecha de pago coincide exactamente con la fecha seleccionada
-            if (fechaPagoNormalizada === fechaSeleccionadaStr) {
-              const item = {
-                clienteId: cliente.id,
-                clienteNombre: cliente.nombre,
-                clienteDocumento: cliente.documento,
-                clienteTelefono: cliente.telefono,
-                clienteBarrio: cliente.barrio,
-                clienteCartera: cliente.cartera || 'K1',
-                clientePosicion: cliente.posicion,
-                creditoId: credito.id,
-                creditoMonto: credito.monto,
-                creditoTipo: credito.tipo,
-                valorCuota: credito.valorCuota,
-                nroCuota: cuota.nroCuota,
-                montoPagado: credito.valorCuota,
-                tipoPago: 'completo'
-              };
-
-              if (cliente.cartera === 'K2') {
-                pagadosK2.push(item);
-              } else {
-                pagadosK1.push(item);
-              }
-            }
-            // Si la cuota está pagada pero en otra fecha, no mostrar nada (ya se mostró en su fecha)
+          if (cuota.pagado && fechaPagoNormalizada === fechaSeleccionadaStr) {
+            const key = `${cliente.id}-${credito.id}-${cuota.nroCuota}`;
+            const item = {
+              clienteId: cliente.id,
+              clienteNombre: cliente.nombre,
+              clienteDocumento: cliente.documento,
+              clienteTelefono: cliente.telefono,
+              clienteBarrio: cliente.barrio,
+              clienteCartera: cliente.cartera || 'K1',
+              clientePosicion: cliente.posicion,
+              creditoId: credito.id,
+              creditoMonto: credito.monto,
+              creditoTipo: credito.tipo,
+              valorCuota: credito.valorCuota,
+              nroCuota: cuota.nroCuota,
+              montoPagado: credito.valorCuota,
+              tipoPago: 'completo',
+              montoPagadoMulta: 0,
+              tieneMulta: false
+            };
+            itemsMap.set(key, item);
             return;
           }
 
@@ -521,6 +511,7 @@ const DiaDeCobro = () => {
 
             // Solo mostrar abonos parciales si hay monto abonado en esta fecha
             if (montoAbonadoHoy > 0) {
+              const key = `${cliente.id}-${credito.id}-${cuota.nroCuota}`;
               const item = {
                 clienteId: cliente.id,
                 clienteNombre: cliente.nombre,
@@ -535,24 +526,183 @@ const DiaDeCobro = () => {
                 valorCuota: credito.valorCuota,
                 nroCuota: cuota.nroCuota,
                 montoPagado: montoAbonadoHoy,
-                tipoPago: 'parcial'
+                tipoPago: 'parcial',
+                montoPagadoMulta: 0,
+                tieneMulta: false
               };
-
-              if (cliente.cartera === 'K2') {
-                pagadosK2.push(item);
-              } else {
-                pagadosK1.push(item);
-              }
+              itemsMap.set(key, item);
             }
           }
         });
+
+        // 2. Procesar pagos de multas
+        if (credito.abonosMulta && credito.abonosMulta.length > 0) {
+          const abonosMultaHoy = credito.abonosMulta.filter(abonoMulta => {
+            // Normalizar fecha de abono de multa para comparación (similar a cuotas)
+            let fechaAbonoNormalizada = null;
+            if (abonoMulta.fecha) {
+              try {
+                let fechaObj = null;
+                
+                if (typeof abonoMulta.fecha === 'string') {
+                  if (abonoMulta.fecha.includes('T')) {
+                    fechaAbonoNormalizada = abonoMulta.fecha.split('T')[0];
+                  } else if (abonoMulta.fecha.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                    fechaAbonoNormalizada = abonoMulta.fecha;
+                  } else {
+                    fechaObj = new Date(abonoMulta.fecha);
+                    if (!isNaN(fechaObj.getTime())) {
+                      // Usar UTC para evitar problemas de zona horaria
+                      const year = fechaObj.getUTCFullYear();
+                      const month = String(fechaObj.getUTCMonth() + 1).padStart(2, '0');
+                      const day = String(fechaObj.getUTCDate()).padStart(2, '0');
+                      fechaAbonoNormalizada = `${year}-${month}-${day}`;
+                    }
+                  }
+                } else if (abonoMulta.fecha instanceof Date) {
+                  // Usar UTC para evitar problemas de zona horaria
+                  const year = abonoMulta.fecha.getUTCFullYear();
+                  const month = String(abonoMulta.fecha.getUTCMonth() + 1).padStart(2, '0');
+                  const day = String(abonoMulta.fecha.getUTCDate()).padStart(2, '0');
+                  fechaAbonoNormalizada = `${year}-${month}-${day}`;
+                } else if (typeof abonoMulta.fecha === 'object') {
+                  fechaObj = new Date(abonoMulta.fecha);
+                  if (!isNaN(fechaObj.getTime())) {
+                    // Usar UTC para evitar problemas de zona horaria
+                    const year = fechaObj.getUTCFullYear();
+                    const month = String(fechaObj.getUTCMonth() + 1).padStart(2, '0');
+                    const day = String(fechaObj.getUTCDate()).padStart(2, '0');
+                    fechaAbonoNormalizada = `${year}-${month}-${day}`;
+                  }
+                }
+              } catch (error) {
+                console.error('Error normalizando fecha de abono de multa:', error, abonoMulta.fecha);
+              }
+            }
+            return fechaAbonoNormalizada === fechaSeleccionadaStr;
+          });
+
+          if (abonosMultaHoy.length > 0) {
+            // Agrupar abonos de multa por multaId para calcular el total pagado por multa
+            const multasPagadas = new Map();
+            
+            abonosMultaHoy.forEach(abonoMulta => {
+              // Buscar la multa, intentando diferentes formas de comparación de ID
+              const multa = credito.multas?.find(m => 
+                m.id === abonoMulta.multaId || 
+                m.id?.toString() === abonoMulta.multaId?.toString() ||
+                String(m.id) === String(abonoMulta.multaId)
+              );
+              
+              if (!multa) {
+                // Si no se encuentra la multa, crear un item con información básica del abono
+                const key = `${cliente.id}-${credito.id}-multa-${abonoMulta.multaId || 'sin-id'}`;
+                // Verificar si ya existe un item para esta multa
+                if (!itemsMap.has(key)) {
+                  const item = {
+                    clienteId: cliente.id,
+                    clienteNombre: cliente.nombre,
+                    clienteDocumento: cliente.documento,
+                    clienteTelefono: cliente.telefono,
+                    clienteBarrio: cliente.barrio,
+                    clienteCartera: cliente.cartera || 'K1',
+                    clientePosicion: cliente.posicion,
+                    creditoId: credito.id,
+                    creditoMonto: credito.monto,
+                    creditoTipo: credito.tipo,
+                    valorCuota: credito.valorCuota,
+                    nroCuota: null,
+                    montoPagado: 0,
+                    tipoPago: null,
+                    montoPagadoMulta: abonoMulta.valor || 0,
+                    tieneMulta: true,
+                    multaMotivo: abonoMulta.descripcion || 'Multa (detalle no disponible)'
+                  };
+                  itemsMap.set(key, item);
+                } else {
+                  // Si ya existe, sumar el monto
+                  const itemExistente = itemsMap.get(key);
+                  itemExistente.montoPagadoMulta += abonoMulta.valor || 0;
+                }
+                return;
+              }
+              
+              if (!multasPagadas.has(abonoMulta.multaId)) {
+                multasPagadas.set(abonoMulta.multaId, {
+                  multaId: abonoMulta.multaId,
+                  multaMotivo: multa.motivo,
+                  multaValor: multa.valor,
+                  montoPagado: 0
+                });
+              }
+              const multaInfo = multasPagadas.get(abonoMulta.multaId);
+              multaInfo.montoPagado += abonoMulta.valor || 0;
+            });
+
+            // Para cada multa pagada, buscar si hay un item de cuota del mismo día o crear uno nuevo
+            multasPagadas.forEach((multaInfo, multaId) => {
+              // Buscar si hay un item de cuota para este crédito en el mismo día
+              let itemExistente = null;
+              let keyExistente = null;
+              
+              // Buscar el primer item de este crédito que tenga cuota
+              for (const [key, item] of itemsMap.entries()) {
+                if (item.creditoId === credito.id && item.nroCuota) {
+                  itemExistente = item;
+                  keyExistente = key;
+                  break;
+                }
+              }
+
+              if (itemExistente) {
+                // Combinar con el item existente de cuota
+                itemExistente.montoPagadoMulta += multaInfo.montoPagado;
+                itemExistente.tieneMulta = true;
+                if (!itemExistente.multaMotivo) {
+                  itemExistente.multaMotivo = multaInfo.multaMotivo;
+                }
+              } else {
+                // Crear un nuevo item solo para multa (sin cuota)
+                const key = `${cliente.id}-${credito.id}-multa-${multaId}`;
+                const item = {
+                  clienteId: cliente.id,
+                  clienteNombre: cliente.nombre,
+                  clienteDocumento: cliente.documento,
+                  clienteTelefono: cliente.telefono,
+                  clienteBarrio: cliente.barrio,
+                  clienteCartera: cliente.cartera || 'K1',
+                  clientePosicion: cliente.posicion,
+                  creditoId: credito.id,
+                  creditoMonto: credito.monto,
+                  creditoTipo: credito.tipo,
+                  valorCuota: credito.valorCuota,
+                  nroCuota: null, // Sin cuota, solo multa
+                  montoPagado: 0, // No hay pago de cuota
+                  tipoPago: null, // No aplica
+                  montoPagadoMulta: multaInfo.montoPagado,
+                  tieneMulta: true,
+                  multaMotivo: multaInfo.multaMotivo
+                };
+                itemsMap.set(key, item);
+              }
+            });
+          }
+        }
       });
     });
 
-    // Calcular totales
-    const totalK1 = pagadosK1.reduce((sum, item) => sum + item.montoPagado, 0);
-    const totalK2 = pagadosK2.reduce((sum, item) => sum + item.montoPagado, 0);
+    // Convertir el mapa a arrays separados por cartera
+    itemsMap.forEach(item => {
+      if (item.clienteCartera === 'K2') {
+        pagadosK2.push(item);
+      } else {
+        pagadosK1.push(item);
+      }
+    });
 
+    // Calcular totales (incluyendo multas)
+    const totalK1 = pagadosK1.reduce((sum, item) => sum + item.montoPagado + (item.montoPagadoMulta || 0), 0);
+    const totalK2 = pagadosK2.reduce((sum, item) => sum + item.montoPagado + (item.montoPagadoMulta || 0), 0);
 
     return {
       K1: { items: pagadosK1, total: totalK1 },
@@ -964,6 +1114,8 @@ const DiaDeCobro = () => {
                       <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
                       <th scope="col" className="px-4 py-3 text-center">Cuota</th>
                       <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                      <th scope="col" className="px-4 py-3 text-center">Multa</th>
+                      <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
                       <th scope="col" className="px-4 py-3 text-center">Acciones</th>
                     </tr>
                   </thead>
@@ -988,21 +1140,45 @@ const DiaDeCobro = () => {
                           </div>
                         </td>
                         <td className="px-4 py-4 font-bold text-green-600 text-base">
-                          {formatearMoneda(item.montoPagado)}
+                          {item.montoPagado > 0 ? formatearMoneda(item.montoPagado) : <span className="text-gray-400">-</span>}
                         </td>
                         <td className="px-4 py-4 text-center">
-                          <span className="bg-blue-200 text-blue-800 px-2 py-1 rounded font-medium">
-                            {item.nroCuota ? `#${item.nroCuota}` : 'General'}
-                          </span>
+                          {item.nroCuota ? (
+                            <span className="bg-blue-200 text-blue-800 px-2 py-1 rounded font-medium">
+                              #{item.nroCuota}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
                         </td>
                         <td className="px-4 py-4 text-center">
-                          <span className={`px-2 py-1 rounded font-medium ${
-                            item.tipoPago === 'completo' 
-                              ? 'bg-green-200 text-green-800' 
-                              : 'bg-yellow-200 text-yellow-800'
-                          }`}>
-                            {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
-                          </span>
+                          {item.tipoPago ? (
+                            <span className={`px-2 py-1 rounded font-medium ${
+                              item.tipoPago === 'completo' 
+                                ? 'bg-green-200 text-green-800' 
+                                : 'bg-yellow-200 text-yellow-800'
+                            }`}>
+                              {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          {item.tieneMulta ? (
+                            <span className="bg-red-200 text-red-800 px-2 py-1 rounded font-medium text-xs">
+                              {item.multaMotivo || 'Multa'}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-center font-bold">
+                          {item.montoPagadoMulta > 0 ? (
+                            <span className="text-orange-600">{formatearMoneda(item.montoPagadoMulta)}</span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
                         </td>
                         <td className="px-4 py-4 text-center">
                           <button
@@ -1047,6 +1223,8 @@ const DiaDeCobro = () => {
                       <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
                       <th scope="col" className="px-4 py-3 text-center">Cuota</th>
                       <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                      <th scope="col" className="px-4 py-3 text-center">Multa</th>
+                      <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
                       <th scope="col" className="px-4 py-3 text-center">Acciones</th>
                     </tr>
                   </thead>
@@ -1071,21 +1249,45 @@ const DiaDeCobro = () => {
                           </div>
                         </td>
                         <td className="px-4 py-4 font-bold text-green-600 text-base">
-                          {formatearMoneda(item.montoPagado)}
+                          {item.montoPagado > 0 ? formatearMoneda(item.montoPagado) : <span className="text-gray-400">-</span>}
                         </td>
                         <td className="px-4 py-4 text-center">
-                          <span className="bg-green-200 text-green-800 px-2 py-1 rounded font-medium">
-                            {item.nroCuota ? `#${item.nroCuota}` : 'General'}
-                          </span>
+                          {item.nroCuota ? (
+                            <span className="bg-green-200 text-green-800 px-2 py-1 rounded font-medium">
+                              #{item.nroCuota}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
                         </td>
                         <td className="px-4 py-4 text-center">
-                          <span className={`px-2 py-1 rounded font-medium ${
-                            item.tipoPago === 'completo' 
-                              ? 'bg-green-200 text-green-800' 
-                              : 'bg-yellow-200 text-yellow-800'
-                          }`}>
-                            {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
-                          </span>
+                          {item.tipoPago ? (
+                            <span className={`px-2 py-1 rounded font-medium ${
+                              item.tipoPago === 'completo' 
+                                ? 'bg-green-200 text-green-800' 
+                                : 'bg-yellow-200 text-yellow-800'
+                            }`}>
+                              {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          {item.tieneMulta ? (
+                            <span className="bg-red-200 text-red-800 px-2 py-1 rounded font-medium text-xs">
+                              {item.multaMotivo || 'Multa'}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-center font-bold">
+                          {item.montoPagadoMulta > 0 ? (
+                            <span className="text-orange-600">{formatearMoneda(item.montoPagadoMulta)}</span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
                         </td>
                         <td className="px-4 py-4 text-center">
                           <button
