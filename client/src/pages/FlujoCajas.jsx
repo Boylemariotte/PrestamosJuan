@@ -904,12 +904,17 @@ const FlujoCajas = () => {
 
     // Calcular papelería acumulada por caja
     todosPrestamos.forEach(mov => {
-      if (mov.caja == 1 && mov.papeleria) {
-        datos.caja1.papeleriaAcumulada += parseFloat(mov.papeleria);
-      } else if (mov.caja == 2 && mov.papeleria) {
-        datos.caja2.papeleriaAcumulada += parseFloat(mov.papeleria);
-      } else if (mov.caja == 3 && mov.papeleria) {
-        datos.caja3.papeleriaAcumulada += parseFloat(mov.papeleria);
+      // Verificar que papeleria existe y es un número válido (puede ser 0)
+      const papeleria = mov.papeleria !== undefined && mov.papeleria !== null 
+        ? parseFloat(mov.papeleria) 
+        : 0;
+      
+      if (mov.caja == 1) {
+        datos.caja1.papeleriaAcumulada += papeleria;
+      } else if (mov.caja == 2) {
+        datos.caja2.papeleriaAcumulada += papeleria;
+      } else if (mov.caja == 3) {
+        datos.caja3.papeleriaAcumulada += papeleria;
       }
     });
 
@@ -1099,23 +1104,14 @@ const FlujoCajas = () => {
       const movimientoCreado = await agregarMovimientoCaja(movimientoData);
       const movimientoId = movimientoCreado?.id || movimientoCreado?._id || movimientoCreado;
 
-      // Si es un préstamo con papelería, guardar también en el historial de papelería
-      if (esPrestamo && papeleria > 0) {
-        savePapeleriaTransaction({
-          tipo: 'ingreso',
-          cantidad: papeleria,
-          descripcion: `Ingreso por préstamo - ${descripcion || 'Sin descripción'}`,
-          fecha: new Date().toISOString(),
-          movimientoId: movimientoId,
-          caja: cajaSeleccionada,
-          tipoMovimiento: 'ingreso',
-          cliente: descripcion || 'Cliente no especificado',
-          montoPrestamo: monto
-        });
-      }
+      // NOTA: Los préstamos NO crean ingresos en la vista de Papelería
+      // Solo se suman al fondo de papelería en FlujoCajas para mostrar el total disponible
+      // Los ingresos de papelería solo se crean cuando se registran explícitamente desde la vista de Papelería
 
       // Si es un retiro de papelería, guardar en el historial de papelería
       if (esRetiroPapeleria) {
+        // Determinar ciudad de papelería según la caja: Caja 3 = Buga, otras = Tuluá
+        const ciudadPapeleria = cajaSeleccionada === 3 ? 'Guadalajara de Buga' : 'Tuluá';
         savePapeleriaTransaction({
           tipo: 'retiro',
           cantidad: monto,
@@ -1123,7 +1119,8 @@ const FlujoCajas = () => {
           fecha: new Date().toISOString(),
           movimientoId: movimientoId,
           caja: cajaSeleccionada,
-          tipoMovimiento: 'retiro'
+          tipoMovimiento: 'retiro',
+          ciudadPapeleria: ciudadPapeleria
         });
       }
 
@@ -1139,17 +1136,56 @@ const FlujoCajas = () => {
       // Buscar el movimiento para ver su tipo
       const movimiento = movimientosCaja.find(mov => mov.id === movimientoId);
 
-      // Si se encuentra el movimiento, verificar si tiene una transacción de papelería asociada
       if (movimiento) {
-        // Ahora getPapeleriaTransactions es async
-        const transacciones = await getPapeleriaTransactions();
-        const transaccionRelacionada = transacciones.find(
-          tx => tx.movimientoId === movimientoId
-        );
+        // Si es un préstamo, eliminar todos los retiros de papelería de la misma caja
+        // que se crearon después de este préstamo, porque esos retiros provienen del fondo
+        // acumulado que incluye la papelería de este préstamo
+        if (movimiento.tipo === 'prestamo') {
+          try {
+            const transacciones = await getPapeleriaTransactions();
+            const fechaPrestamo = movimiento.fecha ? new Date(movimiento.fecha) : new Date(0);
+            
+            // Buscar todos los retiros de papelería de la misma caja que se hicieron después del préstamo
+            const retirosAEliminar = transacciones.filter(tx => {
+              if (tx.tipo !== 'retiro' || tx.caja !== movimiento.caja || !tx.movimientoId) {
+                return false;
+              }
+              // Solo retiros creados desde FlujoCajas (tienen movimientoId)
+              // y que se hicieron después o en la misma fecha que el préstamo
+              const fechaRetiro = tx.fecha ? new Date(tx.fecha) : new Date(0);
+              return fechaRetiro >= fechaPrestamo;
+            });
 
-        // Eliminar la transacción de papelería si existe
-        if (transaccionRelacionada) {
-          await deletePapeleriaTransaction(transaccionRelacionada.id);
+            // Eliminar todos los retiros encontrados
+            for (const retiro of retirosAEliminar) {
+              try {
+                await deletePapeleriaTransaction(retiro.id || retiro._id);
+                // También eliminar el movimiento de caja del retiro
+                if (retiro.movimientoId) {
+                  await eliminarMovimientoCaja(retiro.movimientoId);
+                }
+              } catch (error) {
+                console.error(`Error eliminando retiro ${retiro.id}:`, error);
+              }
+            }
+          } catch (error) {
+            console.error('Error obteniendo transacciones de papelería:', error);
+          }
+        } else {
+          // Para otros tipos de movimientos, buscar transacción de papelería asociada directamente
+          try {
+            const transacciones = await getPapeleriaTransactions();
+            const transaccionRelacionada = transacciones.find(
+              tx => tx.movimientoId === movimientoId
+            );
+
+            // Eliminar la transacción de papelería si existe
+            if (transaccionRelacionada) {
+              await deletePapeleriaTransaction(transaccionRelacionada.id || transaccionRelacionada._id);
+            }
+          } catch (error) {
+            console.error('Error obteniendo transacciones de papelería:', error);
+          }
         }
       }
 

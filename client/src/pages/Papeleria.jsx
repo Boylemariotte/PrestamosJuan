@@ -3,10 +3,12 @@ import { FileText, Search, Calendar as CalendarIcon, Filter, Plus, FileDown, Tra
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
 import api from '../services/api';
 
 const Papeleria = () => {
   const { user } = useAuth();
+  const { eliminarMovimientoCaja } = useApp();
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -170,9 +172,22 @@ const Papeleria = () => {
   const handleDelete = async (id) => {
     if (window.confirm('¿Estás seguro de eliminar esta transacción?')) {
       try {
+        // Buscar la transacción antes de eliminarla para obtener el movimientoId
+        const transaccion = transactions.find(tx => (tx.id === id || tx._id === id));
+        
         const response = await api.delete(`/papeleria/${id}`);
         if (response.success) {
             setTransactions(prev => prev.filter(tx => (tx.id !== id && tx._id !== id)));
+            
+            // Si es un retiro y tiene movimientoId, también eliminar el movimiento de caja asociado
+            if (transaccion && transaccion.tipo === 'retiro' && transaccion.movimientoId) {
+              try {
+                await eliminarMovimientoCaja(transaccion.movimientoId);
+              } catch (error) {
+                console.error("Error eliminando movimiento de caja asociado:", error);
+                // No mostrar error al usuario, solo loguear
+              }
+            }
         }
       } catch (error) {
         console.error("Error eliminando:", error);
