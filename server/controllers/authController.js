@@ -61,7 +61,8 @@ export const login = async (req, res, next) => {
       email: persona.email,
       role: persona.role,
       permissions: persona.getPermissions(),
-      ultimoAcceso: persona.ultimoAcceso
+      ultimoAcceso: persona.ultimoAcceso,
+      ciudad: persona.ciudad || null
     };
 
     res.status(200).json({
@@ -98,7 +99,8 @@ export const getMe = async (req, res, next) => {
       role: persona.role,
       permissions: persona.getPermissions(),
       ultimoAcceso: persona.ultimoAcceso,
-      fechaCreacion: persona.fechaCreacion
+      fechaCreacion: persona.fechaCreacion,
+      ciudad: persona.ciudad || null
     };
 
     res.status(200).json({

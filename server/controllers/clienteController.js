@@ -27,9 +27,28 @@ export const getClientes = async (req, res, next) => {
       });
     }
     
-    // Filtro de cartera
-    if (cartera) {
-      condiciones.push({ cartera: cartera });
+    // Solo aplicar filtro de cartera para domiciliarios
+    // Administradores y CEO ven todas las carteras
+    if (req.user && req.user.role === 'domiciliario') {
+      if (req.user.ciudad === 'Guadalajara de Buga') {
+        // Domiciliarios de Buga solo ven K3
+        condiciones.push({ cartera: 'K3' });
+      } else {
+        // Domiciliarios de Tuluá (u otra ciudad) solo ven K1 y K2 (excluir K3)
+        condiciones.push({ 
+          $or: [
+            { cartera: 'K1' },
+            { cartera: 'K2' },
+            { cartera: { $exists: false } } // Para clientes sin cartera definida (default K1)
+          ]
+        });
+      }
+    } else {
+      // Para administradores y CEO, aplicar filtro de cartera solo si se especifica en query
+      // Si no se especifica, verán todas las carteras
+      if (cartera) {
+        condiciones.push({ cartera: cartera });
+      }
     }
     
     // Filtro de búsqueda
@@ -349,9 +368,9 @@ export const desarchivarCliente = async (req, res, next) => {
 
       let clienteOcupando = await Cliente.findOne(queryBase);
 
-      // Para K1, si hay un cliente ocupando la posición, verificar si es del mismo tipo de pago
+      // Para K1 y K3, si hay un cliente ocupando la posición, verificar si es del mismo tipo de pago
       // Si es del mismo tipo, la posición está ocupada. Si es de otro tipo, está disponible.
-      if (cartera === 'K1' && tipoPagoCliente && clienteOcupando) {
+      if ((cartera === 'K1' || cartera === 'K3') && tipoPagoCliente && clienteOcupando) {
         // Determinar el tipo de pago del cliente ocupante basándose en sus créditos activos
         const tipoPagoOcupante = obtenerTipoPagoCliente(clienteOcupando);
         
@@ -372,7 +391,7 @@ export const desarchivarCliente = async (req, res, next) => {
       }
 
       // Validar rango de posición según cartera
-      const capacidadMaxima = cartera === 'K1' ? 150 : 225;
+      const capacidadMaxima = (cartera === 'K1' || cartera === 'K3') ? 150 : 225;
       if (posicionNum < 1 || posicionNum > capacidadMaxima) {
         return res.status(400).json({
           success: false,
@@ -395,7 +414,7 @@ export const desarchivarCliente = async (req, res, next) => {
           return true; // Para K2, todos los clientes cuentan
         }
         
-        if (cartera === 'K1' && tipoPagoCliente) {
+        if ((cartera === 'K1' || cartera === 'K3') && tipoPagoCliente) {
           const tipoPagoOtroCliente = obtenerTipoPagoCliente(c);
           return tipoPagoOtroCliente === tipoPagoCliente;
         }
@@ -407,7 +426,7 @@ export const desarchivarCliente = async (req, res, next) => {
         .map(c => c.posicion)
         .filter(Boolean);
 
-      const capacidadMaxima = cartera === 'K1' ? 150 : 225;
+      const capacidadMaxima = (cartera === 'K1' || cartera === 'K3') ? 150 : 225;
       let nuevaPosicion = 1;
       while (posicionesOcupadas.includes(nuevaPosicion) && nuevaPosicion <= capacidadMaxima) {
         nuevaPosicion++;
@@ -453,6 +472,8 @@ export const getPosicionesDisponibles = async (req, res, next) => {
       capacidadMaxima = 150;
     } else if (cartera === 'K2') {
       capacidadMaxima = 225;
+    } else if (cartera === 'K3') {
+      capacidadMaxima = 150; // K3 se comporta como K1, con 150 espacios por tipo de pago
     } else {
       return res.status(400).json({
         success: false,
@@ -474,8 +495,8 @@ export const getPosicionesDisponibles = async (req, res, next) => {
         return true;
       }
 
-      // Para K1, filtrar por tipo de pago
-      if (cartera === 'K1' && tipoPago && (tipoPago === 'semanal' || tipoPago === 'quincenal')) {
+      // Para K1 y K3, filtrar por tipo de pago
+      if ((cartera === 'K1' || cartera === 'K3') && tipoPago && (tipoPago === 'semanal' || tipoPago === 'quincenal')) {
         // Obtener tipos de pago activos del cliente
         const tiposActivos = new Set();
         if (cliente.creditos && cliente.creditos.length > 0) {
@@ -498,7 +519,7 @@ export const getPosicionesDisponibles = async (req, res, next) => {
         return tiposDelCliente.includes(tipoPago);
       }
 
-      // Si no hay tipoPago especificado para K1, no incluir (no debería pasar)
+      // Si no hay tipoPago especificado para K1 o K3, no incluir (no debería pasar)
       return false;
     });
 

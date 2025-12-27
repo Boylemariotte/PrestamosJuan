@@ -19,15 +19,20 @@ const Clientes = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { clientes, agregarCliente, loading } = useApp();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [formCartera, setFormCartera] = useState(null);
   const [formTipoPago, setFormTipoPago] = useState(null);
   const [formPosicion, setFormPosicion] = useState(null);
   const [initialData, setInitialData] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filtroCartera, setFiltroCartera] = useState('todas'); // 'todas', 'K1', 'K2'
+  const [filtroCartera, setFiltroCartera] = useState('todas'); // 'todas', 'K1', 'K2', 'K3'
   const [filtroTipoPago, setFiltroTipoPago] = useState('todos'); // 'todos', 'diario', 'semanal', 'quincenal', 'mensual'
+  
+  // Verificar el tipo de usuario para determinar qué carteras mostrar
+  const esDomiciliarioBuga = user && user.role === 'domiciliario' && user.ciudad === 'Guadalajara de Buga';
+  const esDomiciliarioTula = user && user.role === 'domiciliario' && user.ciudad === 'Tuluá';
+  const esAdminOCeo = user && (user.role === 'administrador' || user.role === 'ceo');
 
   // Tipos de pago disponibles según la cartera seleccionada
   const tiposPagoDisponibles = useMemo(() => {
@@ -37,6 +42,8 @@ const Clientes = () => {
       return ['todos', 'semanal', 'quincenal'];
     } else if (filtroCartera === 'K2') {
       return ['todos'];
+    } else if (filtroCartera === 'K3') {
+      return ['todos', 'semanal', 'quincenal']; // K3 solo maneja semanal y quincenal
     }
     return ['todos', 'diario', 'semanal', 'quincenal', 'mensual'];
   }, [filtroCartera]);
@@ -99,19 +106,47 @@ const Clientes = () => {
   };
 
   // Capacidades por cartera/tipo de pago
-  const CAPACIDADES = {
-    K1: { semanal: 150, quincenal: 150 },
-    K2: { general: 225 }
-  };
+  const CAPACIDADES = useMemo(() => {
+    if (esDomiciliarioBuga) {
+      // Solo mostrar K3 para domiciliarios de Guadalajara de Buga
+      return {
+        K3: { semanal: 150, quincenal: 150 } // K3 se comporta como K1
+      };
+    } else if (esAdminOCeo) {
+      // Administradores y CEO ven todas las carteras
+      return {
+        K1: { semanal: 150, quincenal: 150 },
+        K2: { general: 225 },
+        K3: { semanal: 150, quincenal: 150 } // K3 se comporta como K1
+      };
+    } else {
+      // Domiciliarios de Tuluá (u otros) solo ven K1 y K2
+      return {
+        K1: { semanal: 150, quincenal: 150 },
+        K2: { general: 225 }
+      };
+    }
+  }, [esDomiciliarioBuga, esAdminOCeo]);
 
   // Ocupación actual por cartera/tipo (considera clientes con créditos activos/en mora o tipoPagoEsperado)
   const ocupacion = useMemo(() => {
-    const base = {
-      K1: { semanal: 0, quincenal: 0 },
-      K2: { general: 0 }
-    };
+    let base;
+    if (esDomiciliarioBuga) {
+      base = { K3: { semanal: 0, quincenal: 0 } };
+    } else if (esAdminOCeo) {
+      base = {
+        K1: { semanal: 0, quincenal: 0 },
+        K2: { general: 0 },
+        K3: { semanal: 0, quincenal: 0 } // K3 se comporta como K1
+      };
+    } else {
+      base = {
+        K1: { semanal: 0, quincenal: 0 },
+        K2: { general: 0 }
+      };
+    }
     clientes.forEach((cliente) => {
-      const cartera = cliente.cartera || 'K1';
+      const cartera = cliente.cartera || (esDomiciliarioBuga ? 'K3' : 'K1');
       const tiposActivos = getTiposPagoActivos(cliente);
       // Si tiene créditos activos, usar esos tipos; si no, usar tipoPagoEsperado
       const tipos = tiposActivos.length > 0
@@ -119,54 +154,93 @@ const Clientes = () => {
         : (cliente.tipoPagoEsperado ? [cliente.tipoPagoEsperado] : []);
 
       if (tipos.length === 0) {
-        // Si no tiene tipo definido pero está en una cartera, contar como ocupación general si aplica
-        if (cartera === 'K2') base.K2.general += 1;
+        // Si no tiene tipo definido pero está en una cartera, contar como ocupación general solo para K2
+        if (cartera === 'K2') {
+          if (base[cartera] && base[cartera].general !== undefined) {
+            base[cartera].general += 1;
+          }
+        }
         return;
       }
 
       tipos.forEach((t) => {
         if (cartera === 'K2') {
           // Para K2, todo cuenta para general
-          base.K2.general += 1;
+          if (base[cartera] && base[cartera].general !== undefined) {
+            base[cartera].general += 1;
+          }
         } else if (base[cartera] && typeof base[cartera][t] === 'number') {
+          // Para K1 y K3, contar por tipo de pago específico
           base[cartera][t] += 1;
         }
       });
     });
     return base;
-  }, [clientes]);
+  }, [clientes, esDomiciliarioBuga, esAdminOCeo]);
 
   // Generar todas las cards posibles según capacidades
   const todasLasCards = useMemo(() => {
     const cards = [];
 
-    // Generar cards para K1
-    Object.entries(CAPACIDADES.K1).forEach(([tipo, capacidad]) => {
-      for (let i = 1; i <= capacidad; i++) {
-        cards.push({
-          cartera: 'K1',
-          tipoPago: tipo,
-          posicion: i,
-          cliente: null
+    if (esDomiciliarioBuga) {
+      // Solo generar cards para K3 (se comporta como K1)
+      Object.entries(CAPACIDADES.K3).forEach(([tipo, capacidad]) => {
+        for (let i = 1; i <= capacidad; i++) {
+          cards.push({
+            cartera: 'K3',
+            tipoPago: tipo, // 'semanal' o 'quincenal'
+            posicion: i,
+            cliente: null
+          });
+        }
+      });
+    } else {
+      // Generar cards para K1
+      if (CAPACIDADES.K1) {
+        Object.entries(CAPACIDADES.K1).forEach(([tipo, capacidad]) => {
+          for (let i = 1; i <= capacidad; i++) {
+            cards.push({
+              cartera: 'K1',
+              tipoPago: tipo,
+              posicion: i,
+              cliente: null
+            });
+          }
         });
       }
-    });
 
-    // Generar cards para K2
-    Object.entries(CAPACIDADES.K2).forEach(([tipo, capacidad]) => {
-      for (let i = 1; i <= capacidad; i++) {
-        cards.push({
-          cartera: 'K2',
-          tipoPago: tipo, // 'general'
-          posicion: i,
-          cliente: null
+      // Generar cards para K2
+      if (CAPACIDADES.K2) {
+        Object.entries(CAPACIDADES.K2).forEach(([tipo, capacidad]) => {
+          for (let i = 1; i <= capacidad; i++) {
+            cards.push({
+              cartera: 'K2',
+              tipoPago: tipo, // 'general'
+              posicion: i,
+              cliente: null
+            });
+          }
         });
       }
-    });
+
+      // Generar cards para K3 (solo para administradores y CEO, se comporta como K1)
+      if (CAPACIDADES.K3) {
+        Object.entries(CAPACIDADES.K3).forEach(([tipo, capacidad]) => {
+          for (let i = 1; i <= capacidad; i++) {
+            cards.push({
+              cartera: 'K3',
+              tipoPago: tipo, // 'semanal' o 'quincenal'
+              posicion: i,
+              cliente: null
+            });
+          }
+        });
+      }
+    }
 
     // Asignar clientes a las cards correspondientes
     clientes.forEach(cliente => {
-      const carteraCliente = cliente.cartera || 'K1';
+      const carteraCliente = cliente.cartera || (esDomiciliarioBuga ? 'K3' : 'K1');
 
       // Lógica especial para K2 (tipo 'general')
       if (carteraCliente === 'K2') {
@@ -181,6 +255,9 @@ const Clientes = () => {
         }
         return;
       }
+
+      // Para K1 y K3, usar la misma lógica (por tipo de pago específico)
+      if (carteraCliente === 'K1' || carteraCliente === 'K3') {
 
       const tiposActivos = getTiposPagoActivos(cliente);
 
@@ -208,10 +285,12 @@ const Clientes = () => {
           cards[cardIndex].cliente = cliente;
         }
       });
-    });
+    }
+  });
+  
 
     return cards;
-  }, [clientes]);
+  }, [clientes, esDomiciliarioBuga, esAdminOCeo, CAPACIDADES]);
 
   // Filtrar cards según búsqueda, cartera y tipo de pago
   const cardsFiltradas = todasLasCards.filter(card => {
@@ -221,6 +300,7 @@ const Clientes = () => {
     let coincideTipo = filtroTipoPago === 'todos' || card.tipoPago === filtroTipoPago;
 
     // Lógica especial para filtrar tipos en K2 (donde card.tipoPago es 'general')
+    // K3 se comporta como K1, con tipos específicos (semanal/quincenal)
     if (card.cartera === 'K2') {
       if (filtroTipoPago === 'todos') {
         coincideTipo = true;
@@ -260,8 +340,12 @@ const Clientes = () => {
   });
 
   // Contar clientes por cartera
-  const clientesK1 = clientes.filter(c => (c.cartera || 'K1') === 'K1').length;
-  const clientesK2 = clientes.filter(c => c.cartera === 'K2').length;
+  const clientesK1 = (esDomiciliarioBuga ? 0 : clientes.filter(c => (c.cartera || 'K1') === 'K1').length);
+  const clientesK2 = (esDomiciliarioBuga ? 0 : clientes.filter(c => c.cartera === 'K2').length);
+  const clientesK3 = (esDomiciliarioBuga ? clientes.filter(c => (c.cartera || 'K3') === 'K3').length : (esAdminOCeo ? clientes.filter(c => c.cartera === 'K3').length : 0));
+  
+  // Total de clientes para admin/CEO (suma de K1, K2 y K3)
+  const totalClientesAdmin = esAdminOCeo ? (clientesK1 + clientesK2 + clientesK3) : 0;
 
   const getCreditoInfo = (cliente, tipoPago) => {
     if (!cliente || !cliente.creditos) return null;
@@ -340,46 +424,140 @@ const Clientes = () => {
       </div>
 
       {/* Estadísticas por cartera */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="card bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-blue-100 text-sm">Cartera K1</p>
-              <p className="text-3xl font-bold mt-1">{clientesK1}</p>
-              <p className="text-blue-100 text-xs mt-1">clientes</p>
-              <div className="mt-3 space-y-1 text-[11px]">
-                <p className="text-blue-100">Semanal: {ocupacion.K1.semanal}/{CAPACIDADES.K1.semanal}</p>
-                <p className="text-blue-100">Quincenal: {ocupacion.K1.quincenal}/{CAPACIDADES.K1.quincenal}</p>
+      <div className={`grid grid-cols-1 gap-6 mb-8 ${esAdminOCeo ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+        {esDomiciliarioBuga ? (
+          // Solo K3 para domiciliarios de Buga
+          <>
+            <div className="card bg-gradient-to-br from-orange-500 to-orange-600 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-orange-100 text-sm">Cartera K3</p>
+                  <p className="text-3xl font-bold mt-1">{clientesK3}</p>
+                  <p className="text-orange-100 text-xs mt-1">clientes</p>
+                  <div className="mt-3 space-y-1 text-[11px]">
+                    <p className="text-orange-100">Semanal: {ocupacion.K3?.semanal || 0}/{CAPACIDADES.K3.semanal}</p>
+                    <p className="text-orange-100">Quincenal: {ocupacion.K3?.quincenal || 0}/{CAPACIDADES.K3.quincenal}</p>
+                  </div>
+                </div>
+                <Briefcase className="h-12 w-12 text-orange-200" />
               </div>
             </div>
-            <Briefcase className="h-12 w-12 text-blue-200" />
-          </div>
-        </div>
-
-        <div className="card bg-gradient-to-br from-green-500 to-green-600 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-green-100 text-sm">Cartera K2</p>
-              <p className="text-3xl font-bold mt-1">{clientesK2}</p>
-              <p className="text-green-100 text-xs mt-1">clientes</p>
-              <div className="mt-3 space-y-1 text-[11px]">
-                <p className="text-green-100">General: {ocupacion.K2.general || (ocupacion.K2.quincenal + ocupacion.K2.mensual)}/{CAPACIDADES.K2.general}</p>
+            <div className="card bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-purple-100 text-sm">Total Clientes</p>
+                  <p className="text-3xl font-bold mt-1">{clientes.length}</p>
+                  <p className="text-purple-100 text-xs mt-1">registrados</p>
+                </div>
+                <UsersIcon className="h-12 w-12 text-purple-200" />
               </div>
             </div>
-            <Briefcase className="h-12 w-12 text-green-200" />
-          </div>
-        </div>
-
-        <div className="card bg-gradient-to-br from-purple-500 to-purple-600 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-purple-100 text-sm">Total Clientes</p>
-              <p className="text-3xl font-bold mt-1">{clientes.length}</p>
-              <p className="text-purple-100 text-xs mt-1">registrados</p>
+            <div></div>
+          </>
+        ) : esAdminOCeo ? (
+          // Administradores y CEO ven las 3 carteras
+          <>
+            <div className="card bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-blue-100 text-sm">Cartera K1</p>
+                  <p className="text-3xl font-bold mt-1">{clientesK1}</p>
+                  <p className="text-blue-100 text-xs mt-1">clientes</p>
+                  <div className="mt-3 space-y-1 text-[11px]">
+                    <p className="text-blue-100">Semanal: {ocupacion.K1?.semanal || 0}/{CAPACIDADES.K1.semanal}</p>
+                    <p className="text-blue-100">Quincenal: {ocupacion.K1?.quincenal || 0}/{CAPACIDADES.K1.quincenal}</p>
+                  </div>
+                </div>
+                <Briefcase className="h-12 w-12 text-blue-200" />
+              </div>
             </div>
-            <UsersIcon className="h-12 w-12 text-purple-200" />
-          </div>
-        </div>
+
+            <div className="card bg-gradient-to-br from-green-500 to-green-600 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-green-100 text-sm">Cartera K2</p>
+                  <p className="text-3xl font-bold mt-1">{clientesK2}</p>
+                  <p className="text-green-100 text-xs mt-1">clientes</p>
+                  <div className="mt-3 space-y-1 text-[11px]">
+                    <p className="text-green-100">General: {ocupacion.K2?.general || 0}/{CAPACIDADES.K2.general}</p>
+                  </div>
+                </div>
+                <Briefcase className="h-12 w-12 text-green-200" />
+              </div>
+            </div>
+
+            <div className="card bg-gradient-to-br from-orange-500 to-orange-600 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-orange-100 text-sm">Cartera K3</p>
+                  <p className="text-3xl font-bold mt-1">{clientesK3}</p>
+                  <p className="text-orange-100 text-xs mt-1">clientes</p>
+                  <div className="mt-3 space-y-1 text-[11px]">
+                    <p className="text-orange-100">Semanal: {ocupacion.K3?.semanal || 0}/{CAPACIDADES.K3.semanal}</p>
+                    <p className="text-orange-100">Quincenal: {ocupacion.K3?.quincenal || 0}/{CAPACIDADES.K3.quincenal}</p>
+                  </div>
+                </div>
+                <Briefcase className="h-12 w-12 text-orange-200" />
+              </div>
+            </div>
+
+            <div className="card bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-purple-100 text-sm">Total Clientes</p>
+                  <p className="text-3xl font-bold mt-1">{totalClientesAdmin}</p>
+                  <div className="mt-3 space-y-1 text-[11px]">
+                  <p  className='text-purple-100 text-sm'>registrados</p>
+                  </div>
+                </div>
+                <UsersIcon className="h-12 w-12 text-purple-200" />
+              </div>
+            </div>
+          </>
+        ) : (
+          // Domiciliarios de Tuluá solo ven K1 y K2
+          <>
+            <div className="card bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-blue-100 text-sm">Cartera K1</p>
+                  <p className="text-3xl font-bold mt-1">{clientesK1}</p>
+                  <p className="text-blue-100 text-xs mt-1">clientes</p>
+                  <div className="mt-3 space-y-1 text-[11px]">
+                    <p className="text-blue-100">Semanal: {ocupacion.K1?.semanal || 0}/{CAPACIDADES.K1.semanal}</p>
+                    <p className="text-blue-100">Quincenal: {ocupacion.K1?.quincenal || 0}/{CAPACIDADES.K1.quincenal}</p>
+                  </div>
+                </div>
+                <Briefcase className="h-12 w-12 text-blue-200" />
+              </div>
+            </div>
+
+            <div className="card bg-gradient-to-br from-green-500 to-green-600 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-green-100 text-sm">Cartera K2</p>
+                  <p className="text-3xl font-bold mt-1">{clientesK2}</p>
+                  <p className="text-green-100 text-xs mt-1">clientes</p>
+                  <div className="mt-3 space-y-1 text-[11px]">
+                    <p className="text-green-100">General: {ocupacion.K2?.general || 0}/{CAPACIDADES.K2.general}</p>
+                  </div>
+                </div>
+                <Briefcase className="h-12 w-12 text-green-200" />
+              </div>
+            </div>
+
+            <div className="card bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-purple-100 text-sm">Total Clientes</p>
+                  <p className="text-3xl font-bold mt-1">{clientes.length}</p>
+                  <p className="text-purple-100 text-xs mt-1">registrados</p>
+                </div>
+                <UsersIcon className="h-12 w-12 text-purple-200" />
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Barra de búsqueda */}
@@ -403,37 +581,105 @@ const Clientes = () => {
           <h3 className="text-sm font-semibold text-gray-700">Filtrar por cartera:</h3>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setFiltroCartera('todas')}
-            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${filtroCartera === 'todas'
-              ? 'bg-purple-100 text-purple-800 border-purple-300 ring-2 ring-purple-400'
-              : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
-              }`}
-          >
-            Todas ({clientes.length})
-          </button>
-
-          <button
-            onClick={() => setFiltroCartera('K1')}
-            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K1'
-              ? 'bg-blue-100 text-blue-800 border-blue-300 ring-2 ring-blue-400'
-              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-              }`}
-          >
-            <Briefcase className="h-4 w-4" />
-            Cartera K1 ({clientesK1})
-          </button>
-
-          <button
-            onClick={() => setFiltroCartera('K2')}
-            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K2'
-              ? 'bg-green-100 text-green-800 border-green-300 ring-2 ring-green-400'
-              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-              }`}
-          >
-            <Briefcase className="h-4 w-4" />
-            Cartera K2 ({clientesK2})
-          </button>
+          {esDomiciliarioBuga ? (
+            <>
+              <button
+                onClick={() => setFiltroCartera('todas')}
+                className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${filtroCartera === 'todas'
+                  ? 'bg-purple-100 text-purple-800 border-purple-300 ring-2 ring-purple-400'
+                  : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                  }`}
+              >
+                Todas ({clientes.length})
+              </button>
+              <button
+                onClick={() => setFiltroCartera('K3')}
+                className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K3'
+                  ? 'bg-orange-100 text-orange-800 border-orange-300 ring-2 ring-orange-400'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+              >
+                <Briefcase className="h-4 w-4" />
+                Cartera K3 ({clientesK3})
+              </button>
+            </>
+          ) : esAdminOCeo ? (
+            // Administradores y CEO ven todas las carteras
+            <>
+              <button
+                onClick={() => setFiltroCartera('todas')}
+                className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${filtroCartera === 'todas'
+                  ? 'bg-purple-100 text-purple-800 border-purple-300 ring-2 ring-purple-400'
+                  : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                  }`}
+              >
+                Todas ({clientes.length})
+              </button>
+              <button
+                onClick={() => setFiltroCartera('K1')}
+                className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K1'
+                  ? 'bg-blue-100 text-blue-800 border-blue-300 ring-2 ring-blue-400'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+              >
+                <Briefcase className="h-4 w-4" />
+                Cartera K1 ({clientesK1})
+              </button>
+              <button
+                onClick={() => setFiltroCartera('K2')}
+                className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K2'
+                  ? 'bg-green-100 text-green-800 border-green-300 ring-2 ring-green-400'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+              >
+                <Briefcase className="h-4 w-4" />
+                Cartera K2 ({clientesK2})
+              </button>
+              <button
+                onClick={() => setFiltroCartera('K3')}
+                className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K3'
+                  ? 'bg-orange-100 text-orange-800 border-orange-300 ring-2 ring-orange-400'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+              >
+                <Briefcase className="h-4 w-4" />
+                Cartera K3 ({clientesK3})
+              </button>
+            </>
+          ) : (
+            // Domiciliarios de Tuluá solo ven K1 y K2
+            <>
+              <button
+                onClick={() => setFiltroCartera('todas')}
+                className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${filtroCartera === 'todas'
+                  ? 'bg-purple-100 text-purple-800 border-purple-300 ring-2 ring-purple-400'
+                  : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                  }`}
+              >
+                Todas ({clientes.length})
+              </button>
+              <button
+                onClick={() => setFiltroCartera('K1')}
+                className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K1'
+                  ? 'bg-blue-100 text-blue-800 border-blue-300 ring-2 ring-blue-400'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+              >
+                <Briefcase className="h-4 w-4" />
+                Cartera K1 ({clientesK1})
+              </button>
+              <button
+                onClick={() => setFiltroCartera('K2')}
+                className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K2'
+                  ? 'bg-green-100 text-green-800 border-green-300 ring-2 ring-green-400'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+              >
+                <Briefcase className="h-4 w-4" />
+                Cartera K2 ({clientesK2})
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -471,7 +717,7 @@ const Clientes = () => {
               ? 'Intenta con otros términos de búsqueda'
               : 'Comienza agregando tu primer cliente'}
           </p>
-          {!searchTerm && (
+          {!searchTerm && hasPermission('crearClientes') && user?.role !== 'domiciliario' && (
             <button
               onClick={() => setShowForm(true)}
               className="btn-primary inline-flex items-center"
@@ -525,6 +771,8 @@ const Clientes = () => {
                   carteraRowClass = 'bg-blue-100 hover:bg-blue-200';
                 } else if (card.cartera === 'K2') {
                   carteraRowClass = 'bg-green-100 hover:bg-green-200';
+                } else if (card.cartera === 'K3') {
+                  carteraRowClass = 'bg-orange-100 hover:bg-orange-200';
                 } else {
                   carteraRowClass = 'hover:bg-gray-50';
                 }
@@ -587,12 +835,14 @@ const Clientes = () => {
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                       {esVacia ? (
-                        <button
-                          onClick={() => handleAgregarDesdeCard(card.cartera, card.tipoPago, card.posicion)}
-                          className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
-                        >
-                          <Plus className="h-4 w-4" /> Agregar
-                        </button>
+                        hasPermission('crearClientes') && user?.role !== 'domiciliario' && (
+                          <button
+                            onClick={() => handleAgregarDesdeCard(card.cartera, card.tipoPago, card.posicion)}
+                            className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
+                          >
+                            <Plus className="h-4 w-4" /> Agregar
+                          </button>
+                        )
                       ) : (
                         <button
                           onClick={() => navigate(`/cliente/${card.cliente.id}`)}

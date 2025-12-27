@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Edit, Trash2, Plus, User, Phone, MapPin, Mail, UserCheck, Loader2, Archive, Award, Check, Calendar, AlertCircle, Ban } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import ClienteForm from '../components/Clientes/ClienteForm';
 import CreditoCard from '../components/Creditos/CreditoCard';
 import CreditoForm from '../components/Creditos/CreditoForm';
@@ -15,6 +16,8 @@ const ClienteDetalle = ({ soloLectura = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { obtenerCliente, actualizarCliente, eliminarCliente, archivarCliente, agregarCredito, actualizarCoordenadasGPS, asignarEtiquetaCliente, loading, clientes } = useApp();
+  const { user } = useAuth();
+  const esDomiciliario = user?.role === 'domiciliario';
 
   const [showEditForm, setShowEditForm] = useState(false);
   const [showCreditoForm, setShowCreditoForm] = useState(false);
@@ -215,8 +218,8 @@ const ClienteDetalle = ({ soloLectura = false }) => {
                     {ETIQUETAS[cliente.etiqueta].nombre}
                   </span>
                 )}
-                {/* Botón para asignar etiqueta (solo si no está en modo solo lectura) */}
-                {!soloLectura && (
+                {/* Botón para asignar etiqueta (solo si no está en modo solo lectura y no es domiciliario) */}
+                {!soloLectura && !esDomiciliario && (
                   <button
                     onClick={() => setMostrarSelectorEtiqueta(true)}
                     className="px-3 py-1 rounded-lg text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 border-2 border-gray-300 flex items-center gap-1 transition-colors"
@@ -231,7 +234,7 @@ const ClienteDetalle = ({ soloLectura = false }) => {
             </div>
           </div>
 
-          {!soloLectura && (
+          {!soloLectura && !esDomiciliario && (
             <div className="flex space-x-3 w-full md:w-auto justify-end">
               <button
                 onClick={() => setShowEditForm(true)}
@@ -414,7 +417,7 @@ const ClienteDetalle = ({ soloLectura = false }) => {
       <div>
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-900">Créditos</h2>
-          {!soloLectura && (
+          {!soloLectura && !esDomiciliario && (
             <button
               onClick={() => setShowCreditoForm(true)}
               className="btn-primary flex items-center"
@@ -443,7 +446,7 @@ const ClienteDetalle = ({ soloLectura = false }) => {
             <p className="text-gray-600 mb-6">
               Comienza agregando el primer crédito para este cliente
             </p>
-            {!soloLectura && (
+            {!soloLectura && !esDomiciliario && (
               <button
                 onClick={() => setShowCreditoForm(true)}
                 className="btn-primary inline-flex items-center"

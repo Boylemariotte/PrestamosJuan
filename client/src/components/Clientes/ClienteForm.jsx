@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, ChevronDown, Search } from 'lucide-react';
-import { BARRIOS_TULUA } from '../../constants/barrios';
+import { BARRIOS_TULUA, BARRIOS_BUGA } from '../../constants/barrios';
+import { useAuth } from '../../context/AuthContext';
 
 const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoPredefinido, initialData }) => {
+  const { user } = useAuth();
+  const esAdminOCeo = user && (user.role === 'administrador' || user.role === 'ceo');
   const [formData, setFormData] = useState({
     nombre: '',
     documento: '',
@@ -58,22 +61,26 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
     return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   };
 
+  // Seleccionar lista de barrios según la cartera
+  const barriosDisponibles = formData.cartera === 'K3' ? BARRIOS_BUGA : BARRIOS_TULUA;
+
   // Filtrar barrios
-  const filteredBarrios = BARRIOS_TULUA.filter(barrio =>
+  const filteredBarrios = barriosDisponibles.filter(barrio =>
     normalizeText(barrio).includes(normalizeText(barrioSearch))
   );
 
-  const filteredBarriosFiador = BARRIOS_TULUA.filter(barrio =>
+  const filteredBarriosFiador = barriosDisponibles.filter(barrio =>
     normalizeText(barrio).includes(normalizeText(barrioSearchFiador))
   );
 
   useEffect(() => {
     if (cliente) {
+      const barriosCliente = cliente.cartera === 'K3' ? BARRIOS_BUGA : BARRIOS_TULUA;
       const barrioCliente = cliente.barrio || '';
-      const esOtroBarrio = !BARRIOS_TULUA.includes(barrioCliente);
+      const esOtroBarrio = !barriosCliente.includes(barrioCliente);
 
       const barrioFiador = cliente.fiador?.barrio || '';
-      const esOtroBarrioFiador = barrioFiador && !BARRIOS_TULUA.includes(barrioFiador);
+      const esOtroBarrioFiador = barrioFiador && !barriosCliente.includes(barrioFiador);
 
       setFormData({
         nombre: cliente.nombre || '',
@@ -109,11 +116,12 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
       }
     } else if (initialData) {
       // Si vienen datos iniciales (ej. desde Visitas)
+      const barriosCliente = initialData.cartera === 'K3' ? BARRIOS_BUGA : BARRIOS_TULUA;
       const barrioCliente = initialData.barrio || '';
-      const esOtroBarrio = barrioCliente && !BARRIOS_TULUA.includes(barrioCliente);
+      const esOtroBarrio = barrioCliente && !barriosCliente.includes(barrioCliente);
 
       const barrioFiador = initialData.fiador?.barrio || '';
-      const esOtroBarrioFiador = barrioFiador && !BARRIOS_TULUA.includes(barrioFiador);
+      const esOtroBarrioFiador = barrioFiador && !barriosCliente.includes(barrioFiador);
 
       setFormData(prev => ({
         ...prev,
@@ -201,6 +209,30 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
       }));
     }
   };
+
+  // Actualizar barrios cuando cambia la cartera
+  useEffect(() => {
+    // Si cambia la cartera, limpiar la búsqueda de barrios para que use la lista correcta
+    if (formData.cartera === 'K3') {
+      // Si el barrio actual no está en BARRIOS_BUGA, marcarlo como "Otro"
+      if (formData.barrio && formData.barrio !== 'Otro' && !BARRIOS_BUGA.includes(formData.barrio)) {
+        setUsarOtroBarrio(true);
+        setOtroBarrio(formData.barrio);
+        setFormData(prev => ({ ...prev, barrio: 'Otro' }));
+      } else if (formData.barrio && formData.barrio !== 'Otro' && BARRIOS_BUGA.includes(formData.barrio)) {
+        setBarrioSearch(formData.barrio);
+      }
+    } else {
+      // Si el barrio actual no está en BARRIOS_TULUA, marcarlo como "Otro"
+      if (formData.barrio && formData.barrio !== 'Otro' && !BARRIOS_TULUA.includes(formData.barrio)) {
+        setUsarOtroBarrio(true);
+        setOtroBarrio(formData.barrio);
+        setFormData(prev => ({ ...prev, barrio: 'Otro' }));
+      } else if (formData.barrio && formData.barrio !== 'Otro' && BARRIOS_TULUA.includes(formData.barrio)) {
+        setBarrioSearch(formData.barrio);
+      }
+    }
+  }, [formData.cartera]);
 
   const handleBarrioSelect = (barrio) => {
     setFormData(prev => ({ ...prev, barrio }));
@@ -430,12 +462,17 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                 {carteraPredefinida ? (
                   <div className="p-4 border-2 rounded-lg bg-gray-50 border-gray-300">
                     <div className="flex items-center">
-                      <div className={`flex items-center p-4 border-2 rounded-lg ${formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' : 'border-green-500 bg-green-50'
+                      <div className={`flex items-center p-4 border-2 rounded-lg ${
+                        formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' : 
+                        formData.cartera === 'K3' ? 'border-orange-500 bg-orange-50' : 
+                        'border-green-500 bg-green-50'
                         }`}>
                         <div className="ml-3">
                           <span className="font-semibold text-gray-900">Cartera {formData.cartera}</span>
                           <p className="text-sm text-gray-500">
-                            {formData.cartera === 'K1' ? 'Cartera principal' : 'Cartera secundaria'}
+                            {formData.cartera === 'K1' ? 'Cartera principal' : 
+                             formData.cartera === 'K3' ? 'Cartera Buga' : 
+                             'Cartera secundaria'}
                           </p>
                         </div>
                       </div>
@@ -443,7 +480,7 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                     <p className="text-xs text-gray-500 mt-2">La cartera está bloqueada según la card seleccionada</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className={`grid gap-4 ${esAdminOCeo ? 'grid-cols-3' : 'grid-cols-2'}`}>
                     <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
                       }`}>
                       <input
@@ -475,6 +512,24 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                         <p className="text-sm text-gray-500">Cartera secundaria</p>
                       </div>
                     </label>
+
+                    {esAdminOCeo && (
+                      <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${formData.cartera === 'K3' ? 'border-orange-500 bg-orange-50' : 'border-gray-300'
+                        }`}>
+                        <input
+                          type="radio"
+                          name="cartera"
+                          value="K3"
+                          checked={formData.cartera === 'K3'}
+                          onChange={handleChange}
+                          className="h-4 w-4 text-orange-600 focus:ring-orange-500"
+                        />
+                        <div className="ml-3">
+                          <span className="font-semibold text-gray-900">Cartera K3</span>
+                          <p className="text-sm text-gray-500">Cartera Buga</p>
+                        </div>
+                      </label>
+                    )}
                   </div>
                 )}
               </div>

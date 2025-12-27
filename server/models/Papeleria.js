@@ -38,6 +38,12 @@ const papeleriaSchema = new mongoose.Schema({
     type: String,
     trim: true,
     default: 'Sistema'
+  },
+  ciudadPapeleria: {
+    type: String,
+    enum: ['Tuluá', 'Guadalajara de Buga'],
+    default: 'Tuluá',
+    required: true
   }
 }, {
   timestamps: true,
@@ -49,6 +55,7 @@ const papeleriaSchema = new mongoose.Schema({
 papeleriaSchema.index({ fecha: -1 });
 papeleriaSchema.index({ tipo: 1 });
 papeleriaSchema.index({ prestamoId: 1 });
+papeleriaSchema.index({ ciudadPapeleria: 1 });
 
 const Papeleria = mongoose.model('Papeleria', papeleriaSchema);
 

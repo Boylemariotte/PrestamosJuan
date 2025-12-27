@@ -106,6 +106,14 @@ const personaSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  ciudad: {
+    type: String,
+    enum: ['Tuluá', 'Guadalajara de Buga'],
+    required: function() {
+      return this.role === 'domiciliario';
+    },
+    trim: true
+  },
   ultimoAcceso: {
     type: Date,
     default: null

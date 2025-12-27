@@ -21,10 +21,31 @@ export const getCreditos = async (req, res, next) => {
       query.tipo = tipo;
     }
 
+    // Solo aplicar filtro de cartera para domiciliarios
+    // Administradores y CEO ven todos los créditos (de todas las carteras)
+    if (req.user && req.user.role === 'domiciliario') {
+      if (req.user.ciudad === 'Guadalajara de Buga') {
+        // Domiciliarios de Buga solo ven créditos de clientes K3
+        const clientesIds = await Cliente.find({ cartera: 'K3' }).select('_id');
+        query.cliente = { $in: clientesIds.map(c => c._id.toString()) };
+      } else {
+        // Domiciliarios de Tuluá (u otra ciudad) solo ven créditos de clientes K1 y K2
+        const clientesIds = await Cliente.find({
+          $or: [
+            { cartera: 'K1' },
+            { cartera: 'K2' },
+            { cartera: { $exists: false } }
+          ]
+        }).select('_id');
+        query.cliente = { $in: clientesIds.map(c => c._id.toString()) };
+      }
+    }
+    // Si no es domiciliario (administrador o CEO), no se aplica filtro de cartera
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const creditos = await Credito.find(query)
-      .populate('cliente', 'nombre documento telefono')
+      .populate('cliente', 'nombre documento telefono cartera')
       .sort({ fechaCreacion: -1 })
       .skip(skip)
       .limit(parseInt(limit));

@@ -794,6 +794,14 @@ const FlujoCajas = () => {
         retirosPapeleria: 0,
         saldoAnterior: 0,
         saldoAcumulado: 0
+      },
+      caja3: {
+        movimientos: [],
+        papeleriaAcumulada: 0,
+        ingresosAcumulados: 0,
+        retirosPapeleria: 0,
+        saldoAnterior: 0,
+        saldoAcumulado: 0
       }
     };
 
@@ -804,6 +812,8 @@ const FlujoCajas = () => {
         datos.caja1.movimientos.push(mov);
       } else if (mov.caja == 2) {
         datos.caja2.movimientos.push(mov);
+      } else if (mov.caja == 3) {
+        datos.caja3.movimientos.push(mov);
       }
     });
 
@@ -855,6 +865,29 @@ const FlujoCajas = () => {
             : calcularPapeleria(mov.valor || 0);
           datos.caja2.saldoAnterior -= parseFloat(papeleria || 0);
         }
+      } else if (mov.caja == 3) {
+        if (mov.tipo === 'inicioCaja') {
+          datos.caja3.saldoAnterior += parseFloat(mov.valor || 0);
+        } else if (mov.tipo === 'gasto') {
+          datos.caja3.saldoAnterior -= parseFloat(mov.valor || 0);
+        } else if (mov.tipo === 'prestamo') {
+          // Usar montoEntregado guardado si existe, de lo contrario calcularlo considerando cuotas pendientes
+          let montoEntregado = mov.montoEntregado;
+          if (montoEntregado === undefined || montoEntregado === null) {
+            const valorPrestamo = mov.valor || 0;
+            const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+              ? mov.papeleria
+              : calcularPapeleria(valorPrestamo);
+            const valorCuotasPendientes = mov.valorCuotasPendientes || 0;
+            montoEntregado = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
+          }
+          datos.caja3.saldoAnterior -= parseFloat(montoEntregado || 0);
+          // Restar también la papelería del saldo anterior
+          const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+            ? mov.papeleria
+            : calcularPapeleria(mov.valor || 0);
+          datos.caja3.saldoAnterior -= parseFloat(papeleria || 0);
+        }
       }
     });
 
@@ -864,6 +897,8 @@ const FlujoCajas = () => {
         datos.caja1.ingresosAcumulados += parseFloat(mov.valor || 0);
       } else if (mov.caja == 2) {
         datos.caja2.ingresosAcumulados += parseFloat(mov.valor || 0);
+      } else if (mov.caja == 3) {
+        datos.caja3.ingresosAcumulados += parseFloat(mov.valor || 0);
       }
     });
 
@@ -873,6 +908,8 @@ const FlujoCajas = () => {
         datos.caja1.papeleriaAcumulada += parseFloat(mov.papeleria);
       } else if (mov.caja == 2 && mov.papeleria) {
         datos.caja2.papeleriaAcumulada += parseFloat(mov.papeleria);
+      } else if (mov.caja == 3 && mov.papeleria) {
+        datos.caja3.papeleriaAcumulada += parseFloat(mov.papeleria);
       }
     });
 
@@ -884,22 +921,28 @@ const FlujoCajas = () => {
       } else if (mov.caja == 2) {
         datos.caja2.retirosPapeleria += parseFloat(mov.valor || 0);
         datos.caja2.papeleriaAcumulada -= parseFloat(mov.valor || 0);
+      } else if (mov.caja == 3) {
+        datos.caja3.retirosPapeleria += parseFloat(mov.valor || 0);
+        datos.caja3.papeleriaAcumulada -= parseFloat(mov.valor || 0);
       }
     });
 
     // Asegurar que la papelería no sea negativa
     datos.caja1.papeleriaAcumulada = Math.max(0, datos.caja1.papeleriaAcumulada);
     datos.caja2.papeleriaAcumulada = Math.max(0, datos.caja2.papeleriaAcumulada);
+    datos.caja3.papeleriaAcumulada = Math.max(0, datos.caja3.papeleriaAcumulada);
 
     // Calcular saldo acumulado (saldo anterior + ingresos del día - gastos del día)
     datos.caja1.saldoAcumulado = datos.caja1.saldoAnterior;
     datos.caja2.saldoAcumulado = datos.caja2.saldoAnterior;
+    datos.caja3.saldoAcumulado = datos.caja3.saldoAnterior;
 
     // Sumar ingresos del día
     movimientosFecha.forEach(mov => {
       if (mov.tipo === 'inicioCaja') {
         if (mov.caja == 1) datos.caja1.saldoAcumulado += parseFloat(mov.valor || 0);
         if (mov.caja == 2) datos.caja2.saldoAcumulado += parseFloat(mov.valor || 0);
+        if (mov.caja == 3) datos.caja3.saldoAcumulado += parseFloat(mov.valor || 0);
       }
     });
 
@@ -908,6 +951,7 @@ const FlujoCajas = () => {
       if (mov.tipo === 'gasto') {
         if (mov.caja == 1) datos.caja1.saldoAcumulado -= parseFloat(mov.valor || 0);
         if (mov.caja == 2) datos.caja2.saldoAcumulado -= parseFloat(mov.valor || 0);
+        if (mov.caja == 3) datos.caja3.saldoAcumulado -= parseFloat(mov.valor || 0);
       } else if (mov.tipo === 'prestamo') {
         // Restar el monto entregado del préstamo
         let montoARestar = mov.montoEntregado;
@@ -921,6 +965,7 @@ const FlujoCajas = () => {
         }
         if (mov.caja == 1) datos.caja1.saldoAcumulado -= parseFloat(montoARestar || 0);
         if (mov.caja == 2) datos.caja2.saldoAcumulado -= parseFloat(montoARestar || 0);
+        if (mov.caja == 3) datos.caja3.saldoAcumulado -= parseFloat(montoARestar || 0);
         
         // Restar también la papelería del saldo final
         const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
@@ -928,6 +973,7 @@ const FlujoCajas = () => {
           : calcularPapeleria(mov.valor || 0);
         if (mov.caja == 1) datos.caja1.saldoAcumulado -= parseFloat(papeleria || 0);
         if (mov.caja == 2) datos.caja2.saldoAcumulado -= parseFloat(papeleria || 0);
+        if (mov.caja == 3) datos.caja3.saldoAcumulado -= parseFloat(papeleria || 0);
       }
     });
 
@@ -988,7 +1034,9 @@ const FlujoCajas = () => {
     if (tipo === 'retiroPapeleria') {
       const papeleriaDisponible = cajaSeleccionada === 1
         ? datosCajas.caja1.papeleriaAcumulada
-        : datosCajas.caja2.papeleriaAcumulada;
+        : cajaSeleccionada === 2
+        ? datosCajas.caja2.papeleriaAcumulada
+        : datosCajas.caja3.papeleriaAcumulada;
 
       if (monto > papeleriaDisponible) {
         alert(`No hay suficiente saldo en la papelería. Disponible: ${formatearMoneda(papeleriaDisponible)}`);
@@ -1208,6 +1256,23 @@ const FlujoCajas = () => {
           onEliminarMovimiento={handleEliminarMovimiento}
           movimientosCaja={movimientosFlujo}
         />
+
+        <CajaSection
+          titulo="Caja 3"
+          color="bg-gradient-to-r from-orange-600 to-orange-700"
+          numero={3}
+          fechaSeleccionada={fechaFormato}
+          movimientos={datosCajas.caja3.movimientos}
+          papeleriaAcumulada={datosCajas.caja3.papeleriaAcumulada}
+          saldoAnterior={datosCajas.caja3.saldoAnterior}
+          saldoAcumulado={datosCajas.caja3.saldoAcumulado}
+          onIniciarCaja={handleIniciarCaja}
+          onAgregarGasto={() => handleAgregarGasto(3)}
+          onAgregarPrestamo={() => handleAgregarPrestamo(3)}
+          onRetirarPapeleria={handleRetirarPapeleria}
+          onEliminarMovimiento={handleEliminarMovimiento}
+          movimientosCaja={movimientosFlujo}
+        />
       </div>
 
       {/* Modales */}
@@ -1265,7 +1330,9 @@ const FlujoCajas = () => {
           mostrarMensajeDisponible={true}
           montoDisponible={cajaSeleccionada === 1
             ? datosCajas.caja1.papeleriaAcumulada
-            : datosCajas.caja2.papeleriaAcumulada}
+            : cajaSeleccionada === 2
+            ? datosCajas.caja2.papeleriaAcumulada
+            : datosCajas.caja3.papeleriaAcumulada}
           montoDisponibleLabel="Saldo disponible en papelería"
           textoBotonConfirmar="Confirmar Retiro"
           mostrarBotonCancelar={true}

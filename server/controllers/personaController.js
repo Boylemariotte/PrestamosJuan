@@ -77,13 +77,28 @@ export const getPersona = async (req, res, next) => {
  */
 export const createPersona = async (req, res, next) => {
   try {
-    const { username, password, nombre, email, role } = req.body;
+    const { username, password, nombre, email, role, ciudad } = req.body;
 
     // Validaciones
     if (!username || !password || !nombre || !email || !role) {
       return res.status(400).json({
         success: false,
         error: 'Por favor proporciona todos los campos requeridos'
+      });
+    }
+
+    // Validar ciudad si el rol es domiciliario
+    if (role === 'domiciliario' && !ciudad) {
+      return res.status(400).json({
+        success: false,
+        error: 'La ciudad es requerida para domiciliarios'
+      });
+    }
+
+    if (role === 'domiciliario' && !['Tuluá', 'Guadalajara de Buga'].includes(ciudad)) {
+      return res.status(400).json({
+        success: false,
+        error: 'La ciudad debe ser "Tuluá" o "Guadalajara de Buga"'
       });
     }
 
@@ -114,13 +129,20 @@ export const createPersona = async (req, res, next) => {
     }
 
     // Crear persona
-    const persona = await Persona.create({
+    const personaDataToCreate = {
       username: username.toLowerCase(),
       password,
       nombre,
       email: email.toLowerCase(),
       role
-    });
+    };
+
+    // Solo agregar ciudad si el rol es domiciliario
+    if (role === 'domiciliario') {
+      personaDataToCreate.ciudad = ciudad;
+    }
+
+    const persona = await Persona.create(personaDataToCreate);
 
     const personaData = {
       id: persona._id,
@@ -132,6 +154,11 @@ export const createPersona = async (req, res, next) => {
       fechaCreacion: persona.fechaCreacion,
       permissions: persona.getPermissions()
     };
+
+    // Incluir ciudad solo si es domiciliario
+    if (persona.role === 'domiciliario' && persona.ciudad) {
+      personaData.ciudad = persona.ciudad;
+    }
 
     res.status(201).json({
       success: true,
@@ -149,7 +176,7 @@ export const createPersona = async (req, res, next) => {
  */
 export const updatePersona = async (req, res, next) => {
   try {
-    const { nombre, email, role, activo, password } = req.body;
+    const { nombre, email, role, activo, password, ciudad } = req.body;
     const personaId = req.params.id;
 
     // Verificar que la persona existe
@@ -226,11 +253,40 @@ export const updatePersona = async (req, res, next) => {
       persona.username = username.toLowerCase();
     }
 
+    // Validar ciudad si el rol es o será domiciliario
+    const nuevoRole = role || persona.role;
+    if (nuevoRole === 'domiciliario') {
+      const nuevaCiudad = ciudad !== undefined ? ciudad : persona.ciudad;
+      if (!nuevaCiudad) {
+        return res.status(400).json({
+          success: false,
+          error: 'La ciudad es requerida para domiciliarios'
+        });
+      }
+      if (!['Tuluá', 'Guadalajara de Buga'].includes(nuevaCiudad)) {
+        return res.status(400).json({
+          success: false,
+          error: 'La ciudad debe ser "Tuluá" o "Guadalajara de Buga"'
+        });
+      }
+    }
+
     // Actualizar campos
     if (nombre) persona.nombre = nombre;
     if (email) persona.email = email.toLowerCase();
-    if (role && req.user.role === 'ceo') persona.role = role;
+    if (role && req.user.role === 'ceo') {
+      persona.role = role;
+      // Si cambia de domiciliario a otro rol, eliminar ciudad
+      if (role !== 'domiciliario') {
+        persona.ciudad = undefined;
+      }
+    }
     if (activo !== undefined && req.user.role === 'ceo') persona.activo = activo;
+    
+    // Actualizar ciudad solo si el rol es domiciliario
+    if (nuevoRole === 'domiciliario' && ciudad !== undefined) {
+      persona.ciudad = ciudad;
+    }
 
     await persona.save();
 
@@ -243,6 +299,11 @@ export const updatePersona = async (req, res, next) => {
       activo: persona.activo,
       permissions: persona.getPermissions()
     };
+
+    // Incluir ciudad solo si es domiciliario
+    if (persona.role === 'domiciliario' && persona.ciudad) {
+      personaData.ciudad = persona.ciudad;
+    }
 
     res.status(200).json({
       success: true,

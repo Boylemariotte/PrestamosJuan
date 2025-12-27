@@ -14,6 +14,7 @@ import CreditosActivos from './pages/CreditosActivos';
 import Estadisticas from './pages/Estadisticas';
 import Configuracion from './pages/Configuracion';
 import DiaDeCobro from './pages/DiaDeCobro';
+import Rutas from './pages/Rutas';
 
 import FlujoCajas from './pages/FlujoCajas';
 import Alertas from './pages/Alertas';
@@ -82,6 +83,17 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <DiaDeCobro />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/rutas"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Rutas />
                   </Layout>
                 </ProtectedRoute>
               }

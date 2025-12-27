@@ -12,7 +12,8 @@ const GestionUsuarios = () => {
         nombre: '',
         email: '',
         password: '',
-        role: 'domiciliario'
+        role: 'domiciliario',
+        ciudad: ''
     });
 
     // Estado para edición
@@ -45,9 +46,19 @@ const GestionUsuarios = () => {
     const handleChange = (e) => {
         const { name, value } = e.target;
         if (isEditModalOpen) {
-            setEditingUser(prev => ({ ...prev, [name]: value }));
+            const updatedUser = { ...editingUser, [name]: value };
+            // Si se cambia el rol y no es domiciliario, limpiar ciudad
+            if (name === 'role' && value !== 'domiciliario') {
+                updatedUser.ciudad = '';
+            }
+            setEditingUser(updatedUser);
         } else {
-            setFormData(prev => ({ ...prev, [name]: value }));
+            const updatedData = { ...formData, [name]: value };
+            // Si se cambia el rol y no es domiciliario, limpiar ciudad
+            if (name === 'role' && value !== 'domiciliario') {
+                updatedData.ciudad = '';
+            }
+            setFormData(updatedData);
         }
         setError('');
         setSuccess('');
@@ -60,7 +71,12 @@ const GestionUsuarios = () => {
         setSuccess('');
 
         try {
-            const response = await api.post('/personas', formData);
+            // Preparar datos para enviar, incluyendo ciudad solo si es domiciliario
+            const dataToSend = {
+                ...formData,
+                ...(formData.role !== 'domiciliario' && { ciudad: undefined })
+            };
+            const response = await api.post('/personas', dataToSend);
             if (response.success) {
                 setSuccess('Usuario creado exitosamente');
                 setFormData({
@@ -68,7 +84,8 @@ const GestionUsuarios = () => {
                     nombre: '',
                     email: '',
                     password: '',
-                    role: 'domiciliario'
+                    role: 'domiciliario',
+                    ciudad: ''
                 });
                 fetchUsers(); // Recargar lista
             }
@@ -91,7 +108,7 @@ const GestionUsuarios = () => {
         setLoading(true);
 
         try {
-            // Solo enviamos los campos que se pueden actualizar: nombre, email, role, activo
+            // Solo enviamos los campos que se pueden actualizar: nombre, email, role, activo, ciudad
             // Nota: El backend permite actualizar estos campos si eres CEO
             const payload = {
                 nombre: editingUser.nombre,
@@ -99,7 +116,8 @@ const GestionUsuarios = () => {
                 username: editingUser.username,
                 role: editingUser.role,
                 activo: editingUser.activo,
-                ...(editingUser.password && { password: editingUser.password }) // Add password if exists
+                ...(editingUser.password && { password: editingUser.password }), // Add password if exists
+                ...(editingUser.role === 'domiciliario' && editingUser.ciudad && { ciudad: editingUser.ciudad }) // Add ciudad if domiciliario
             };
 
             const response = await api.put(`/personas/${editingUser.id}`, payload);
@@ -184,11 +202,14 @@ const GestionUsuarios = () => {
                                     <tbody className="divide-y divide-gray-100">
                                         {users.map(user => (
                                             <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                                                <div className="p-4">
+                                                <td className="p-4">
                                                     <p className="font-medium text-gray-900">{user.nombre}</p>
                                                     <p className="text-xs text-gray-500">{user.email}</p>
                                                     <p className="text-xs text-blue-500">@{user.username}</p>
-                                                </div>
+                                                    {user.role === 'domiciliario' && user.ciudad && (
+                                                        <p className="text-xs text-gray-400 mt-1">📍 {user.ciudad}</p>
+                                                    )}
+                                                </td>
                                                 <td className="p-4">
                                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
                                                         ${user.role === 'ceo' ? 'bg-purple-100 text-purple-800' :
@@ -267,6 +288,17 @@ const GestionUsuarios = () => {
                                     </select>
                                 </div>
 
+                                {formData.role === 'domiciliario' && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Ciudad</label>
+                                        <select name="ciudad" value={formData.ciudad} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500">
+                                            <option value="">Seleccione una ciudad</option>
+                                            <option value="Tuluá">Tuluá</option>
+                                            <option value="Guadalajara de Buga">Guadalajara de Buga</option>
+                                        </select>
+                                    </div>
+                                )}
+
                                 <button type="submit" disabled={loading} className="w-full py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors font-medium">
                                     {loading ? 'Creando...' : 'Crear Usuario'}
                                 </button>
@@ -322,7 +354,7 @@ const GestionUsuarios = () => {
                                         name="activo"
                                         value={editingUser.activo}
                                         onChange={(e) => {
-                                            setEditingUser(prev => ({ ...prev, activo: val }));
+                                            setEditingUser(prev => ({ ...prev, activo: e.target.value === 'true' }));
                                         }}
                                         className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500"
                                     >
@@ -331,6 +363,17 @@ const GestionUsuarios = () => {
                                     </select>
                                 </div>
                             </div>
+
+                            {editingUser.role === 'domiciliario' && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Ciudad</label>
+                                    <select name="ciudad" value={editingUser.ciudad || ''} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500">
+                                        <option value="">Seleccione una ciudad</option>
+                                        <option value="Tuluá">Tuluá</option>
+                                        <option value="Guadalajara de Buga">Guadalajara de Buga</option>
+                                    </select>
+                                </div>
+                            )}
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Usuario</label>

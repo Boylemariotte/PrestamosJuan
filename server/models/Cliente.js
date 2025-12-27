@@ -157,7 +157,7 @@ const clienteSchema = new mongoose.Schema({
   },
   cartera: {
     type: String,
-    enum: ['K1', 'K2'],
+    enum: ['K1', 'K2', 'K3'],
     default: 'K1'
   },
   tipoPago: {

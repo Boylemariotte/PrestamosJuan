@@ -185,9 +185,9 @@ const ClientesArchivados = () => {
       const cartera = cliente.cartera || 'K1';
       const tipoPago = getTipoPagoCliente(cliente);
       
-      // Construir URL con query parameter para tipo de pago (solo para K1)
+      // Construir URL con query parameter para tipo de pago (para K1 y K3)
       let url = `/clientes/posiciones-disponibles/${cartera}`;
-      if (cartera === 'K1' && tipoPago) {
+      if ((cartera === 'K1' || cartera === 'K3') && tipoPago) {
         url += `?tipoPago=${tipoPago}`;
       }
       
@@ -293,6 +293,7 @@ const ClientesArchivados = () => {
                 <option value="todas">Todas las carteras</option>
                 <option value="K1">K1</option>
                 <option value="K2">K2</option>
+                <option value="K3">K3</option>
               </select>
             </div>
           </div>
@@ -335,6 +336,8 @@ const ClientesArchivados = () => {
                   ? 'bg-blue-100 hover:bg-blue-200' 
                   : cliente.cartera === 'K2'
                   ? 'bg-green-100 hover:bg-green-200'
+                  : cliente.cartera === 'K3'
+                  ? 'bg-orange-100 hover:bg-orange-200'
                   : 'hover:bg-gray-50';
 
                 return (
@@ -441,7 +444,7 @@ const ClientesArchivados = () => {
                 <p className="text-sm text-gray-600">
                   Cartera: <span className="font-semibold">{clienteParaDesarchivar.cartera || 'K1'}</span>
                 </p>
-                {clienteParaDesarchivar.cartera === 'K1' && (
+                {(clienteParaDesarchivar.cartera === 'K1' || clienteParaDesarchivar.cartera === 'K3') && (
                   <p className="text-sm text-gray-600">
                     Modalidad: <span className="font-semibold capitalize">
                       {getTipoPagoCliente(clienteParaDesarchivar) || 'No definida'}

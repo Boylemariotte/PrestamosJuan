@@ -11,7 +11,7 @@ import { formatearMoneda, calcularTotalMultasCuota, aplicarAbonosAutomaticamente
 import CreditoDetalle from '../components/Creditos/CreditoDetalle';
 import api, { prorrogaService } from '../services/api';
 
-const DiaDeCobro = () => {
+const Rutas = () => {
   const navigate = useNavigate();
   const { clientes, obtenerCliente, obtenerCredito } = useApp();
   const { user } = useAuth();
@@ -31,10 +31,6 @@ const DiaDeCobro = () => {
 
   // Estado para búsqueda
   const [searchTerm, setSearchTerm] = useState('');
-
-  // Estado para filtros de tipo de pago por cartera
-  const [filtroK1, setFiltroK1] = useState('todos'); // 'todos', 'semanal', 'quincenal'
-  const [filtroK3, setFiltroK3] = useState('todos'); // 'todos', 'semanal', 'quincenal'
 
   // Estado para orden de cobro por fecha y cliente
   // Estructura: { [fechaStr]: { [clienteId]: numeroOrden } }
@@ -232,22 +228,7 @@ const DiaDeCobro = () => {
 
           const keyCuota = `${cliente.id}-${credito.id}-${cuota.nroCuota}`;
           const fechaProrroga = prorrogasCuotas[keyCuota];
-          let fechaReferencia = fechaProrroga || cuotaOriginal.fechaProgramada;
-
-          // Normalizar fechaReferencia a formato YYYY-MM-DD
-          if (typeof fechaReferencia === 'string') {
-            if (fechaReferencia.includes('T')) {
-              fechaReferencia = fechaReferencia.split('T')[0];
-            } else if (!fechaReferencia.match(/^\d{4}-\d{2}-\d{2}$/)) {
-              // Si no está en formato YYYY-MM-DD, intentar parsear
-              const fechaObj = parseISO(fechaReferencia);
-              if (!isNaN(fechaObj.getTime())) {
-                fechaReferencia = format(fechaObj, 'yyyy-MM-dd');
-              }
-            }
-          } else if (fechaReferencia instanceof Date) {
-            fechaReferencia = format(fechaReferencia, 'yyyy-MM-dd');
-          }
+          const fechaReferencia = fechaProrroga || cuotaOriginal.fechaProgramada;
 
           const abonoAplicado = cuota.abonoAplicado || 0;
           const valorCuotaPendiente = credito.valorCuota - abonoAplicado;
@@ -256,11 +237,11 @@ const DiaDeCobro = () => {
           const multasPendientes = totalMultas - multasCubiertas;
           const tieneSaldo = valorCuotaPendiente > 0 || multasPendientes > 0;
 
-          // Check fecha - comparar strings normalizados
+          // Check fecha
           if (fechaReferencia === fechaSeleccionadaStr) return tieneSaldo;
-          
-          // Para fechas vencidas, comparar strings directamente (más seguro que Date)
-          return tieneSaldo && fechaReferencia <= fechaSeleccionadaStr;
+          const fProg = new Date(fechaReferencia);
+          const fSel = new Date(fechaSeleccionadaStr);
+          return tieneSaldo && fProg <= fSel;
         });
 
         if (cuotasPendientesHoy.length > 0) {
@@ -392,8 +373,8 @@ const DiaDeCobro = () => {
     return { porBarrio: barriosOrdenados, stats };
   }, [clientes, fechaSeleccionadaStr, creditosInvalidos, prorrogasCuotas]);
 
-  // Construir listas de cobros del día separadas por cartera
-  const cobrosPorCartera = useMemo(() => {
+  // Construir lista plana de cobros del día (sin agrupar por barrio)
+  const listaCobrosDia = useMemo(() => {
     const items = [];
     Object.values(datosCobro.porBarrio).forEach(arr => {
       arr.forEach(item => items.push(item));
@@ -401,58 +382,46 @@ const DiaDeCobro = () => {
 
     const ordenFecha = ordenCobro[fechaSeleccionadaStr] || {};
 
-    // Separar por cartera
-    const itemsK1 = items.filter(item => item.clienteCartera === 'K1');
-    const itemsK2 = items.filter(item => item.clienteCartera === 'K2');
-    const itemsK3 = items.filter(item => item.clienteCartera === 'K3');
+    // Ordenar primero por número de orden asignado, luego por nombre de cliente
+    items.sort((a, b) => {
+      const rawA = ordenFecha[a.clienteId];
+      const rawB = ordenFecha[b.clienteId];
 
-    // Función para aplicar filtro de tipo de pago
-    const aplicarFiltroTipoPago = (itemsList, filtro) => {
-      if (filtro === 'todos') return itemsList;
-      return itemsList.filter(item => item.creditoTipo === filtro);
-    };
+      const ordenA =
+        rawA === '' || rawA == null ? Number.MAX_SAFE_INTEGER : Number(rawA);
+      const ordenB =
+        rawB === '' || rawB == null ? Number.MAX_SAFE_INTEGER : Number(rawB);
 
-    // Aplicar filtros de tipo de pago
-    const itemsK1Filtrados = aplicarFiltroTipoPago(itemsK1, filtroK1);
-    const itemsK3Filtrados = aplicarFiltroTipoPago(itemsK3, filtroK3);
+      if (ordenA !== ordenB) return ordenA - ordenB;
+      return (a.clienteNombre || '').localeCompare(b.clienteNombre || '');
+    });
 
-    // Función para ordenar items
-    const ordenarItems = (itemsList) => {
-      return [...itemsList].sort((a, b) => {
-        const rawA = ordenFecha[a.clienteId];
-        const rawB = ordenFecha[b.clienteId];
-
-        const ordenA =
-          rawA === '' || rawA == null ? Number.MAX_SAFE_INTEGER : Number(rawA);
-        const ordenB =
-          rawB === '' || rawB == null ? Number.MAX_SAFE_INTEGER : Number(rawB);
-
-        if (ordenA !== ordenB) return ordenA - ordenB;
-        return (a.clienteNombre || '').localeCompare(b.clienteNombre || '');
-      });
-    };
-
-    // Función para filtrar por búsqueda
-    const filtrarPorBusqueda = (itemsList) => {
-      if (!searchTerm.trim()) return itemsList;
+    // Filtrar por término de búsqueda si existe
+    if (searchTerm.trim()) {
       const termino = searchTerm.toLowerCase().trim();
-      return itemsList.filter(item => {
+      return items.filter(item => {
+        // Buscar en ref. crédito (posición del cliente)
         const refCredito = item.clientePosicion ? `#${item.clientePosicion}` : '';
         if (refCredito.toLowerCase().includes(termino)) return true;
+
+        // Buscar en nombre del cliente
         if (item.clienteNombre?.toLowerCase().includes(termino)) return true;
+
+        // Buscar en CC (documento)
         if (item.clienteDocumento?.includes(termino)) return true;
+
+        // Buscar en teléfono
         if (item.clienteTelefono?.includes(termino)) return true;
+
+        // Buscar en barrio
         if (item.clienteBarrio?.toLowerCase().includes(termino)) return true;
+
         return false;
       });
-    };
+    }
 
-    return {
-      K1: filtrarPorBusqueda(ordenarItems(itemsK1Filtrados)),
-      K2: filtrarPorBusqueda(ordenarItems(itemsK2)),
-      K3: filtrarPorBusqueda(ordenarItems(itemsK3Filtrados))
-    };
-  }, [datosCobro, ordenCobro, fechaSeleccionadaStr, searchTerm, filtroK1, filtroK3]);
+    return items;
+  }, [datosCobro, ordenCobro, fechaSeleccionadaStr, searchTerm]);
 
   // Obtener clientes que pagaron ese día, separados por cartera
   const clientesPagados = useMemo(() => {
@@ -1012,7 +981,7 @@ const DiaDeCobro = () => {
               <Calendar className="h-8 w-8 text-blue-300" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Día de Cobro</h1>
+              <h1 className="text-2xl font-bold">Rutas</h1>
               <p className="text-slate-300 text-sm">
                 {format(fechaSeleccionada, "EEEE, d 'de' MMMM", { locale: es })}
               </p>
@@ -1104,133 +1073,38 @@ const DiaDeCobro = () => {
         </div>
       </div>
 
-      {/* Sección por Carteras */}
-      <div className="space-y-6">
-        {/* Cartera K1 */}
-        {!esDomiciliarioBuga && (
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-lg">
-                  <Users className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold">Cartera K1</h3>
-                  <p className="text-blue-100 text-sm">{cobrosPorCartera.K1.length} {cobrosPorCartera.K1.length === 1 ? 'cliente' : 'clientes'}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <select
-                  value={filtroK1}
-                  onChange={(e) => setFiltroK1(e.target.value)}
-                  className="bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white/50"
-                >
-                  <option value="todos" className="text-gray-900">Todos</option>
-                  <option value="semanal" className="text-gray-900">Semanal</option>
-                  <option value="quincenal" className="text-gray-900">Quincenal</option>
-                </select>
-              </div>
-            </div>
-            {cobrosPorCartera.K1.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
-                <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No hay cobros para esta fecha en K1</p>
-              </div>
-            ) : (
-              <TablaCobrosLista
-                items={cobrosPorCartera.K1}
-                onCambioOrden={handleCambioOrdenCliente}
-                ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
-                onProrrogaDias={handleProrrogaDias}
-                onProrrogaFecha={handleProrrogaFecha}
-              />
-            )}
+      {/* Lista única de clientes del día con numeración */}
+      <div className="space-y-4">
+        {listaCobrosDia.length === 0 ? (
+          <div className="text-center py-12 text-gray-400">
+            <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
+            <p className="text-lg">No hay cobros para esta fecha</p>
           </div>
-        )}
-
-        {/* Cartera K2 */}
-        {!esDomiciliarioBuga && (
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="bg-green-600 text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-lg">
-                  <Users className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold">Cartera K2</h3>
-                  <p className="text-green-100 text-sm">{cobrosPorCartera.K2.length} {cobrosPorCartera.K2.length === 1 ? 'cliente' : 'clientes'}</p>
-                </div>
-              </div>
-            </div>
-            {cobrosPorCartera.K2.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
-                <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No hay cobros para esta fecha en K2</p>
-              </div>
-            ) : (
-              <TablaCobrosLista
-                items={cobrosPorCartera.K2}
-                onCambioOrden={handleCambioOrdenCliente}
-                ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
-                onProrrogaDias={handleProrrogaDias}
-                onProrrogaFecha={handleProrrogaFecha}
-              />
-            )}
-          </div>
-        )}
-
-        {/* Cartera K3 */}
-        {(esDomiciliarioBuga || esAdminOCeo) && (
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="bg-orange-600 text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-lg">
-                  <Users className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold">Cartera K3</h3>
-                  <p className="text-orange-100 text-sm">{cobrosPorCartera.K3.length} {cobrosPorCartera.K3.length === 1 ? 'cliente' : 'clientes'}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <select
-                  value={filtroK3}
-                  onChange={(e) => setFiltroK3(e.target.value)}
-                  className="bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white/50"
-                >
-                  <option value="todos" className="text-gray-900">Todos</option>
-                  <option value="semanal" className="text-gray-900">Semanal</option>
-                  <option value="quincenal" className="text-gray-900">Quincenal</option>
-                </select>
-              </div>
-            </div>
-            {cobrosPorCartera.K3.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
-                <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No hay cobros para esta fecha en K3</p>
-              </div>
-            ) : (
-              <TablaCobrosLista
-                items={cobrosPorCartera.K3}
-                onCambioOrden={handleCambioOrdenCliente}
-                ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
-                onProrrogaDias={handleProrrogaDias}
-                onProrrogaFecha={handleProrrogaFecha}
-              />
-            )}
+        ) : (
+          <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">
+            <TablaCobrosLista
+              items={listaCobrosDia}
+              onCambioOrden={handleCambioOrdenCliente}
+              ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
+              onProrrogaDias={handleProrrogaDias}
+              onProrrogaFecha={handleProrrogaFecha}
+            />
           </div>
         )}
       </div>
 
-      {/* Sección Pagados - Siempre visible */}
-      <div className="space-y-6 mt-8 pt-8 border-t-2 border-gray-300">
-        <div className="flex items-center gap-3 mb-4">
-          <CheckCircle className="h-6 w-6 text-green-600" />
-          <h2 className="text-2xl font-bold text-gray-900">Pagados</h2>
-        </div>
-        
-        {/* Card K1 - Mostrar para administradores, CEO y domiciliarios de Tuluá */}
-        {!esDomiciliarioBuga && (
+      {/* Sección Pagados - Siempre visible si hay pagos */}
+      {((esAdminOCeo && (clientesPagados.K1.items.length > 0 || clientesPagados.K2.items.length > 0 || clientesPagados.K3.items.length > 0)) ||
+        (!esDomiciliarioBuga && !esAdminOCeo && (clientesPagados.K1.items.length > 0 || clientesPagados.K2.items.length > 0)) || 
+        (esDomiciliarioBuga && clientesPagados.K3.items.length > 0)) && (
+        <div className="space-y-6 mt-8 pt-8 border-t-2 border-gray-300">
+          <div className="flex items-center gap-3 mb-4">
+            <CheckCircle className="h-6 w-6 text-green-600" />
+            <h2 className="text-2xl font-bold text-gray-900">Pagados</h2>
+          </div>
+          
+          {/* Card K1 - Mostrar para administradores, CEO y domiciliarios de Tuluá */}
+          {!esDomiciliarioBuga && clientesPagados.K1.items.length > 0 && (
             <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
               <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1247,28 +1121,22 @@ const DiaDeCobro = () => {
                   <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K1.total)}</p>
                 </div>
               </div>
-              {clientesPagados.K1.items.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                  <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg">No hay pagos registrados para K1</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left text-gray-500">
-                    <thead className="text-xs text-white uppercase bg-slate-800">
-                      <tr>
-                        <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
-                        <th scope="col" className="px-4 py-3">Cliente</th>
-                        <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
-                        <th scope="col" className="px-4 py-3 text-center">Cuota</th>
-                        <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
-                        <th scope="col" className="px-4 py-3 text-center">Multa</th>
-                        <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
-                        <th scope="col" className="px-4 py-3 text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {clientesPagados.K1.items.map((item, index) => (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-gray-500">
+                  <thead className="text-xs text-white uppercase bg-slate-800">
+                    <tr>
+                      <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
+                      <th scope="col" className="px-4 py-3">Cliente</th>
+                      <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
+                      <th scope="col" className="px-4 py-3 text-center">Cuota</th>
+                      <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                      <th scope="col" className="px-4 py-3 text-center">Multa</th>
+                      <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
+                      <th scope="col" className="px-4 py-3 text-center">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {clientesPagados.K1.items.map((item, index) => (
                       <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-blue-50 hover:bg-blue-100">
                         <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
                           {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
@@ -1338,15 +1206,14 @@ const DiaDeCobro = () => {
                         </td>
                       </tr>
                     ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-        )}
+          )}
 
-        {/* Card K2 - Mostrar para administradores, CEO y domiciliarios de Tuluá */}
-        {!esDomiciliarioBuga && (
+          {/* Card K2 - Mostrar para administradores, CEO y domiciliarios de Tuluá */}
+          {!esDomiciliarioBuga && clientesPagados.K2.items.length > 0 && (
             <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
               <div className="bg-green-600 text-white px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1363,28 +1230,22 @@ const DiaDeCobro = () => {
                   <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K2.total)}</p>
                 </div>
               </div>
-              {clientesPagados.K2.items.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                  <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg">No hay pagos registrados para K2</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left text-gray-500">
-                    <thead className="text-xs text-white uppercase bg-slate-800">
-                      <tr>
-                        <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
-                        <th scope="col" className="px-4 py-3">Cliente</th>
-                        <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
-                        <th scope="col" className="px-4 py-3 text-center">Cuota</th>
-                        <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
-                        <th scope="col" className="px-4 py-3 text-center">Multa</th>
-                        <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
-                        <th scope="col" className="px-4 py-3 text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {clientesPagados.K2.items.map((item, index) => (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-gray-500">
+                  <thead className="text-xs text-white uppercase bg-slate-800">
+                    <tr>
+                      <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
+                      <th scope="col" className="px-4 py-3">Cliente</th>
+                      <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
+                      <th scope="col" className="px-4 py-3 text-center">Cuota</th>
+                      <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                      <th scope="col" className="px-4 py-3 text-center">Multa</th>
+                      <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
+                      <th scope="col" className="px-4 py-3 text-center">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {clientesPagados.K2.items.map((item, index) => (
                       <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-green-50 hover:bg-green-100">
                         <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
                           {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
@@ -1454,15 +1315,14 @@ const DiaDeCobro = () => {
                         </td>
                       </tr>
                     ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-        )}
+          )}
 
-        {/* Card K3 - Mostrar para administradores, CEO y domiciliarios de Buga */}
-        {(esDomiciliarioBuga || esAdminOCeo) && (
+          {/* Card K3 - Mostrar para administradores, CEO y domiciliarios de Buga */}
+          {(esDomiciliarioBuga || esAdminOCeo) && clientesPagados.K3.items.length > 0 && (
             <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
               <div className="bg-orange-600 text-white px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1479,28 +1339,22 @@ const DiaDeCobro = () => {
                   <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K3.total)}</p>
                 </div>
               </div>
-              {clientesPagados.K3.items.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                  <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg">No hay pagos registrados para K3</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left text-gray-500">
-                    <thead className="text-xs text-white uppercase bg-slate-800">
-                      <tr>
-                        <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
-                        <th scope="col" className="px-4 py-3">Cliente</th>
-                        <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
-                        <th scope="col" className="px-4 py-3 text-center">Cuota</th>
-                        <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
-                        <th scope="col" className="px-4 py-3 text-center">Multa</th>
-                        <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
-                        <th scope="col" className="px-4 py-3 text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {clientesPagados.K3.items.map((item, index) => (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-gray-500">
+                  <thead className="text-xs text-white uppercase bg-slate-800">
+                    <tr>
+                      <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
+                      <th scope="col" className="px-4 py-3">Cliente</th>
+                      <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
+                      <th scope="col" className="px-4 py-3 text-center">Cuota</th>
+                      <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                      <th scope="col" className="px-4 py-3 text-center">Multa</th>
+                      <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
+                      <th scope="col" className="px-4 py-3 text-center">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {clientesPagados.K3.items.map((item, index) => (
                       <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-orange-50 hover:bg-orange-100">
                         <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
                           {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
@@ -1570,13 +1424,13 @@ const DiaDeCobro = () => {
                         </td>
                       </tr>
                     ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Modal Detalle */}
       {creditoSeleccionado && clienteSeleccionado && (
@@ -1594,4 +1448,5 @@ const DiaDeCobro = () => {
   );
 };
 
-export default DiaDeCobro;
+export default Rutas;
+

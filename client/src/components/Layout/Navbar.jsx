@@ -40,6 +40,7 @@ const Navbar = () => {
     { path: '/', label: 'Clientes', icon: Users },
     { path: '/archivados', label: 'Archivados', icon: Archive },
     { path: '/dia-de-cobro', label: 'Día de Cobro', icon: Calendar },
+    { path: '/rutas', label: 'Rutas', icon: Route },
     { path: '/caja', label: 'Caja', icon: Wallet },
     { path: '/visitas', label: 'Visitas', icon: ClipboardList },
     { path: '/papeleria', label: 'Papelería', icon: ClipboardList },
@@ -52,9 +53,13 @@ const Navbar = () => {
   // Filtrar items del nav según permisos y rol de usuario
   const getFilteredNavItems = () => {
     return navItems.filter(item => {
-      // Ocultar Caja y Papelería para el rol de domiciliario
-      if (user?.role === 'domiciliario' && (item.path === '/caja' || item.path === '/papeleria')) {
-        return false;
+      // Ocultar varias opciones para domiciliarios
+      if (user?.role === 'domiciliario') {
+        // Ocultar: Caja, Papelería, Archivados, Usuarios
+        if (item.path === '/caja' || item.path === '/papeleria' || 
+            item.path === '/archivados' || item.path === '/usuarios') {
+          return false;
+        }
       }
       if (item.path === '/estadisticas') return hasPermission('verEstadisticas');
       if (item.path === '/configuracion') return hasPermission('verConfiguracion');

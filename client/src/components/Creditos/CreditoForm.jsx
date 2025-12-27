@@ -12,7 +12,7 @@ import {
 import { obtenerFechaLocal } from '../../utils/dateUtils';
 
 const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefinido = null, tipoPagoPreferido = null }) => {
-  // Para K1: tipo de pago automático según posición (no se puede seleccionar)
+  // Para K1 y K3: tipo de pago automático según posición (no se puede seleccionar)
   // Para K2: tipo de pago seleccionable (quincenal o mensual)
   const tipoPagoInicial = carteraCliente === 'K2'
     ? (tipoPagoPreferido && ['quincenal', 'mensual'].includes(tipoPagoPreferido) ? tipoPagoPreferido : 'quincenal')
@@ -33,11 +33,11 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
     numCuotasManual: ''
   });
 
-  // Para K1: asegurar que el tipo de pago siempre sea el correcto (no se puede cambiar)
+  // Para K1 y K3: asegurar que el tipo de pago siempre sea el correcto (no se puede cambiar)
   // Para K2: solo actualizar si cambia el preferido inicialmente
   useEffect(() => {
-    if (carteraCliente === 'K1') {
-      // K1: tipo fijo según posición
+    if (carteraCliente === 'K1' || carteraCliente === 'K3') {
+      // K1 y K3: tipo fijo según posición
       const tipoFijo = tipoPagoPredefinido ||
         (tipoPagoPreferido && ['semanal', 'quincenal'].includes(tipoPagoPreferido) ? tipoPagoPreferido : null) ||
         'semanal';
@@ -218,12 +218,20 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
                   (Cartera {carteraCliente})
                 </span>
               </label>
-              {carteraCliente === 'K1' ? (
-                // K1: Solo lectura, determinado automáticamente
-                <div className="p-4 border-2 rounded-lg bg-gray-50 border-gray-300">
+              {(carteraCliente === 'K1' || carteraCliente === 'K3') ? (
+                // K1 y K3: Solo lectura, determinado automáticamente según posición
+                <div className={`p-4 border-2 rounded-lg ${
+                  carteraCliente === 'K3' 
+                    ? 'bg-orange-50 border-orange-300' 
+                    : 'bg-gray-50 border-gray-300'
+                }`}>
                   <div className="flex items-center">
                     <div className="flex items-center">
-                      <div className="h-4 w-4 rounded-full bg-sky-600 flex items-center justify-center">
+                      <div className={`h-4 w-4 rounded-full flex items-center justify-center ${
+                        carteraCliente === 'K3' 
+                          ? 'bg-orange-600' 
+                          : 'bg-sky-600'
+                      }`}>
                         <div className="h-2 w-2 rounded-full bg-white"></div>
                       </div>
                       <div className="ml-3">

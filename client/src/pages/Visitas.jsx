@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Save, Printer, UserPlus, X, Briefcase, Trash2, PlusCircle, Search } from 'lucide-react';
-import { BARRIOS_TULUA } from '../constants/barrios';
+import { BARRIOS_TULUA, BARRIOS_BUGA } from '../constants/barrios';
+import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 
 const Visitas = () => {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [showCarteraModal, setShowCarteraModal] = useState(false);
     const [selectedVisit, setSelectedVisit] = useState(null);
     
@@ -66,6 +68,16 @@ const Visitas = () => {
         }
     }, []);
 
+    // Determinar qué lista de barrios usar según la ciudad del domiciliario
+    const barriosDisponibles = useMemo(() => {
+        // Si el usuario es domiciliario y tiene ciudad = "Guadalajara de Buga", usar BARRIOS_BUGA
+        if (user && user.role === 'domiciliario' && user.ciudad === 'Guadalajara de Buga') {
+            return BARRIOS_BUGA;
+        }
+        // Por defecto, usar BARRIOS_TULUA (para domiciliarios de Tuluá o cualquier otro rol)
+        return BARRIOS_TULUA;
+    }, [user]);
+
     // Función auxiliar para normalizar texto (quitar tildes y convertir a minúsculas)
     const normalizeText = (text) => {
         return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -74,7 +86,7 @@ const Visitas = () => {
     // Filtrar barrios según el término de búsqueda
     const filterBarrios = (searchTerm) => {
         if (!searchTerm) return [];
-        return BARRIOS_TULUA.filter(barrio => 
+        return barriosDisponibles.filter(barrio => 
             normalizeText(barrio).includes(normalizeText(searchTerm))
         );
     };

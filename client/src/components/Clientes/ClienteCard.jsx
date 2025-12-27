@@ -3,10 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { User, Phone, MapPin, Mail, UserCheck, CreditCard, AlertCircle, Briefcase, Plus, Trash2 } from 'lucide-react';
 import { determinarEstadoCredito, getColorEstado } from '../../utils/creditCalculations';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 
 const ClienteCard = ({ cliente, cardVacia, numeroCard, cartera, tipoPago, onAgregarCliente }) => {
   const navigate = useNavigate();
   const { eliminarCliente } = useApp();
+  const { user } = useAuth();
+  const esDomiciliario = user?.role === 'domiciliario';
 
   // Si es una card vacía, mostrar diseño diferente
   if (cardVacia) {
@@ -22,6 +25,12 @@ const ClienteCard = ({ cliente, cardVacia, numeroCard, cartera, tipoPago, onAgre
         border: 'border-green-300',
         icon: 'bg-green-200 text-green-700',
         badge: 'bg-green-200 text-green-800 border-green-400'
+      },
+      K3: {
+        bg: 'bg-orange-50',
+        border: 'border-orange-200',
+        icon: 'bg-orange-100 text-orange-600',
+        badge: 'bg-orange-100 text-orange-700 border-orange-300'
       }
     };
     const colors = carteraColors[cartera] || carteraColors.K1;
@@ -55,16 +64,18 @@ const ClienteCard = ({ cliente, cardVacia, numeroCard, cartera, tipoPago, onAgre
               </span>
             </div>
           </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onAgregarCliente(cartera, tipoPago, numeroCard);
-            }}
-            className="btn-primary flex items-center gap-2 w-full justify-center"
-          >
-            <Plus className="h-4 w-4" />
-            Agregar cliente a esta card
-          </button>
+          {!esDomiciliario && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAgregarCliente(cartera, tipoPago, numeroCard);
+              }}
+              className="btn-primary flex items-center gap-2 w-full justify-center"
+            >
+              <Plus className="h-4 w-4" />
+              Agregar cliente a esta card
+            </button>
+          )}
         </div>
       </div>
     );
@@ -129,11 +140,17 @@ const ClienteCard = ({ cliente, cardVacia, numeroCard, cartera, tipoPago, onAgre
       border: 'border-green-300',
       icon: 'bg-green-200 text-green-700',
       badge: 'bg-green-200 text-green-800 border-green-400'
+    },
+    K3: {
+      bg: 'bg-orange-50',
+      border: 'border-orange-200',
+      icon: 'bg-orange-100 text-orange-600',
+      badge: 'bg-orange-100 text-orange-700 border-orange-300'
     }
   };
 
   const carteraCliente = cliente.cartera || 'K1';
-  const colors = carteraColors[carteraCliente];
+  const colors = carteraColors[carteraCliente] || carteraColors.K1;
 
   return (
     <div
@@ -257,14 +274,16 @@ const ClienteCard = ({ cliente, cardVacia, numeroCard, cartera, tipoPago, onAgre
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleEliminar}
-            className="text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1 transition-colors"
-            title="Eliminar cliente"
-          >
-            <Trash2 className="h-4 w-4" />
-            Eliminar
-          </button>
+          {!esDomiciliario && (
+            <button
+              onClick={handleEliminar}
+              className="text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1 transition-colors"
+              title="Eliminar cliente"
+            >
+              <Trash2 className="h-4 w-4" />
+              Eliminar
+            </button>
+          )}
           <button
             onClick={handleClick}
             className="text-sky-600 hover:text-sky-700 text-sm font-medium"
