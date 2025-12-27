@@ -1,224 +1,231 @@
-import React from 'react';
+// client/src/App.jsx
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import Layout from './components/Layout/Layout';
 
-// Pages
+// Login se mantiene estático (se carga inmediatamente porque es la primera vista)
 import Login from './pages/Login';
-import Clientes from './pages/Clientes';
-import ClienteDetalle from './pages/ClienteDetalle';
-import ClientesArchivados from './pages/ClientesArchivados';
-import CreditosActivos from './pages/CreditosActivos';
-import Estadisticas from './pages/Estadisticas';
-import Configuracion from './pages/Configuracion';
-import DiaDeCobro from './pages/DiaDeCobro';
-import Rutas from './pages/Rutas';
 
-import FlujoCajas from './pages/FlujoCajas';
-import Alertas from './pages/Alertas';
-import Papeleria from './pages/Papeleria';
-import Visitas from './pages/Visitas';
-import GestionUsuarios from './pages/GestionUsuarios';
-import Perfil from './pages/Perfil';
+// Lazy loading para todas las demás páginas
+const Clientes = lazy(() => import('./pages/Clientes'));
+const ClienteDetalle = lazy(() => import('./pages/ClienteDetalle'));
+const ClientesArchivados = lazy(() => import('./pages/ClientesArchivados'));
+const CreditosActivos = lazy(() => import('./pages/CreditosActivos'));
+const Estadisticas = lazy(() => import('./pages/Estadisticas'));
+const Configuracion = lazy(() => import('./pages/Configuracion'));
+const DiaDeCobro = lazy(() => import('./pages/DiaDeCobro'));
+const Rutas = lazy(() => import('./pages/Rutas'));
+const FlujoCajas = lazy(() => import('./pages/FlujoCajas'));
+const Alertas = lazy(() => import('./pages/Alertas'));
+const Papeleria = lazy(() => import('./pages/Papeleria'));
+const Visitas = lazy(() => import('./pages/Visitas'));
+const GestionUsuarios = lazy(() => import('./pages/GestionUsuarios'));
+const Perfil = lazy(() => import('./pages/Perfil'));
+
+// Componente de carga (puedes personalizarlo)
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center min-h-screen bg-gray-50">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+      <p className="text-gray-600">Cargando...</p>
+    </div>
+  </div>
+);
 
 function App() {
   return (
     <AuthProvider>
       <AppProvider>
         <BrowserRouter>
-          <Routes>
-            {/* Login - No requiere autenticación */}
-            <Route path="/login" element={<Login />} />
+          <Suspense fallback={<LoadingSpinner />}>
+            <Routes>
+              {/* Login - No requiere autenticación */}
+              <Route path="/login" element={<Login />} />
 
-            {/* Rutas protegidas */}
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Clientes />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+              {/* Rutas protegidas */}
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Clientes />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/cliente/:id"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ClienteDetalle />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/cliente/:id"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <ClienteDetalle />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/archivados"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ClientesArchivados />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/archivados"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <ClientesArchivados />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/archivados/cliente/:id"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ClienteDetalle soloLectura={true} />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/archivados/cliente/:id"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <ClienteDetalle soloLectura={true} />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/dia-de-cobro"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <DiaDeCobro />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/dia-de-cobro"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <DiaDeCobro />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/rutas"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Rutas />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/rutas"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Rutas />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/caja"
-              element={
-                <ProtectedRoute requiredRole="administrador">
-                  <Layout>
-                    <FlujoCajas />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/caja"
+                element={
+                  <ProtectedRoute requiredRole="administrador">
+                    <Layout>
+                      <FlujoCajas />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/creditos-activos"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <CreditosActivos />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/creditos-activos"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <CreditosActivos />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
+              <Route
+                path="/usuarios"
+                element={
+                  <ProtectedRoute requiredRole="ceo">
+                    <Layout>
+                      <GestionUsuarios />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
+              <Route
+                path="/perfil"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Perfil />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
+              <Route
+                path="/estadisticas"
+                element={
+                  <ProtectedRoute requiredPermission="verEstadisticas">
+                    <Layout>
+                      <Estadisticas />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
+              <Route
+                path="/configuracion"
+                element={
+                  <ProtectedRoute requiredPermission="verConfiguracion">
+                    <Layout>
+                      <Configuracion />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
+              <Route
+                path="/flujo-cajas"
+                element={
+                  <ProtectedRoute requiredPermission="gestionarCaja">
+                    <Layout>
+                      <FlujoCajas />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/usuarios"
-              element={
-                <ProtectedRoute requiredRole="ceo">
-                  <Layout>
-                    <GestionUsuarios />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/alertas"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Alertas />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/perfil"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Perfil />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/papeleria"
+                element={
+                  <ProtectedRoute requiredRole="administrador">
+                    <Layout>
+                      <Papeleria />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/estadisticas"
-              element={
-                <ProtectedRoute requiredPermission="verEstadisticas">
-                  <Layout>
-                    <Estadisticas />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/visitas"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Visitas />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/configuracion"
-              element={
-                <ProtectedRoute requiredPermission="verConfiguracion">
-                  <Layout>
-                    <Configuracion />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-
-
-
-            <Route
-              path="/flujo-cajas"
-              element={
-                <ProtectedRoute requiredPermission="gestionarCaja">
-                  <Layout>
-                    <FlujoCajas />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="/alertas"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Alertas />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="/papeleria"
-              element={
-                <ProtectedRoute requiredRole="administrador">
-                  <Layout>
-                    <Papeleria />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="/visitas"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Visitas />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Redirigir cualquier ruta no encontrada a la página principal */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+              {/* Redirigir cualquier ruta no encontrada a la página principal */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </BrowserRouter>
       </AppProvider>
     </AuthProvider>
@@ -226,4 +233,3 @@ function App() {
 }
 
 export default App;
-
