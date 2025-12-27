@@ -512,8 +512,59 @@ const DiaDeCobro = () => {
             }
           }
 
-          // Si la cuota está pagada, solo mostrar en la fecha exacta de pago
-          if (cuota.pagado && fechaPagoNormalizada === fechaSeleccionadaStr) {
+          // Buscar abonos en la fecha seleccionada (independientemente de si la cuota está pagada o no)
+          const abonosHoy = (cuota.abonosCuota || []).filter(a => {
+            const fechaAbono = typeof a.fecha === 'string' 
+              ? a.fecha.split('T')[0] 
+              : format(new Date(a.fecha), 'yyyy-MM-dd');
+            return fechaAbono === fechaSeleccionadaStr;
+          });
+
+          const montoAbonadoHoy = abonosHoy.reduce((sum, a) => sum + (a.valor || 0), 0);
+
+          // Si hay abonos en la fecha seleccionada, mostrarlos
+          if (montoAbonadoHoy > 0) {
+            // Calcular el saldo pendiente antes del abono de hoy
+            // Para esto, necesitamos sumar todos los abonos anteriores a la fecha seleccionada
+            const abonosAnteriores = (cuota.abonosCuota || []).filter(a => {
+              const fechaAbono = typeof a.fecha === 'string' 
+                ? a.fecha.split('T')[0] 
+                : format(new Date(a.fecha), 'yyyy-MM-dd');
+              return fechaAbono < fechaSeleccionadaStr;
+            });
+            const montoAbonadoAnterior = abonosAnteriores.reduce((sum, a) => sum + (a.valor || 0), 0);
+            const saldoPendienteAntes = credito.valorCuota - montoAbonadoAnterior;
+            const saldoPendienteDespues = saldoPendienteAntes - montoAbonadoHoy;
+
+            // Determinar tipo de pago: "completo" si el saldo pendiente después del abono es 0 o menos
+            const tipoPago = saldoPendienteDespues <= 0 ? 'completo' : 'parcial';
+
+            const key = `${cliente.id}-${credito.id}-${cuota.nroCuota}`;
+            const item = {
+              clienteId: cliente.id,
+              clienteNombre: cliente.nombre,
+              clienteDocumento: cliente.documento,
+              clienteTelefono: cliente.telefono,
+              clienteBarrio: cliente.barrio,
+              clienteCartera: cliente.cartera || 'K1',
+              clientePosicion: cliente.posicion,
+              creditoId: credito.id,
+              creditoMonto: credito.monto,
+              creditoTipo: credito.tipo,
+              valorCuota: credito.valorCuota,
+              nroCuota: cuota.nroCuota,
+              montoPagado: montoAbonadoHoy,
+              tipoPago: tipoPago,
+              montoPagadoMulta: 0,
+              tieneMulta: false
+            };
+            itemsMap.set(key, item);
+            return; // No procesar más para esta cuota en esta fecha
+          }
+
+          // Si no hay abonos en la fecha seleccionada pero la cuota está pagada en esta fecha
+          // (pago completo directo, sin abonos)
+          if (cuota.pagado && fechaPagoNormalizada === fechaSeleccionadaStr && montoAbonadoHoy === 0) {
             const key = `${cliente.id}-${credito.id}-${cuota.nroCuota}`;
             const item = {
               clienteId: cliente.id,
@@ -535,42 +586,6 @@ const DiaDeCobro = () => {
             };
             itemsMap.set(key, item);
             return;
-          }
-
-          // Si la cuota NO está pagada, buscar abonos parciales en la fecha seleccionada
-          if (!cuota.pagado) {
-            const abonosHoy = (cuota.abonosCuota || []).filter(a => {
-              const fechaAbono = typeof a.fecha === 'string' 
-                ? a.fecha.split('T')[0] 
-                : format(new Date(a.fecha), 'yyyy-MM-dd');
-              return fechaAbono === fechaSeleccionadaStr;
-            });
-
-            const montoAbonadoHoy = abonosHoy.reduce((sum, a) => sum + (a.valor || 0), 0);
-
-            // Solo mostrar abonos parciales si hay monto abonado en esta fecha
-            if (montoAbonadoHoy > 0) {
-              const key = `${cliente.id}-${credito.id}-${cuota.nroCuota}`;
-              const item = {
-                clienteId: cliente.id,
-                clienteNombre: cliente.nombre,
-                clienteDocumento: cliente.documento,
-                clienteTelefono: cliente.telefono,
-                clienteBarrio: cliente.barrio,
-                clienteCartera: cliente.cartera || 'K1',
-                clientePosicion: cliente.posicion,
-                creditoId: credito.id,
-                creditoMonto: credito.monto,
-                creditoTipo: credito.tipo,
-                valorCuota: credito.valorCuota,
-                nroCuota: cuota.nroCuota,
-                montoPagado: montoAbonadoHoy,
-                tipoPago: 'parcial',
-                montoPagadoMulta: 0,
-                tieneMulta: false
-              };
-              itemsMap.set(key, item);
-            }
           }
         });
 
