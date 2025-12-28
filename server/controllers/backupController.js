@@ -44,7 +44,11 @@ export const exportData = async (req, res, next) => {
             fechaCreacion: cliente.fechaCreacion,
             coordenadasResidencia: cliente.coordenadasResidencia,
             coordenadasTrabajo: cliente.coordenadasTrabajo,
-            esArchivado: cliente.esArchivado // Include archived status
+            coordenadasResidenciaActualizada: cliente.coordenadasResidenciaActualizada,
+            coordenadasTrabajoActualizada: cliente.coordenadasTrabajoActualizada,
+            esArchivado: cliente.esArchivado,
+            etiqueta: cliente.etiqueta,
+            rf: cliente.rf
         }));
 
         // Formato de backup compatible con el JSON original
@@ -114,6 +118,10 @@ const performImport = async (data) => {
 
             for (const clienteRaw of clientesBatch) {
                 const clienteId = clienteRaw.id || clienteRaw._id || new mongoose.Types.ObjectId().toString();
+
+                if (clienteRaw.esArchivado) {
+                    console.log(`[Backup Import] Procesando cliente archivado: ${clienteRaw.nombre}, esArchivado value: ${clienteRaw.esArchivado}`);
+                }
 
                 // Procesar créditos embebidos
                 const creditosEmbebidos = [];
@@ -212,7 +220,13 @@ const performImport = async (data) => {
                     creditos: creditosEmbebidos,
                     fechaCreacion: clienteRaw.fechaCreacion,
                     coordenadasResidencia: clienteRaw.coordenadasResidencia,
-                    coordenadasTrabajo: clienteRaw.coordenadasTrabajo
+                    coordenadasTrabajo: clienteRaw.coordenadasTrabajo,
+                    coordenadasResidenciaActualizada: clienteRaw.coordenadasResidenciaActualizada,
+                    coordenadasTrabajoActualizada: clienteRaw.coordenadasTrabajoActualizada,
+                    coordenadasTrabajoActualizada: clienteRaw.coordenadasTrabajoActualizada,
+                    esArchivado: (clienteRaw.esArchivado === true || clienteRaw.esArchivado === 'true'),
+                    etiqueta: clienteRaw.etiqueta,
+                    rf: clienteRaw.rf
                 });
             }
 

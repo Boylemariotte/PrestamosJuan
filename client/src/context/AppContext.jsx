@@ -686,10 +686,19 @@ export const AppProvider = ({ children }) => {
   const exportarDatos = async () => {
     try {
       const response = await api.get('/backup/export');
-      return response;
+      if (response) {
+        // Helper to trigger download
+        const dataStr = JSON.stringify(response, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+        const exportFileDefaultName = `reservas_juan_backup_${new Date().toISOString().slice(0, 10)}.json`;
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+      }
     } catch (error) {
       console.error('Error exportando:', error);
-      throw error;
+      alert('Error al exportar datos');
     }
   };
 

@@ -10,35 +10,9 @@ const Configuracion = () => {
   const handleExportar = async () => {
     setLoading(true);
     try {
-      // 1. Obtener datos del servidor
-      const serverData = await exportarDatos();
-
-      // 2. Obtener datos locales (localStorage)
-      const localData = {
-        visitas: JSON.parse(localStorage.getItem('visitas') || '[]'),
-        ordenCobro: JSON.parse(localStorage.getItem('ordenCobro') || '{}'),
-        prorrogasCuotas: JSON.parse(localStorage.getItem('prorrogasCuotas') || '{}') // Backup por si acaso falla sync server
-      };
-
-      // 3. Combinar todo
-      const fullBackup = {
-        ...serverData,
-        localData
-      };
-
-      // 4. Descargar archivo
-      const dataStr = JSON.stringify(fullBackup, null, 2);
-      const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-      const exportFileDefaultName = `reservas_juan_backup_${new Date().toISOString().slice(0, 10)}.json`;
-
-      const linkElement = document.createElement('a');
-      linkElement.setAttribute('href', dataUri);
-      linkElement.setAttribute('download', exportFileDefaultName);
-      linkElement.click();
-
-      setMensaje({ tipo: 'success', texto: 'Datos (Server + Local) exportados correctamente' });
+      await exportarDatos();
+      setMensaje({ tipo: 'success', texto: 'Datos exportados correctamente' });
     } catch (error) {
-      console.error('Error exportando:', error);
       setMensaje({ tipo: 'error', texto: 'Error al exportar los datos' });
     }
     setLoading(false);
@@ -54,20 +28,6 @@ const Configuracion = () => {
         try {
           const jsonData = JSON.parse(event.target.result);
 
-          // 1. Restaurar datos locales si existen
-          if (jsonData.localData) {
-            if (jsonData.localData.visitas) {
-              localStorage.setItem('visitas', JSON.stringify(jsonData.localData.visitas));
-            }
-            if (jsonData.localData.ordenCobro) {
-              localStorage.setItem('ordenCobro', JSON.stringify(jsonData.localData.ordenCobro));
-            }
-            if (jsonData.localData.prorrogasCuotas) {
-              localStorage.setItem('prorrogasCuotas', JSON.stringify(jsonData.localData.prorrogasCuotas));
-            }
-          }
-
-          // 2. Restaurar datos del servidor
           const success = await importarDatos(jsonData);
 
           if (success) {
@@ -96,13 +56,7 @@ const Configuracion = () => {
       if (confirm('Esta acción eliminará todos los clientes y créditos. ¿Continuar?')) {
         setLoading(true);
         try {
-          // Limpiar server
           await limpiarDatos();
-
-          // Limpiar local
-          localStorage.removeItem('visitas');
-          localStorage.removeItem('ordenCobro');
-          localStorage.removeItem('prorrogasCuotas');
 
           setMensaje({ tipo: 'success', texto: 'Todos los datos (Server + Local) han sido eliminados' });
           setTimeout(() => {
