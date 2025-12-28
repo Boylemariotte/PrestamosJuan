@@ -165,6 +165,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
   const [multaParaPagar, setMultaParaPagar] = useState(null);
   const [mostrarModalNuevaMulta, setMostrarModalNuevaMulta] = useState(false);
   const [multaParaEditar, setMultaParaEditar] = useState(null);
+  const [procesandoPago, setProcesandoPago] = useState(false);
 
   // Ref para el contenedor que se va a imprimir/exportar
   const formularioRef = useRef(null);
@@ -688,10 +689,17 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
       return;
     }
 
-    // Siempre agregamos como abono para mantener el historial visual y la lógica de asignación específica
-    await agregarAbono(clienteId, credito.id, valorNumerico, descFinal, fecha);
-
-    setCuotaParaPagar(null);
+    try {
+      setProcesandoPago(true);
+      // Siempre agregamos como abono para mantener el historial visual y la lógica de asignación específica
+      await agregarAbono(clienteId, credito.id, valorNumerico, descFinal, fecha);
+      setCuotaParaPagar(null);
+    } catch (error) {
+      console.error('Error procesando pago:', error);
+      alert('Error al procesar el pago. Por favor, intente nuevamente.');
+    } finally {
+      setProcesandoPago(false);
+    }
   };
 
   const handleConfirmarMulta = async ({ valor, fecha, motivo }) => {
@@ -1088,6 +1096,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
               cuota={cuotaParaPagar}
               onClose={() => setCuotaParaPagar(null)}
               onConfirm={handleConfirmarPago}
+              procesando={procesandoPago}
             />
           )}
 
@@ -1278,13 +1287,14 @@ const ModalEditarAbono = ({ abono, maxCuotas, onClose, onConfirm, onDelete }) =>
   );
 };
 
-const ModalPago = ({ cuota, onClose, onConfirm }) => {
+const ModalPago = ({ cuota, onClose, onConfirm, procesando = false }) => {
   const [valor, setValor] = useState(cuota.valorPendiente || '');
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
   const [descripcion, setDescripcion] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (procesando) return; // Prevenir múltiples envíos
     if (!valor || valor <= 0) return alert('Ingrese un valor válido');
     onConfirm({ valor, fecha, descripcion });
   };
@@ -1296,6 +1306,12 @@ const ModalPago = ({ cuota, onClose, onConfirm }) => {
         <p className="text-sm text-gray-600 mb-4">
           Pendiente: <span className="font-bold text-red-600">${formatearMoneda(cuota.valorPendiente)}</span>
         </p>
+        {procesando && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+            <span className="text-sm text-blue-700 font-medium">Procesando pago...</span>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1">Valor a pagar</label>
@@ -1305,6 +1321,7 @@ const ModalPago = ({ cuota, onClose, onConfirm }) => {
               onChange={(e) => setValor(e.target.value)}
               className="w-full border rounded p-2"
               autoFocus
+              disabled={procesando}
             />
           </div>
           <div>
@@ -1314,6 +1331,7 @@ const ModalPago = ({ cuota, onClose, onConfirm }) => {
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
               className="w-full border rounded p-2"
+              disabled={procesando}
             />
           </div>
           <div>
@@ -1324,6 +1342,7 @@ const ModalPago = ({ cuota, onClose, onConfirm }) => {
               onChange={(e) => setDescripcion(e.target.value)}
               className="w-full border rounded p-2"
               placeholder="Ej: Abono parcial"
+              disabled={procesando}
             />
           </div>
           <div className="flex justify-end gap-2 pt-2">
@@ -1331,14 +1350,23 @@ const ModalPago = ({ cuota, onClose, onConfirm }) => {
               type="button"
               onClick={onClose}
               className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded"
+              disabled={procesando}
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold"
+              className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              disabled={procesando}
             >
-              Confirmar Pago
+              {procesando ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Procesando...</span>
+                </>
+              ) : (
+                'Confirmar Pago'
+              )}
             </button>
           </div>
         </form>

@@ -303,6 +303,10 @@ const DiaDeCobro = () => {
 
         if (!tieneActividadHoy) return;
 
+        // Si no hay nada pendiente (totalACobrarHoy === 0), no mostrar en la sección de pendientes
+        // Solo se mostrará en "Pagados" si hay actividad de pago ese día
+        if (totalACobrarHoy === 0) return;
+
         // Determinar estado visual para la tabla
         // Prioridad: Pendiente > Abonado > Cobrado
         let tipoItem = 'cobrado';
