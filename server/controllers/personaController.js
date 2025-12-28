@@ -282,7 +282,7 @@ export const updatePersona = async (req, res, next) => {
       }
     }
     if (activo !== undefined && req.user.role === 'ceo') persona.activo = activo;
-    
+
     // Actualizar ciudad solo si el rol es domiciliario
     if (nuevoRole === 'domiciliario' && ciudad !== undefined) {
       persona.ciudad = ciudad;

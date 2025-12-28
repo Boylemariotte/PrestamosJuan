@@ -354,7 +354,7 @@ const recalcularCreditoCompleto = (credito) => {
       const cuota = credito.cuotas.find(c => c.nroCuota === nroCuotaTarget);
       if (cuota) {
         const saldoAntes = cuota.saldoPendiente;
-        
+
         cuota.abonosCuota.push({
           id: abono.id,
           valor: montoDisponible,
@@ -364,7 +364,7 @@ const recalcularCreditoCompleto = (credito) => {
 
         cuota.abonoAplicado = (cuota.abonoAplicado || 0) + montoDisponible;
         cuota.saldoPendiente -= montoDisponible;
-        
+
         // Si este abono completó el pago (saldo pendiente <= 10), guardar su fecha
         if (saldoAntes > 10 && cuota.saldoPendiente <= 10) {
           fechaPagoPorCuota[nroCuotaTarget] = abono.fecha;
@@ -380,12 +380,12 @@ const recalcularCreditoCompleto = (credito) => {
         const aplicar = Math.min(montoDisponible, cuota.saldoPendiente);
         cuota.saldoPendiente -= aplicar;
         cuota.abonoAplicado = (cuota.abonoAplicado || 0) + aplicar;
-        
+
         // Si este abono completó el pago (saldo pendiente <= 10), guardar su fecha
         if (saldoAntes > 10 && cuota.saldoPendiente <= 10) {
           fechaPagoPorCuota[cuota.nroCuota] = abono.fecha;
         }
-        
+
         montoDisponible -= aplicar;
       }
     }
@@ -394,7 +394,7 @@ const recalcularCreditoCompleto = (credito) => {
   // 4. Finalizar Estados
   credito.cuotas.forEach(cuota => {
     if (cuota.saldoPendiente < 0) cuota.saldoPendiente = 0;
-    cuota.pagado = cuota.saldoPendiente <= 10; 
+    cuota.pagado = cuota.saldoPendiente <= 10;
     cuota.tieneAbono = cuota.abonoAplicado > 0;
 
     if (cuota.pagado) {
@@ -462,7 +462,7 @@ const recalcularCreditoCompleto = (credito) => {
       }
     });
   }
-  
+
   // totalAPagar = (valorCuota * numCuotas) + saldoPendienteMultas
   const totalCuotas = credito.valorCuota * credito.numCuotas;
   credito.totalAPagar = totalCuotas + totalMultasPendientes;
@@ -606,7 +606,7 @@ export const agregarAbono = async (req, res, next) => {
       if (!multaId) {
         return res.status(400).json({ success: false, error: 'multaId es requerido para abonos de multa' });
       }
-      
+
       // Normalizar la fecha del abono de multa para evitar problemas de zona horaria
       let fechaAbonoMulta = fecha || new Date();
       if (fecha) {
@@ -625,7 +625,7 @@ export const agregarAbono = async (req, res, next) => {
           fechaAbonoMulta = new Date(fecha);
         }
       }
-      
+
       const nuevoAbonoMulta = {
         id: Date.now().toString(),
         valor: parseFloat(valor),
@@ -676,7 +676,7 @@ export const eliminarAbono = async (req, res, next) => {
     if (!credito) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
 
     const abonoId = req.params.abonoId;
-    
+
     // Buscar en abonos de cuotas
     const abonoEncontrado = credito.abonos.find(a => a.id === abonoId);
     if (abonoEncontrado) {
@@ -711,11 +711,11 @@ export const editarAbono = async (req, res, next) => {
     if (!credito) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
 
     const abonoId = req.params.abonoId;
-    
+
     // Buscar primero en abonos de cuotas
     let abonoIndex = credito.abonos.findIndex(a => a.id === abonoId);
     let esAbonoMulta = false;
-    
+
     // Si no se encuentra, buscar en abonos de multas
     if (abonoIndex === -1) {
       abonoIndex = (credito.abonosMulta || []).findIndex(a => a.id === abonoId);
@@ -746,7 +746,7 @@ export const editarAbono = async (req, res, next) => {
     if (esAbonoMulta) {
       // Actualizar abono de multa
       const abonoOriginal = credito.abonosMulta[abonoIndex];
-      
+
       // Crear una copia del objeto para asegurar que Mongoose detecte el cambio
       const abonoActualizado = {
         id: abonoOriginal.id || abonoId,
@@ -755,13 +755,13 @@ export const editarAbono = async (req, res, next) => {
         fecha: fechaNormalizada || abonoOriginal.fecha,
         multaId: abonoOriginal.multaId // Asegurar que multaId se mantenga
       };
-      
+
       // Usar set para actualizar el array completo y forzar que Mongoose detecte el cambio
-      const nuevosAbonosMulta = credito.abonosMulta.map((abono, idx) => 
+      const nuevosAbonosMulta = credito.abonosMulta.map((abono, idx) =>
         idx === abonoIndex ? abonoActualizado : abono
       );
       credito.set('abonosMulta', nuevosAbonosMulta);
-      
+
       console.log(`[editarAbono] Abono de multa actualizado:`, {
         abonoId,
         fechaAnterior: abonoOriginal.fecha,

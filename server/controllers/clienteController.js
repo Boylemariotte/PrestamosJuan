@@ -9,10 +9,10 @@ import Credito from '../models/Credito.js';
 export const getClientes = async (req, res, next) => {
   try {
     const { search, cartera, page = 1, limit = 50, archivados } = req.query;
-    
+
     const query = {};
     const condiciones = [];
-    
+
     // Filtro de archivados (SIEMPRE debe aplicarse)
     if (archivados === 'true') {
       condiciones.push({ esArchivado: true });
@@ -26,7 +26,7 @@ export const getClientes = async (req, res, next) => {
         ]
       });
     }
-    
+
     // Solo aplicar filtro de cartera para domiciliarios
     // Administradores y CEO ven todas las carteras
     if (req.user && req.user.role === 'domiciliario') {
@@ -35,7 +35,7 @@ export const getClientes = async (req, res, next) => {
         condiciones.push({ cartera: 'K3' });
       } else {
         // Domiciliarios de Tuluá (u otra ciudad) solo ven K1 y K2 (excluir K3)
-        condiciones.push({ 
+        condiciones.push({
           $or: [
             { cartera: 'K1' },
             { cartera: 'K2' },
@@ -50,7 +50,7 @@ export const getClientes = async (req, res, next) => {
         condiciones.push({ cartera: cartera });
       }
     }
-    
+
     // Filtro de búsqueda
     if (search) {
       condiciones.push({
@@ -61,7 +61,7 @@ export const getClientes = async (req, res, next) => {
         ]
       });
     }
-    
+
     // Construir query final: si hay múltiples condiciones, usar $and
     if (condiciones.length === 1) {
       Object.assign(query, condiciones[0]);
@@ -70,12 +70,13 @@ export const getClientes = async (req, res, next) => {
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+
     const clientes = await Cliente.find(query)
       .populate('creditos')
       .sort({ fechaCreacion: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+
 
     const total = await Cliente.countDocuments(query);
 
@@ -233,13 +234,13 @@ export const updateCoordenadas = async (req, res, next) => {
       }
       const campo = tipo === 'trabajo' ? 'coordenadasTrabajo' : 'coordenadasResidencia';
       const campoFecha = tipo === 'trabajo' ? 'coordenadasTrabajoActualizada' : 'coordenadasResidenciaActualizada';
-      
+
       cliente.fiador[campo] = coordenadas;
       cliente.fiador[campoFecha] = new Date();
     } else {
       const campo = tipo === 'trabajo' ? 'coordenadasTrabajo' : 'coordenadasResidencia';
       const campoFecha = tipo === 'trabajo' ? 'coordenadasTrabajoActualizada' : 'coordenadasResidenciaActualizada';
-      
+
       cliente[campo] = coordenadas;
       cliente[campoFecha] = new Date();
     }
@@ -348,7 +349,7 @@ export const desarchivarCliente = async (req, res, next) => {
     // Si se proporciona una posición específica, validarla
     if (posicion !== undefined && posicion !== null) {
       const posicionNum = parseInt(posicion);
-      
+
       // Validar que la posición sea un número válido
       if (isNaN(posicionNum)) {
         return res.status(400).json({
@@ -373,7 +374,7 @@ export const desarchivarCliente = async (req, res, next) => {
       if ((cartera === 'K1' || cartera === 'K3') && tipoPagoCliente && clienteOcupando) {
         // Determinar el tipo de pago del cliente ocupante basándose en sus créditos activos
         const tipoPagoOcupante = obtenerTipoPagoCliente(clienteOcupando);
-        
+
         // Si el ocupante es del mismo tipo de pago, la posición está ocupada
         if (tipoPagoOcupante === tipoPagoCliente) {
           // La posición está ocupada por un cliente del mismo tipo
@@ -413,12 +414,12 @@ export const desarchivarCliente = async (req, res, next) => {
         if (cartera === 'K2') {
           return true; // Para K2, todos los clientes cuentan
         }
-        
+
         if ((cartera === 'K1' || cartera === 'K3') && tipoPagoCliente) {
           const tipoPagoOtroCliente = obtenerTipoPagoCliente(c);
           return tipoPagoOtroCliente === tipoPagoCliente;
         }
-        
+
         return false;
       });
 

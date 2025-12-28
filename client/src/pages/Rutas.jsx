@@ -228,7 +228,22 @@ const Rutas = () => {
 
           const keyCuota = `${cliente.id}-${credito.id}-${cuota.nroCuota}`;
           const fechaProrroga = prorrogasCuotas[keyCuota];
-          const fechaReferencia = fechaProrroga || cuotaOriginal.fechaProgramada;
+          let fechaReferencia = fechaProrroga || cuotaOriginal.fechaProgramada;
+
+          // Normalizar fechaReferencia a formato YYYY-MM-DD
+          if (typeof fechaReferencia === 'string') {
+            if (fechaReferencia.includes('T')) {
+              fechaReferencia = fechaReferencia.split('T')[0];
+            } else if (!fechaReferencia.match(/^\d{4}-\d{2}-\d{2}$/)) {
+              // Si no está en formato YYYY-MM-DD, intentar parsear
+              const fechaObj = parseISO(fechaReferencia);
+              if (!isNaN(fechaObj.getTime())) {
+                fechaReferencia = format(fechaObj, 'yyyy-MM-dd');
+              }
+            }
+          } else if (fechaReferencia instanceof Date) {
+            fechaReferencia = format(fechaReferencia, 'yyyy-MM-dd');
+          }
 
           const abonoAplicado = cuota.abonoAplicado || 0;
           const valorCuotaPendiente = credito.valorCuota - abonoAplicado;
@@ -237,11 +252,11 @@ const Rutas = () => {
           const multasPendientes = totalMultas - multasCubiertas;
           const tieneSaldo = valorCuotaPendiente > 0 || multasPendientes > 0;
 
-          // Check fecha
+          // Check fecha - comparar strings normalizados
           if (fechaReferencia === fechaSeleccionadaStr) return tieneSaldo;
-          const fProg = new Date(fechaReferencia);
-          const fSel = new Date(fechaSeleccionadaStr);
-          return tieneSaldo && fProg <= fSel;
+          
+          // Para fechas vencidas, comparar strings directamente (más seguro que Date)
+          return tieneSaldo && fechaReferencia <= fechaSeleccionadaStr;
         });
 
         if (cuotasPendientesHoy.length > 0) {
@@ -283,6 +298,10 @@ const Rutas = () => {
         }
 
         if (!tieneActividadHoy) return;
+
+        // Si no hay nada pendiente (totalACobrarHoy === 0), no mostrar en la sección de pendientes
+        // Solo se mostrará en "Pagados" si hay actividad de pago ese día
+        if (totalACobrarHoy === 0) return;
 
         // Determinar estado visual para la tabla
         // Prioridad: Pendiente > Abonado > Cobrado
@@ -481,8 +500,59 @@ const Rutas = () => {
             }
           }
 
-          // Si la cuota está pagada, solo mostrar en la fecha exacta de pago
-          if (cuota.pagado && fechaPagoNormalizada === fechaSeleccionadaStr) {
+          // Buscar abonos en la fecha seleccionada (independientemente de si la cuota está pagada o no)
+          const abonosHoy = (cuota.abonosCuota || []).filter(a => {
+            const fechaAbono = typeof a.fecha === 'string' 
+              ? a.fecha.split('T')[0] 
+              : format(new Date(a.fecha), 'yyyy-MM-dd');
+            return fechaAbono === fechaSeleccionadaStr;
+          });
+
+          const montoAbonadoHoy = abonosHoy.reduce((sum, a) => sum + (a.valor || 0), 0);
+
+          // Si hay abonos en la fecha seleccionada, mostrarlos
+          if (montoAbonadoHoy > 0) {
+            // Calcular el saldo pendiente antes del abono de hoy
+            // Para esto, necesitamos sumar todos los abonos anteriores a la fecha seleccionada
+            const abonosAnteriores = (cuota.abonosCuota || []).filter(a => {
+              const fechaAbono = typeof a.fecha === 'string' 
+                ? a.fecha.split('T')[0] 
+                : format(new Date(a.fecha), 'yyyy-MM-dd');
+              return fechaAbono < fechaSeleccionadaStr;
+            });
+            const montoAbonadoAnterior = abonosAnteriores.reduce((sum, a) => sum + (a.valor || 0), 0);
+            const saldoPendienteAntes = credito.valorCuota - montoAbonadoAnterior;
+            const saldoPendienteDespues = saldoPendienteAntes - montoAbonadoHoy;
+
+            // Determinar tipo de pago: "completo" si el saldo pendiente después del abono es 0 o menos
+            const tipoPago = saldoPendienteDespues <= 0 ? 'completo' : 'parcial';
+
+            const key = `${cliente.id}-${credito.id}-${cuota.nroCuota}`;
+            const item = {
+              clienteId: cliente.id,
+              clienteNombre: cliente.nombre,
+              clienteDocumento: cliente.documento,
+              clienteTelefono: cliente.telefono,
+              clienteBarrio: cliente.barrio,
+              clienteCartera: cliente.cartera || 'K1',
+              clientePosicion: cliente.posicion,
+              creditoId: credito.id,
+              creditoMonto: credito.monto,
+              creditoTipo: credito.tipo,
+              valorCuota: credito.valorCuota,
+              nroCuota: cuota.nroCuota,
+              montoPagado: montoAbonadoHoy,
+              tipoPago: tipoPago,
+              montoPagadoMulta: 0,
+              tieneMulta: false
+            };
+            itemsMap.set(key, item);
+            return; // No procesar más para esta cuota en esta fecha
+          }
+
+          // Si no hay abonos en la fecha seleccionada pero la cuota está pagada en esta fecha
+          // (pago completo directo, sin abonos)
+          if (cuota.pagado && fechaPagoNormalizada === fechaSeleccionadaStr && montoAbonadoHoy === 0) {
             const key = `${cliente.id}-${credito.id}-${cuota.nroCuota}`;
             const item = {
               clienteId: cliente.id,
@@ -504,42 +574,6 @@ const Rutas = () => {
             };
             itemsMap.set(key, item);
             return;
-          }
-
-          // Si la cuota NO está pagada, buscar abonos parciales en la fecha seleccionada
-          if (!cuota.pagado) {
-            const abonosHoy = (cuota.abonosCuota || []).filter(a => {
-              const fechaAbono = typeof a.fecha === 'string' 
-                ? a.fecha.split('T')[0] 
-                : format(new Date(a.fecha), 'yyyy-MM-dd');
-              return fechaAbono === fechaSeleccionadaStr;
-            });
-
-            const montoAbonadoHoy = abonosHoy.reduce((sum, a) => sum + (a.valor || 0), 0);
-
-            // Solo mostrar abonos parciales si hay monto abonado en esta fecha
-            if (montoAbonadoHoy > 0) {
-              const key = `${cliente.id}-${credito.id}-${cuota.nroCuota}`;
-              const item = {
-                clienteId: cliente.id,
-                clienteNombre: cliente.nombre,
-                clienteDocumento: cliente.documento,
-                clienteTelefono: cliente.telefono,
-                clienteBarrio: cliente.barrio,
-                clienteCartera: cliente.cartera || 'K1',
-                clientePosicion: cliente.posicion,
-                creditoId: credito.id,
-                creditoMonto: credito.monto,
-                creditoTipo: credito.tipo,
-                valorCuota: credito.valorCuota,
-                nroCuota: cuota.nroCuota,
-                montoPagado: montoAbonadoHoy,
-                tipoPago: 'parcial',
-                montoPagadoMulta: 0,
-                tieneMulta: false
-              };
-              itemsMap.set(key, item);
-            }
           }
         });
 
@@ -1021,11 +1055,25 @@ const Rutas = () => {
           </div>
           <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0 overflow-hidden">
             <p className="text-xs text-slate-400 uppercase font-bold mb-1">Recogido</p>
-            <p className="text-[10px] sm:text-xs md:text-xl lg:text-2xl font-bold text-green-300 break-words leading-tight">{formatearMoneda(datosCobro.stats.recogido)}</p>
+            <p className="text-[10px] sm:text-xs md:text-xl lg:text-2xl font-bold text-green-300 break-words leading-tight">
+              {formatearMoneda(
+                // Sumar todos los totales de la sección "Pagados" de todas las carteras
+                (clientesPagados.K1?.total || 0) +
+                (clientesPagados.K2?.total || 0) +
+                (clientesPagados.K3?.total || 0)
+              )}
+            </p>
           </div>
           <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0">
             <p className="text-xs text-slate-400 uppercase font-bold mb-1">Clientes</p>
-            <p className="text-sm md:text-xl lg:text-2xl font-bold text-blue-300">{datosCobro.stats.clientesTotal}</p>
+            <p className="text-sm md:text-xl lg:text-2xl font-bold text-blue-300">
+              {(() => {
+                // Contar clientes únicos en la lista de cobros del día (ya filtrada)
+                const clientesUnicosPendientes = new Set();
+                listaCobrosDia.forEach(item => clientesUnicosPendientes.add(item.clienteId));
+                return clientesUnicosPendientes.size;
+              })()}
+            </p>
           </div>
         </div>
       </div>

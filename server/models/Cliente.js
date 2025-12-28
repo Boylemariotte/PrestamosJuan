@@ -198,6 +198,11 @@ const clienteSchema = new mongoose.Schema({
     enum: ['excelente', 'bueno', 'atrasado', 'incompleto', 'vetado', 'sin-etiqueta'],
     default: 'sin-etiqueta'
   },
+  rf: {
+    type: String,
+    enum: ['si', 'no', ''],
+    default: ''
+  },
   fechaCreacion: {
     type: Date,
     default: Date.now

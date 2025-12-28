@@ -74,7 +74,7 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     // Esperar a que la autenticación termine de cargar
     if (authLoading) return;
-    
+
     fetchData();
   }, [fetchData, authLoading]);
 
@@ -534,8 +534,8 @@ export const AppProvider = ({ children }) => {
   const agregarMulta = async (clienteId, creditoId, valorMulta, motivo, nroCuota = null) => {
     try {
       // nroCuota es opcional, solo para referencia informativa
-      const response = await api.post(`/creditos/${creditoId}/multas`, { 
-        valor: valorMulta, 
+      const response = await api.post(`/creditos/${creditoId}/multas`, {
+        valor: valorMulta,
         motivo,
         nroCuota: nroCuota || undefined
       });
@@ -686,19 +686,10 @@ export const AppProvider = ({ children }) => {
   const exportarDatos = async () => {
     try {
       const response = await api.get('/backup/export');
-      if (response) { // api.js returns parsed JSON directly or response object? api.js usually returns data.
-        // Helper to trigger download
-        const dataStr = JSON.stringify(response, null, 2);
-        const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-        const exportFileDefaultName = `creditos_backup_${new Date().toISOString().slice(0, 10)}.json`;
-        const linkElement = document.createElement('a');
-        linkElement.setAttribute('href', dataUri);
-        linkElement.setAttribute('download', exportFileDefaultName);
-        linkElement.click();
-      }
+      return response;
     } catch (error) {
       console.error('Error exportando:', error);
-      alert('Error al exportar datos');
+      throw error;
     }
   };
 

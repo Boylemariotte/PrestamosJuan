@@ -9,16 +9,16 @@ import MovimientoCaja from '../models/MovimientoCaja.js';
 export const getMovimientosCaja = async (req, res, next) => {
   try {
     const { tipo, tipoMovimiento, fechaInicio, fechaFin, page = 1, limit = 100 } = req.query;
-    
+
     const query = {};
-    
+
     if (tipo) {
       query.tipo = tipo;
     }
     if (tipoMovimiento) {
       query.tipoMovimiento = tipoMovimiento;
     }
-    
+
     if (fechaInicio || fechaFin) {
       query.fecha = {};
       if (fechaInicio) {
@@ -34,7 +34,7 @@ export const getMovimientosCaja = async (req, res, next) => {
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+
     const movimientos = await MovimientoCaja.find(query)
       .sort({ fecha: -1, fechaCreacion: -1 })
       .skip(skip)

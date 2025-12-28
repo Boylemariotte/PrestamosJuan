@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocation } from 'react-router-dom';
-import { Plus, Search, Users as UsersIcon, Briefcase, Filter, User, Phone, CreditCard, AlertCircle, MapPin } from 'lucide-react';
+import { Plus, Search, Users as UsersIcon, Briefcase, Filter, User, Phone, CreditCard, AlertCircle, MapPin, ChevronDown } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 import ClienteCard from '../components/Clientes/ClienteCard';
 import ClienteForm from '../components/Clientes/ClienteForm';
 import {
@@ -18,7 +19,7 @@ import { format, parseISO, isBefore, startOfDay } from 'date-fns';
 const Clientes = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { clientes, agregarCliente, loading } = useApp();
+  const { clientes, agregarCliente, actualizarCliente, loading } = useApp();
   const { hasPermission, user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [formCartera, setFormCartera] = useState(null);
@@ -122,9 +123,9 @@ const Clientes = () => {
     } else {
       // Domiciliarios de Tuluá (u otros) solo ven K1 y K2
       return {
-        K1: { semanal: 150, quincenal: 150 },
-        K2: { general: 225 }
-      };
+    K1: { semanal: 150, quincenal: 150 },
+    K2: { general: 225 }
+  };
     }
   }, [esDomiciliarioBuga, esAdminOCeo]);
 
@@ -141,9 +142,9 @@ const Clientes = () => {
       };
     } else {
       base = {
-        K1: { semanal: 0, quincenal: 0 },
-        K2: { general: 0 }
-      };
+      K1: { semanal: 0, quincenal: 0 },
+      K2: { general: 0 }
+    };
     }
     clientes.forEach((cliente) => {
       const cartera = cliente.cartera || (esDomiciliarioBuga ? 'K3' : 'K1');
@@ -195,32 +196,32 @@ const Clientes = () => {
         }
       });
     } else {
-      // Generar cards para K1
+    // Generar cards para K1
       if (CAPACIDADES.K1) {
-        Object.entries(CAPACIDADES.K1).forEach(([tipo, capacidad]) => {
-          for (let i = 1; i <= capacidad; i++) {
-            cards.push({
-              cartera: 'K1',
-              tipoPago: tipo,
-              posicion: i,
-              cliente: null
-            });
-          }
+    Object.entries(CAPACIDADES.K1).forEach(([tipo, capacidad]) => {
+      for (let i = 1; i <= capacidad; i++) {
+        cards.push({
+          cartera: 'K1',
+          tipoPago: tipo,
+          posicion: i,
+          cliente: null
         });
       }
+    });
+      }
 
-      // Generar cards para K2
+    // Generar cards para K2
       if (CAPACIDADES.K2) {
-        Object.entries(CAPACIDADES.K2).forEach(([tipo, capacidad]) => {
-          for (let i = 1; i <= capacidad; i++) {
-            cards.push({
-              cartera: 'K2',
-              tipoPago: tipo, // 'general'
-              posicion: i,
-              cliente: null
-            });
-          }
+    Object.entries(CAPACIDADES.K2).forEach(([tipo, capacidad]) => {
+      for (let i = 1; i <= capacidad; i++) {
+        cards.push({
+          cartera: 'K2',
+          tipoPago: tipo, // 'general'
+          posicion: i,
+          cliente: null
         });
+      }
+    });
       }
 
       // Generar cards para K3 (solo para administradores y CEO, se comporta como K1)
@@ -286,7 +287,7 @@ const Clientes = () => {
         }
       });
     }
-  });
+    });
   
 
     return cards;
@@ -457,28 +458,28 @@ const Clientes = () => {
         ) : esAdminOCeo ? (
           // Administradores y CEO ven las 3 carteras
           <>
-            <div className="card bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-blue-100 text-sm">Cartera K1</p>
-                  <p className="text-3xl font-bold mt-1">{clientesK1}</p>
-                  <p className="text-blue-100 text-xs mt-1">clientes</p>
-                  <div className="mt-3 space-y-1 text-[11px]">
+        <div className="card bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-blue-100 text-sm">Cartera K1</p>
+              <p className="text-3xl font-bold mt-1">{clientesK1}</p>
+              <p className="text-blue-100 text-xs mt-1">clientes</p>
+              <div className="mt-3 space-y-1 text-[11px]">
                     <p className="text-blue-100">Semanal: {ocupacion.K1?.semanal || 0}/{CAPACIDADES.K1.semanal}</p>
                     <p className="text-blue-100">Quincenal: {ocupacion.K1?.quincenal || 0}/{CAPACIDADES.K1.quincenal}</p>
-                  </div>
-                </div>
-                <Briefcase className="h-12 w-12 text-blue-200" />
               </div>
             </div>
+            <Briefcase className="h-12 w-12 text-blue-200" />
+          </div>
+        </div>
 
-            <div className="card bg-gradient-to-br from-green-500 to-green-600 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-green-100 text-sm">Cartera K2</p>
-                  <p className="text-3xl font-bold mt-1">{clientesK2}</p>
-                  <p className="text-green-100 text-xs mt-1">clientes</p>
-                  <div className="mt-3 space-y-1 text-[11px]">
+        <div className="card bg-gradient-to-br from-green-500 to-green-600 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-green-100 text-sm">Cartera K2</p>
+              <p className="text-3xl font-bold mt-1">{clientesK2}</p>
+              <p className="text-green-100 text-xs mt-1">clientes</p>
+              <div className="mt-3 space-y-1 text-[11px]">
                     <p className="text-green-100">General: {ocupacion.K2?.general || 0}/{CAPACIDADES.K2.general}</p>
                   </div>
                 </div>
@@ -540,22 +541,22 @@ const Clientes = () => {
                   <p className="text-green-100 text-xs mt-1">clientes</p>
                   <div className="mt-3 space-y-1 text-[11px]">
                     <p className="text-green-100">General: {ocupacion.K2?.general || 0}/{CAPACIDADES.K2.general}</p>
-                  </div>
-                </div>
-                <Briefcase className="h-12 w-12 text-green-200" />
               </div>
             </div>
+            <Briefcase className="h-12 w-12 text-green-200" />
+          </div>
+        </div>
 
-            <div className="card bg-gradient-to-br from-purple-500 to-purple-600 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-purple-100 text-sm">Total Clientes</p>
-                  <p className="text-3xl font-bold mt-1">{clientes.length}</p>
-                  <p className="text-purple-100 text-xs mt-1">registrados</p>
-                </div>
-                <UsersIcon className="h-12 w-12 text-purple-200" />
-              </div>
+        <div className="card bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-purple-100 text-sm">Total Clientes</p>
+              <p className="text-3xl font-bold mt-1">{clientes.length}</p>
+              <p className="text-purple-100 text-xs mt-1">registrados</p>
             </div>
+            <UsersIcon className="h-12 w-12 text-purple-200" />
+          </div>
+        </div>
           </>
         )}
       </div>
@@ -649,35 +650,35 @@ const Clientes = () => {
           ) : (
             // Domiciliarios de Tuluá solo ven K1 y K2
             <>
-              <button
-                onClick={() => setFiltroCartera('todas')}
-                className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${filtroCartera === 'todas'
-                  ? 'bg-purple-100 text-purple-800 border-purple-300 ring-2 ring-purple-400'
-                  : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
-                  }`}
-              >
-                Todas ({clientes.length})
-              </button>
-              <button
-                onClick={() => setFiltroCartera('K1')}
-                className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K1'
-                  ? 'bg-blue-100 text-blue-800 border-blue-300 ring-2 ring-blue-400'
-                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                  }`}
-              >
-                <Briefcase className="h-4 w-4" />
-                Cartera K1 ({clientesK1})
-              </button>
-              <button
-                onClick={() => setFiltroCartera('K2')}
-                className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K2'
-                  ? 'bg-green-100 text-green-800 border-green-300 ring-2 ring-green-400'
-                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                  }`}
-              >
-                <Briefcase className="h-4 w-4" />
-                Cartera K2 ({clientesK2})
-              </button>
+          <button
+            onClick={() => setFiltroCartera('todas')}
+            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${filtroCartera === 'todas'
+              ? 'bg-purple-100 text-purple-800 border-purple-300 ring-2 ring-purple-400'
+              : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+              }`}
+          >
+            Todas ({clientes.length})
+          </button>
+          <button
+            onClick={() => setFiltroCartera('K1')}
+            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K1'
+              ? 'bg-blue-100 text-blue-800 border-blue-300 ring-2 ring-blue-400'
+              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+          >
+            <Briefcase className="h-4 w-4" />
+            Cartera K1 ({clientesK1})
+          </button>
+          <button
+            onClick={() => setFiltroCartera('K2')}
+            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K2'
+              ? 'bg-green-100 text-green-800 border-green-300 ring-2 ring-green-400'
+              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+          >
+            <Briefcase className="h-4 w-4" />
+            Cartera K2 ({clientesK2})
+          </button>
             </>
           )}
         </div>
@@ -752,6 +753,9 @@ const Clientes = () => {
                 </th>
                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
                   Modalidad
+                </th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                  RF
                 </th>
                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
                   Acciones
@@ -833,15 +837,43 @@ const Clientes = () => {
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
                       {creditoInfo?.tipo ? (creditoInfo.tipo.charAt(0).toUpperCase() + creditoInfo.tipo.slice(1)) : card.tipoPago}
                     </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm">
+                      {esVacia ? (
+                        <span className="text-gray-400">-</span>
+                      ) : (
+                        <div className="relative">
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const currentValue = card.cliente.rf || '';
+                              const newValue = currentValue === 'si' ? 'no' : currentValue === 'no' ? '' : 'si';
+                              
+                              try {
+                                await actualizarCliente(card.cliente.id, { rf: newValue });
+                              } catch (error) {
+                                console.error('Error actualizando RF:', error);
+                                alert('Error al actualizar RF');
+                              }
+                            }}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex items-center gap-1 min-w-[80px] justify-between"
+                          >
+                            <span className={card.cliente.rf ? 'font-medium' : 'text-gray-400'}>
+                              {card.cliente.rf === 'si' ? 'Sí' : card.cliente.rf === 'no' ? 'No' : ''}
+                            </span>
+                            <ChevronDown className="h-4 w-4 text-gray-400" />
+                          </button>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                       {esVacia ? (
                         hasPermission('crearClientes') && user?.role !== 'domiciliario' && (
-                          <button
-                            onClick={() => handleAgregarDesdeCard(card.cartera, card.tipoPago, card.posicion)}
-                            className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
-                          >
-                            <Plus className="h-4 w-4" /> Agregar
-                          </button>
+                        <button
+                          onClick={() => handleAgregarDesdeCard(card.cartera, card.tipoPago, card.posicion)}
+                          className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
+                        >
+                          <Plus className="h-4 w-4" /> Agregar
+                        </button>
                         )
                       ) : (
                         <button

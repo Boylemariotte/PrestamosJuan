@@ -451,10 +451,14 @@ const DiaDeCobro = () => {
       });
     };
 
+    const k1Final = filtrarPorBusqueda(ordenarItems(itemsK1Filtrados));
+    const k2Final = filtrarPorBusqueda(ordenarItems(itemsK2));
+    const k3Final = filtrarPorBusqueda(ordenarItems(itemsK3Filtrados));
+
     return {
-      K1: filtrarPorBusqueda(ordenarItems(itemsK1Filtrados)),
-      K2: filtrarPorBusqueda(ordenarItems(itemsK2)),
-      K3: filtrarPorBusqueda(ordenarItems(itemsK3Filtrados))
+      K1: k1Final,
+      K2: k2Final,
+      K3: k3Final
     };
   }, [datosCobro, ordenCobro, fechaSeleccionadaStr, searchTerm, filtroK1, filtroK3]);
 
@@ -1067,15 +1071,38 @@ const DiaDeCobro = () => {
         <div className="grid grid-cols-3 gap-2 md:gap-4 text-center">
           <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0 overflow-hidden">
             <p className="text-xs text-slate-400 uppercase font-bold mb-1">Por Cobrar</p>
-            <p className="text-[10px] sm:text-xs md:text-xl lg:text-2xl font-bold text-orange-300 break-words leading-tight">{formatearMoneda(datosCobro.stats.pendiente)}</p>
+            <p className="text-[10px] sm:text-xs md:text-xl lg:text-2xl font-bold text-orange-300 break-words leading-tight">
+              {formatearMoneda(
+                // Sumar todos los saldos pendientes (valorRealACobrar) de todas las carteras mostradas
+                (cobrosPorCartera.K1 || []).reduce((sum, item) => sum + (item.valorRealACobrar || 0), 0) +
+                (cobrosPorCartera.K2 || []).reduce((sum, item) => sum + (item.valorRealACobrar || 0), 0) +
+                (cobrosPorCartera.K3 || []).reduce((sum, item) => sum + (item.valorRealACobrar || 0), 0)
+              )}
+            </p>
           </div>
           <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0 overflow-hidden">
             <p className="text-xs text-slate-400 uppercase font-bold mb-1">Recogido</p>
-            <p className="text-[10px] sm:text-xs md:text-xl lg:text-2xl font-bold text-green-300 break-words leading-tight">{formatearMoneda(datosCobro.stats.recogido)}</p>
+            <p className="text-[10px] sm:text-xs md:text-xl lg:text-2xl font-bold text-green-300 break-words leading-tight">
+              {formatearMoneda(
+                // Sumar todos los totales de la sección "Pagados" de todas las carteras
+                (clientesPagados.K1?.total || 0) +
+                (clientesPagados.K2?.total || 0) +
+                (clientesPagados.K3?.total || 0)
+              )}
+            </p>
           </div>
           <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0">
             <p className="text-xs text-slate-400 uppercase font-bold mb-1">Clientes</p>
-            <p className="text-sm md:text-xl lg:text-2xl font-bold text-blue-300">{datosCobro.stats.clientesTotal}</p>
+            <p className="text-sm md:text-xl lg:text-2xl font-bold text-blue-300">
+              {(() => {
+                // Contar clientes únicos en las secciones de pendientes
+                const clientesUnicosPendientes = new Set();
+                (cobrosPorCartera.K1 || []).forEach(item => clientesUnicosPendientes.add(item.clienteId));
+                (cobrosPorCartera.K2 || []).forEach(item => clientesUnicosPendientes.add(item.clienteId));
+                (cobrosPorCartera.K3 || []).forEach(item => clientesUnicosPendientes.add(item.clienteId));
+                return clientesUnicosPendientes.size;
+              })()}
+            </p>
           </div>
         </div>
       </div>

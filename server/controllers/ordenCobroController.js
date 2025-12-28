@@ -29,11 +29,11 @@ export const obtenerOrdenesPorFecha = async (req, res) => {
 export const guardarOrdenes = async (req, res) => {
   try {
     const { fecha, ordenes } = req.body; // ordenes: { clienteId: orden, ... }
-    
+
     const bulkOps = Object.entries(ordenes).map(([clienteId, orden]) => ({
       updateOne: {
         filter: { fecha: new Date(fecha), clienteId },
-        update: { 
+        update: {
           orden,
           fechaModificacion: new Date()
         },
@@ -42,7 +42,7 @@ export const guardarOrdenes = async (req, res) => {
     }));
 
     await OrdenCobro.bulkWrite(bulkOps);
-    
+
     res.json({ success: true, message: 'Órdenes de cobro guardadas correctamente' });
   } catch (error) {
     console.error('Error al guardar órdenes de cobro:', error);

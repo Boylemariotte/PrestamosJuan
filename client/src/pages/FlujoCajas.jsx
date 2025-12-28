@@ -1174,13 +1174,13 @@ const FlujoCajas = () => {
         } else {
           // Para otros tipos de movimientos, buscar transacción de papelería asociada directamente
           try {
-            const transacciones = await getPapeleriaTransactions();
-            const transaccionRelacionada = transacciones.find(
-              tx => tx.movimientoId === movimientoId
-            );
+        const transacciones = await getPapeleriaTransactions();
+        const transaccionRelacionada = transacciones.find(
+          tx => tx.movimientoId === movimientoId
+        );
 
-            // Eliminar la transacción de papelería si existe
-            if (transaccionRelacionada) {
+        // Eliminar la transacción de papelería si existe
+        if (transaccionRelacionada) {
               await deletePapeleriaTransaction(transaccionRelacionada.id || transaccionRelacionada._id);
             }
           } catch (error) {

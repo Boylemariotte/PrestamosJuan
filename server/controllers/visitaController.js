@@ -7,21 +7,21 @@ import Visita from '../models/Visita.js';
  */
 export const getVisitas = async (req, res, next) => {
   try {
-    const { 
-      completada, 
-      fechaInicio, 
-      fechaFin, 
+    const {
+      completada,
+      fechaInicio,
+      fechaFin,
       search,
-      page = 1, 
-      limit = 100 
+      page = 1,
+      limit = 100
     } = req.query;
-    
+
     const query = {};
-    
+
     if (completada !== undefined) {
       query.completada = completada === 'true';
     }
-    
+
     if (fechaInicio || fechaFin) {
       query.fechaVisita = {};
       if (fechaInicio) {
@@ -43,7 +43,7 @@ export const getVisitas = async (req, res, next) => {
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+
     const visitas = await Visita.find(query)
       .sort({ fechaVisita: 1, fechaAgendamiento: -1 })
       .skip(skip)
@@ -96,11 +96,11 @@ export const createVisita = async (req, res, next) => {
   try {
     // Convertir fechas de string a Date si vienen como string
     const visitaData = { ...req.body };
-    
+
     if (visitaData.fechaAgendamiento && typeof visitaData.fechaAgendamiento === 'string') {
       visitaData.fechaAgendamiento = new Date(visitaData.fechaAgendamiento);
     }
-    
+
     if (visitaData.fechaVisita && typeof visitaData.fechaVisita === 'string') {
       visitaData.fechaVisita = new Date(visitaData.fechaVisita);
     }
@@ -124,12 +124,12 @@ export const createVisita = async (req, res, next) => {
 export const updateVisita = async (req, res, next) => {
   try {
     const visitaData = { ...req.body };
-    
+
     // Convertir fechas de string a Date si vienen como string
     if (visitaData.fechaAgendamiento && typeof visitaData.fechaAgendamiento === 'string') {
       visitaData.fechaAgendamiento = new Date(visitaData.fechaAgendamiento);
     }
-    
+
     if (visitaData.fechaVisita && typeof visitaData.fechaVisita === 'string') {
       visitaData.fechaVisita = new Date(visitaData.fechaVisita);
     }

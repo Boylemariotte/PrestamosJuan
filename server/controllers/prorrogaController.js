@@ -27,11 +27,11 @@ export const obtenerProrrogasPorCredito = async (req, res) => {
 export const guardarProrrogas = async (req, res) => {
   try {
     const { clienteId, creditoId, prorrogas } = req.body; // prorrogas: [{ nroCuota, fechaProrroga }, ...]
-    
+
     const bulkOps = prorrogas.map(({ nroCuota, fechaProrroga }) => ({
       updateOne: {
         filter: { clienteId, creditoId, nroCuota },
-        update: { 
+        update: {
           fechaProrroga: new Date(fechaProrroga),
           fechaModificacion: new Date()
         },
@@ -40,7 +40,7 @@ export const guardarProrrogas = async (req, res) => {
     }));
 
     await ProrrogaCuota.bulkWrite(bulkOps);
-    
+
     res.json({ success: true, message: 'Prórrogas guardadas correctamente' });
   } catch (error) {
     console.error('Error al guardar prórrogas:', error);

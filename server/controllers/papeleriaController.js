@@ -8,9 +8,9 @@ import Papeleria from '../models/Papeleria.js';
 export const getPapeleria = async (req, res, next) => {
   try {
     const { tipo, fechaInicio, fechaFin, search, ciudadPapeleria } = req.query;
-    
+
     const query = {};
-    
+
     // Filtrar por ciudad según el usuario
     if (req.user && req.user.role === 'domiciliario') {
       // Domiciliarios solo ven la papelería de su ciudad
@@ -25,11 +25,11 @@ export const getPapeleria = async (req, res, next) => {
       query.ciudadPapeleria = ciudadPapeleria;
     }
     // Si no hay filtro de ciudad y es admin/CEO, se devuelven todas (sin filtro de ciudad)
-    
+
     if (tipo && tipo !== 'all') {
       query.tipo = tipo;
     }
-    
+
     if (fechaInicio || fechaFin) {
       query.fecha = {};
       if (fechaInicio) {
@@ -72,7 +72,7 @@ export const createPapeleria = async (req, res, next) => {
   try {
     const { fecha } = req.body;
     let fechaTransaccion = new Date();
-    
+
     if (fecha) {
       // Manejar fecha para evitar desfases de zona horaria
       // Si fecha es un objeto Date, usar sus componentes
@@ -92,7 +92,7 @@ export const createPapeleria = async (req, res, next) => {
           }
         }
       }
-      
+
       // Asegurar que siempre sea mediodía (a menos que se especifique hora específica)
       if (!req.body.horaEspecifica) {
         fechaTransaccion.setHours(12, 0, 0, 0);
@@ -104,8 +104,8 @@ export const createPapeleria = async (req, res, next) => {
     if (!ciudadPapeleria && req.user) {
       if (req.user.role === 'domiciliario') {
         // Domiciliarios solo pueden crear en su ciudad
-        ciudadPapeleria = req.user.ciudad === 'Guadalajara de Buga' 
-          ? 'Guadalajara de Buga' 
+        ciudadPapeleria = req.user.ciudad === 'Guadalajara de Buga'
+          ? 'Guadalajara de Buga'
           : 'Tuluá';
       } else {
         // Admins y CEO por defecto crean en Tuluá si no especifican
@@ -154,7 +154,7 @@ export const updatePapeleria = async (req, res, next) => {
     // Solo actualizar la fecha si se envía explícitamente en el body
     if (fecha !== undefined && fecha !== null && fecha !== '') {
       let fechaObj;
-      
+
       // Manejar fecha para evitar desfases de zona horaria
       if (fecha instanceof Date) {
         fechaObj = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 12, 0, 0, 0);
@@ -177,7 +177,7 @@ export const updatePapeleria = async (req, res, next) => {
         fechaObj = new Date(fecha);
         fechaObj.setHours(12, 0, 0, 0);
       }
-      
+
       datosActualizar.fecha = fechaObj;
     } else {
       // Si no se envía fecha, mantener la fecha original

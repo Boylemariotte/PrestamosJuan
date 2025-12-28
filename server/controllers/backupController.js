@@ -13,11 +13,11 @@ import Persona from '../models/Persona.js';
 export const exportData = async (req, res, next) => {
     try {
         // Exportar clientes con créditos embebidos (estructura JSON original)
-        const clientes = await Cliente.find().lean();
-        const creditos = await Credito.find().lean();
-        const movimientosCajaRaw = await MovimientoCaja.find().lean();
-        const alertas = await Alerta.find().lean();
-        const personas = await Persona.find().select('+password').lean();
+        const clientes = await Cliente.find();
+        const creditos = await Credito.find();
+        const movimientosCajaRaw = await MovimientoCaja.find();
+        const alertas = await Alerta.find();
+        const personas = await Persona.find().select('+password');
 
         // Transformar movimientos para incluir campo id
         const movimientosCaja = movimientosCajaRaw.map(mov => ({
@@ -43,7 +43,8 @@ export const exportData = async (req, res, next) => {
             creditos: cliente.creditos || [],
             fechaCreacion: cliente.fechaCreacion,
             coordenadasResidencia: cliente.coordenadasResidencia,
-            coordenadasTrabajo: cliente.coordenadasTrabajo
+            coordenadasTrabajo: cliente.coordenadasTrabajo,
+            esArchivado: cliente.esArchivado // Include archived status
         }));
 
         // Formato de backup compatible con el JSON original
@@ -278,7 +279,7 @@ const performImport = async (data) => {
         const opsMovs = movimientos.map(m => ({
             updateOne: {
                 filter: { id: m.id }, // usar campo id textual para upsert
-                update: { 
+                update: {
                     $set: {
                         ...m,
                         _id: m._id || m.id // Asegurar que _id esté presente
@@ -290,7 +291,7 @@ const performImport = async (data) => {
         try {
             const resMovs = await MovimientoCaja.bulkWrite(opsMovs, { ordered: false });
             console.log(`Movimientos upsertados: ins=${resMovs.upsertedCount || 0}, mod=${resMovs.modifiedCount || 0}, matched=${resMovs.matchedCount || 0}`);
-        } catch (e) { 
+        } catch (e) {
             console.error('Error importando movimientos:', e);
             // Si falla por campo id único, intentar sin el campo id en el update
             const opsMovsFallback = movimientos.map(m => ({

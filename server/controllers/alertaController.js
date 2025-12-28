@@ -8,23 +8,23 @@ import Alerta from '../models/Alerta.js';
 export const getAlertas = async (req, res, next) => {
   try {
     const { activa, notificada, cliente, page = 1, limit = 50 } = req.query;
-    
+
     const query = {};
-    
+
     if (activa !== undefined) {
       query.activa = activa === 'true';
     }
-    
+
     if (notificada !== undefined) {
       query.notificada = notificada === 'true';
     }
-    
+
     if (cliente) {
       query.cliente = cliente;
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+
     const alertas = await Alerta.find(query)
       .populate('cliente', 'nombre documento')
       .populate('credito')
