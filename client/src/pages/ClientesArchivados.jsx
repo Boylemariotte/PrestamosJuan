@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Archive, Search, Users as UsersIcon, Briefcase, Filter, User, Phone, MapPin, RotateCcw, X, Award, Check, Calendar, AlertCircle, Ban } from 'lucide-react';
+import { Archive, Search, Users as UsersIcon, Briefcase, Filter, User, Phone, MapPin, RotateCcw, X, Award, Check, Calendar, AlertCircle, Ban, AlertOctagon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { formatearMoneda, determinarEstadoCredito, aplicarAbonosAutomaticamente, calcularValorPendienteCuota } from '../utils/creditCalculations';
@@ -47,6 +47,11 @@ const ClientesArchivados = () => {
       nombre: 'Vetado',
       color: 'bg-gray-800 text-white border-gray-900',
       icono: Ban
+    },
+    perdido: {
+      nombre: 'Perdido',
+      color: 'bg-rose-100 text-rose-800 border-rose-300',
+      icono: AlertOctagon
     },
     'sin-etiqueta': {
       nombre: 'Sin etiqueta',
@@ -124,7 +129,7 @@ const ClientesArchivados = () => {
   // Obtener tipo de pago del cliente (de créditos activos o tipoPagoEsperado)
   const getTipoPagoCliente = (cliente) => {
     if (!cliente) return null;
-    
+
     // Primero intentar obtener de créditos activos
     if (cliente.creditos && cliente.creditos.length > 0) {
       const creditoActivo = cliente.creditos.find(c => {
@@ -135,7 +140,7 @@ const ClientesArchivados = () => {
         return creditoActivo.tipo;
       }
     }
-    
+
     // Si no hay créditos activos, usar tipoPagoEsperado
     return cliente.tipoPagoEsperado || null;
   };
@@ -165,7 +170,7 @@ const ClientesArchivados = () => {
           const totalAbonadoMulta = (credito.abonosMulta || [])
             .filter(abono => abono.multaId === multa.id)
             .reduce((sum, abono) => sum + (abono.valor || 0), 0);
-          
+
           const multaPendiente = Math.max(0, (multa.valor || 0) - totalAbonadoMulta);
           saldoTotal += multaPendiente;
         });
@@ -184,13 +189,13 @@ const ClientesArchivados = () => {
     try {
       const cartera = cliente.cartera || 'K1';
       const tipoPago = getTipoPagoCliente(cliente);
-      
+
       // Construir URL con query parameter para tipo de pago (para K1 y K3)
       let url = `/clientes/posiciones-disponibles/${cartera}`;
       if ((cartera === 'K1' || cartera === 'K3') && tipoPago) {
         url += `?tipoPago=${tipoPago}`;
       }
-      
+
       const response = await api.get(url);
       if (response.success) {
         setPosicionesDisponibles(response.data);
@@ -296,6 +301,22 @@ const ClientesArchivados = () => {
                 <option value="K3">K3</option>
               </select>
             </div>
+
+            <div className="flex items-center gap-2">
+              <Award className="h-5 w-5 text-gray-400" />
+              <select
+                value={filtroEtiqueta}
+                onChange={(e) => setFiltroEtiqueta(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="todas">Todas las etiquetas</option>
+                {Object.entries(ETIQUETAS).map(([key, etiqueta]) => (
+                  <option key={key} value={key}>
+                    {etiqueta.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -332,13 +353,13 @@ const ClientesArchivados = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {clientesFiltrados.map((cliente) => {
                 const creditoInfo = getCreditoInfo(cliente);
-                const carteraRowClass = cliente.cartera === 'K1' 
-                  ? 'bg-blue-100 hover:bg-blue-200' 
+                const carteraRowClass = cliente.cartera === 'K1'
+                  ? 'bg-blue-100 hover:bg-blue-200'
                   : cliente.cartera === 'K2'
-                  ? 'bg-green-100 hover:bg-green-200'
-                  : cliente.cartera === 'K3'
-                  ? 'bg-orange-100 hover:bg-orange-200'
-                  : 'hover:bg-gray-50';
+                    ? 'bg-green-100 hover:bg-green-200'
+                    : cliente.cartera === 'K3'
+                      ? 'bg-orange-100 hover:bg-orange-200'
+                      : 'hover:bg-gray-50';
 
                 return (
                   <tr
@@ -472,11 +493,10 @@ const ClientesArchivados = () => {
                       <button
                         key={pos}
                         onClick={() => setPosicionSeleccionada(pos)}
-                        className={`px-3 py-2 rounded-lg border-2 font-medium transition-all ${
-                          posicionSeleccionada === pos
+                        className={`px-3 py-2 rounded-lg border-2 font-medium transition-all ${posicionSeleccionada === pos
                             ? 'bg-blue-600 text-white border-blue-700 ring-2 ring-blue-400'
                             : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                        }`}
+                          }`}
                       >
                         {pos}
                       </button>

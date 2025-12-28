@@ -195,12 +195,12 @@ const clienteSchema = new mongoose.Schema({
   },
   etiqueta: {
     type: String,
-    enum: ['excelente', 'bueno', 'atrasado', 'incompleto', 'vetado', 'sin-etiqueta'],
+    enum: ['excelente', 'bueno', 'atrasado', 'incompleto', 'vetado', 'perdido', 'sin-etiqueta'],
     default: 'sin-etiqueta'
   },
   rf: {
     type: String,
-    enum: ['si', 'no', ''],
+    enum: ['RF', ''],
     default: ''
   },
   fechaCreacion: {
@@ -214,7 +214,7 @@ const clienteSchema = new mongoose.Schema({
 });
 
 // Hook pre-save para asegurar que esArchivado y etiqueta siempre estén definidos
-clienteSchema.pre('save', function(next) {
+clienteSchema.pre('save', function (next) {
   if (this.esArchivado === undefined || this.esArchivado === null) {
     this.esArchivado = false;
   }

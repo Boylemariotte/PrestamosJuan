@@ -29,7 +29,7 @@ const Clientes = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroCartera, setFiltroCartera] = useState('todas'); // 'todas', 'K1', 'K2', 'K3'
   const [filtroTipoPago, setFiltroTipoPago] = useState('todos'); // 'todos', 'diario', 'semanal', 'quincenal', 'mensual'
-  
+
   // Verificar el tipo de usuario para determinar qué carteras mostrar
   const esDomiciliarioBuga = user && user.role === 'domiciliario' && user.ciudad === 'Guadalajara de Buga';
   const esDomiciliarioTula = user && user.role === 'domiciliario' && user.ciudad === 'Tuluá';
@@ -123,9 +123,9 @@ const Clientes = () => {
     } else {
       // Domiciliarios de Tuluá (u otros) solo ven K1 y K2
       return {
-    K1: { semanal: 150, quincenal: 150 },
-    K2: { general: 225 }
-  };
+        K1: { semanal: 150, quincenal: 150 },
+        K2: { general: 225 }
+      };
     }
   }, [esDomiciliarioBuga, esAdminOCeo]);
 
@@ -142,9 +142,9 @@ const Clientes = () => {
       };
     } else {
       base = {
-      K1: { semanal: 0, quincenal: 0 },
-      K2: { general: 0 }
-    };
+        K1: { semanal: 0, quincenal: 0 },
+        K2: { general: 0 }
+      };
     }
     clientes.forEach((cliente) => {
       const cartera = cliente.cartera || (esDomiciliarioBuga ? 'K3' : 'K1');
@@ -196,32 +196,32 @@ const Clientes = () => {
         }
       });
     } else {
-    // Generar cards para K1
+      // Generar cards para K1
       if (CAPACIDADES.K1) {
-    Object.entries(CAPACIDADES.K1).forEach(([tipo, capacidad]) => {
-      for (let i = 1; i <= capacidad; i++) {
-        cards.push({
-          cartera: 'K1',
-          tipoPago: tipo,
-          posicion: i,
-          cliente: null
+        Object.entries(CAPACIDADES.K1).forEach(([tipo, capacidad]) => {
+          for (let i = 1; i <= capacidad; i++) {
+            cards.push({
+              cartera: 'K1',
+              tipoPago: tipo,
+              posicion: i,
+              cliente: null
+            });
+          }
         });
-      }
-    });
       }
 
-    // Generar cards para K2
+      // Generar cards para K2
       if (CAPACIDADES.K2) {
-    Object.entries(CAPACIDADES.K2).forEach(([tipo, capacidad]) => {
-      for (let i = 1; i <= capacidad; i++) {
-        cards.push({
-          cartera: 'K2',
-          tipoPago: tipo, // 'general'
-          posicion: i,
-          cliente: null
+        Object.entries(CAPACIDADES.K2).forEach(([tipo, capacidad]) => {
+          for (let i = 1; i <= capacidad; i++) {
+            cards.push({
+              cartera: 'K2',
+              tipoPago: tipo, // 'general'
+              posicion: i,
+              cliente: null
+            });
+          }
         });
-      }
-    });
       }
 
       // Generar cards para K3 (solo para administradores y CEO, se comporta como K1)
@@ -260,35 +260,35 @@ const Clientes = () => {
       // Para K1 y K3, usar la misma lógica (por tipo de pago específico)
       if (carteraCliente === 'K1' || carteraCliente === 'K3') {
 
-      const tiposActivos = getTiposPagoActivos(cliente);
+        const tiposActivos = getTiposPagoActivos(cliente);
 
-      // Si el cliente tiene créditos activos, usar esos tipos
-      // Si no tiene créditos pero tiene tipoPagoEsperado, usar ese
-      const tiposAAsignar = tiposActivos.length > 0
-        ? tiposActivos
-        : (cliente.tipoPagoEsperado ? [cliente.tipoPagoEsperado] : []);
+        // Si el cliente tiene créditos activos, usar esos tipos
+        // Si no tiene créditos pero tiene tipoPagoEsperado, usar ese
+        const tiposAAsignar = tiposActivos.length > 0
+          ? tiposActivos
+          : (cliente.tipoPagoEsperado ? [cliente.tipoPagoEsperado] : []);
 
-      // Si no hay tipos para asignar, no hacer nada
-      if (tiposAAsignar.length === 0) return;
+        // Si no hay tipos para asignar, no hacer nada
+        if (tiposAAsignar.length === 0) return;
 
-      tiposAAsignar.forEach(tipo => {
-        // Buscar la card correspondiente
-        // Convertir posiciones a número para comparación correcta
-        const posicionCliente = Number(cliente.posicion);
-        const cardIndex = cards.findIndex(c => {
-          return c.cartera === carteraCliente &&
-            c.tipoPago === tipo &&
-            Number(c.posicion) === posicionCliente &&
-            c.cliente === null;
+        tiposAAsignar.forEach(tipo => {
+          // Buscar la card correspondiente
+          // Convertir posiciones a número para comparación correcta
+          const posicionCliente = Number(cliente.posicion);
+          const cardIndex = cards.findIndex(c => {
+            return c.cartera === carteraCliente &&
+              c.tipoPago === tipo &&
+              Number(c.posicion) === posicionCliente &&
+              c.cliente === null;
+          });
+
+          if (cardIndex !== -1) {
+            cards[cardIndex].cliente = cliente;
+          }
         });
-
-        if (cardIndex !== -1) {
-          cards[cardIndex].cliente = cliente;
-        }
-      });
-    }
+      }
     });
-  
+
 
     return cards;
   }, [clientes, esDomiciliarioBuga, esAdminOCeo, CAPACIDADES]);
@@ -344,7 +344,7 @@ const Clientes = () => {
   const clientesK1 = (esDomiciliarioBuga ? 0 : clientes.filter(c => (c.cartera || 'K1') === 'K1').length);
   const clientesK2 = (esDomiciliarioBuga ? 0 : clientes.filter(c => c.cartera === 'K2').length);
   const clientesK3 = (esDomiciliarioBuga ? clientes.filter(c => (c.cartera || 'K3') === 'K3').length : (esAdminOCeo ? clientes.filter(c => c.cartera === 'K3').length : 0));
-  
+
   // Total de clientes para admin/CEO (suma de K1, K2 y K3)
   const totalClientesAdmin = esAdminOCeo ? (clientesK1 + clientesK2 + clientesK3) : 0;
 
@@ -458,28 +458,28 @@ const Clientes = () => {
         ) : esAdminOCeo ? (
           // Administradores y CEO ven las 3 carteras
           <>
-        <div className="card bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-blue-100 text-sm">Cartera K1</p>
-              <p className="text-3xl font-bold mt-1">{clientesK1}</p>
-              <p className="text-blue-100 text-xs mt-1">clientes</p>
-              <div className="mt-3 space-y-1 text-[11px]">
+            <div className="card bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-blue-100 text-sm">Cartera K1</p>
+                  <p className="text-3xl font-bold mt-1">{clientesK1}</p>
+                  <p className="text-blue-100 text-xs mt-1">clientes</p>
+                  <div className="mt-3 space-y-1 text-[11px]">
                     <p className="text-blue-100">Semanal: {ocupacion.K1?.semanal || 0}/{CAPACIDADES.K1.semanal}</p>
                     <p className="text-blue-100">Quincenal: {ocupacion.K1?.quincenal || 0}/{CAPACIDADES.K1.quincenal}</p>
+                  </div>
+                </div>
+                <Briefcase className="h-12 w-12 text-blue-200" />
               </div>
             </div>
-            <Briefcase className="h-12 w-12 text-blue-200" />
-          </div>
-        </div>
 
-        <div className="card bg-gradient-to-br from-green-500 to-green-600 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-green-100 text-sm">Cartera K2</p>
-              <p className="text-3xl font-bold mt-1">{clientesK2}</p>
-              <p className="text-green-100 text-xs mt-1">clientes</p>
-              <div className="mt-3 space-y-1 text-[11px]">
+            <div className="card bg-gradient-to-br from-green-500 to-green-600 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-green-100 text-sm">Cartera K2</p>
+                  <p className="text-3xl font-bold mt-1">{clientesK2}</p>
+                  <p className="text-green-100 text-xs mt-1">clientes</p>
+                  <div className="mt-3 space-y-1 text-[11px]">
                     <p className="text-green-100">General: {ocupacion.K2?.general || 0}/{CAPACIDADES.K2.general}</p>
                   </div>
                 </div>
@@ -508,7 +508,7 @@ const Clientes = () => {
                   <p className="text-purple-100 text-sm">Total Clientes</p>
                   <p className="text-3xl font-bold mt-1">{totalClientesAdmin}</p>
                   <div className="mt-3 space-y-1 text-[11px]">
-                  <p  className='text-purple-100 text-sm'>registrados</p>
+                    <p className='text-purple-100 text-sm'>registrados</p>
                   </div>
                 </div>
                 <UsersIcon className="h-12 w-12 text-purple-200" />
@@ -541,22 +541,22 @@ const Clientes = () => {
                   <p className="text-green-100 text-xs mt-1">clientes</p>
                   <div className="mt-3 space-y-1 text-[11px]">
                     <p className="text-green-100">General: {ocupacion.K2?.general || 0}/{CAPACIDADES.K2.general}</p>
+                  </div>
+                </div>
+                <Briefcase className="h-12 w-12 text-green-200" />
               </div>
             </div>
-            <Briefcase className="h-12 w-12 text-green-200" />
-          </div>
-        </div>
 
-        <div className="card bg-gradient-to-br from-purple-500 to-purple-600 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-purple-100 text-sm">Total Clientes</p>
-              <p className="text-3xl font-bold mt-1">{clientes.length}</p>
-              <p className="text-purple-100 text-xs mt-1">registrados</p>
+            <div className="card bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-purple-100 text-sm">Total Clientes</p>
+                  <p className="text-3xl font-bold mt-1">{clientes.length}</p>
+                  <p className="text-purple-100 text-xs mt-1">registrados</p>
+                </div>
+                <UsersIcon className="h-12 w-12 text-purple-200" />
+              </div>
             </div>
-            <UsersIcon className="h-12 w-12 text-purple-200" />
-          </div>
-        </div>
           </>
         )}
       </div>
@@ -650,35 +650,35 @@ const Clientes = () => {
           ) : (
             // Domiciliarios de Tuluá solo ven K1 y K2
             <>
-          <button
-            onClick={() => setFiltroCartera('todas')}
-            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${filtroCartera === 'todas'
-              ? 'bg-purple-100 text-purple-800 border-purple-300 ring-2 ring-purple-400'
-              : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
-              }`}
-          >
-            Todas ({clientes.length})
-          </button>
-          <button
-            onClick={() => setFiltroCartera('K1')}
-            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K1'
-              ? 'bg-blue-100 text-blue-800 border-blue-300 ring-2 ring-blue-400'
-              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-              }`}
-          >
-            <Briefcase className="h-4 w-4" />
-            Cartera K1 ({clientesK1})
-          </button>
-          <button
-            onClick={() => setFiltroCartera('K2')}
-            className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K2'
-              ? 'bg-green-100 text-green-800 border-green-300 ring-2 ring-green-400'
-              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-              }`}
-          >
-            <Briefcase className="h-4 w-4" />
-            Cartera K2 ({clientesK2})
-          </button>
+              <button
+                onClick={() => setFiltroCartera('todas')}
+                className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${filtroCartera === 'todas'
+                  ? 'bg-purple-100 text-purple-800 border-purple-300 ring-2 ring-purple-400'
+                  : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                  }`}
+              >
+                Todas ({clientes.length})
+              </button>
+              <button
+                onClick={() => setFiltroCartera('K1')}
+                className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K1'
+                  ? 'bg-blue-100 text-blue-800 border-blue-300 ring-2 ring-blue-400'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+              >
+                <Briefcase className="h-4 w-4" />
+                Cartera K1 ({clientesK1})
+              </button>
+              <button
+                onClick={() => setFiltroCartera('K2')}
+                className={`px-4 py-2 rounded-lg border-2 font-medium transition-all flex items-center gap-2 ${filtroCartera === 'K2'
+                  ? 'bg-green-100 text-green-800 border-green-300 ring-2 ring-green-400'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+              >
+                <Briefcase className="h-4 w-4" />
+                Cartera K2 ({clientesK2})
+              </button>
             </>
           )}
         </div>
@@ -771,14 +771,22 @@ const Clientes = () => {
                 if (esVacia) {
                   // Filas vacías siempre blanco
                   carteraRowClass = 'bg-white';
-                } else if (card.cartera === 'K1') {
-                  carteraRowClass = 'bg-blue-100 hover:bg-blue-200';
-                } else if (card.cartera === 'K2') {
-                  carteraRowClass = 'bg-green-100 hover:bg-green-200';
-                } else if (card.cartera === 'K3') {
-                  carteraRowClass = 'bg-orange-100 hover:bg-orange-200';
                 } else {
-                  carteraRowClass = 'hover:bg-gray-50';
+                  // Determinar clase de color según la cartera del cliente
+                  if (card.cartera === 'K1') {
+                    carteraRowClass = 'bg-blue-100 hover:bg-blue-200 border-b';
+                  } else if (card.cartera === 'K2') {
+                    carteraRowClass = 'bg-green-100 hover:bg-green-200 border-b';
+                  } else if (card.cartera === 'K3') {
+                    carteraRowClass = 'bg-orange-100 hover:bg-orange-200 border-b';
+                  } else {
+                    carteraRowClass = 'hover:bg-gray-50 border-b'; // Default for other carteras
+                  }
+
+                  // Si el cliente tiene RF activo, sobrescribir con color morado claro
+                  if (card.cliente.rf === 'RF') {
+                    carteraRowClass = 'bg-purple-100 hover:bg-purple-200 border-b';
+                  }
                 }
 
                 return (
@@ -846,8 +854,8 @@ const Clientes = () => {
                             onClick={async (e) => {
                               e.stopPropagation();
                               const currentValue = card.cliente.rf || '';
-                              const newValue = currentValue === 'si' ? 'no' : currentValue === 'no' ? '' : 'si';
-                              
+                              const newValue = currentValue === 'RF' ? '' : 'RF';
+
                               try {
                                 await actualizarCliente(card.cliente.id, { rf: newValue });
                               } catch (error) {
@@ -857,8 +865,8 @@ const Clientes = () => {
                             }}
                             className="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex items-center gap-1 min-w-[80px] justify-between"
                           >
-                            <span className={card.cliente.rf ? 'font-medium' : 'text-gray-400'}>
-                              {card.cliente.rf === 'si' ? 'Sí' : card.cliente.rf === 'no' ? 'No' : ''}
+                            <span className={card.cliente.rf === 'RF' ? 'font-medium text-purple-700' : 'text-gray-400'}>
+                              {card.cliente.rf === 'RF' ? 'RF' : '-'}
                             </span>
                             <ChevronDown className="h-4 w-4 text-gray-400" />
                           </button>
@@ -868,12 +876,12 @@ const Clientes = () => {
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                       {esVacia ? (
                         hasPermission('crearClientes') && user?.role !== 'domiciliario' && (
-                        <button
-                          onClick={() => handleAgregarDesdeCard(card.cartera, card.tipoPago, card.posicion)}
-                          className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
-                        >
-                          <Plus className="h-4 w-4" /> Agregar
-                        </button>
+                          <button
+                            onClick={() => handleAgregarDesdeCard(card.cartera, card.tipoPago, card.posicion)}
+                            className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
+                          >
+                            <Plus className="h-4 w-4" /> Agregar
+                          </button>
                         )
                       ) : (
                         <button

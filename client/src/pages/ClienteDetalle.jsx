@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Plus, User, Phone, MapPin, Mail, UserCheck, Loader2, Archive, Award, Check, Calendar, AlertCircle, Ban } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Plus, User, Phone, MapPin, Mail, UserCheck, Loader2, Archive, Award, Check, Calendar, AlertCircle, Ban, AlertOctagon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import ClienteForm from '../components/Clientes/ClienteForm';
@@ -53,6 +53,11 @@ const ClienteDetalle = ({ soloLectura = false }) => {
       nombre: 'Vetado',
       color: 'bg-gray-800 text-white border-gray-900',
       icono: Ban
+    },
+    perdido: {
+      nombre: 'Perdido',
+      color: 'bg-rose-100 text-rose-800 border-rose-300',
+      icono: AlertOctagon
     },
     'sin-etiqueta': {
       nombre: 'Sin etiqueta',
@@ -111,7 +116,7 @@ const ClienteDetalle = ({ soloLectura = false }) => {
   // IMPORTANTE: Este hook debe estar antes de cualquier return condicional
   const tipoPagoPredefinido = useMemo(() => {
     if (!cliente) return null;
-    
+
     const creditosActivos = (cliente.creditos || []).filter(c => {
       const estado = determinarEstadoCredito(c.cuotas, c);
       return estado === 'activo' || estado === 'mora';

@@ -13,10 +13,10 @@ import api, { prorrogaService } from '../services/api';
 
 const DiaDeCobro = () => {
   const navigate = useNavigate();
-  const { clientes, obtenerCliente, obtenerCredito } = useApp();
+  const { clientes, obtenerCliente, obtenerCredito, actualizarCliente } = useApp();
   const { user } = useAuth();
   const hoy = startOfDay(new Date());
-  
+
   // Verificar el tipo de usuario para determinar qué carteras mostrar
   const esDomiciliarioBuga = user && user.role === 'domiciliario' && user.ciudad === 'Guadalajara de Buga';
   const esDomiciliarioTula = user && user.role === 'domiciliario' && user.ciudad === 'Tuluá';
@@ -258,7 +258,7 @@ const DiaDeCobro = () => {
 
           // Check fecha - comparar strings normalizados
           if (fechaReferencia === fechaSeleccionadaStr) return tieneSaldo;
-          
+
           // Para fechas vencidas, comparar strings directamente (más seguro que Date)
           return tieneSaldo && fechaReferencia <= fechaSeleccionadaStr;
         });
@@ -373,7 +373,9 @@ const DiaDeCobro = () => {
           saldoTotalCredito: saldoTotalCredito,
           estadoCredito: estadoCredito,
           cuotasVencidasCount,
-          primerCuotaVencidaFecha
+          cuotasVencidasCount,
+          primerCuotaVencidaFecha,
+          clienteRF: cliente.rf
         };
 
         agregarItem(cliente.barrio, item);
@@ -467,7 +469,7 @@ const DiaDeCobro = () => {
     const pagadosK1 = [];
     const pagadosK2 = [];
     const pagadosK3 = [];
-    
+
     // Mapa para rastrear items por cliente-credito-cuota para combinar pagos de cuota y multa
     const itemsMap = new Map();
 
@@ -486,7 +488,7 @@ const DiaDeCobro = () => {
           if (cuota.fechaPago) {
             try {
               let fechaObj = null;
-              
+
               if (typeof cuota.fechaPago === 'string') {
                 if (cuota.fechaPago.includes('T')) {
                   fechaPagoNormalizada = cuota.fechaPago.split('T')[0];
@@ -522,8 +524,8 @@ const DiaDeCobro = () => {
 
           // Buscar abonos en la fecha seleccionada (independientemente de si la cuota está pagada o no)
           const abonosHoy = (cuota.abonosCuota || []).filter(a => {
-            const fechaAbono = typeof a.fecha === 'string' 
-              ? a.fecha.split('T')[0] 
+            const fechaAbono = typeof a.fecha === 'string'
+              ? a.fecha.split('T')[0]
               : format(new Date(a.fecha), 'yyyy-MM-dd');
             return fechaAbono === fechaSeleccionadaStr;
           });
@@ -535,8 +537,8 @@ const DiaDeCobro = () => {
             // Calcular el saldo pendiente antes del abono de hoy
             // Para esto, necesitamos sumar todos los abonos anteriores a la fecha seleccionada
             const abonosAnteriores = (cuota.abonosCuota || []).filter(a => {
-              const fechaAbono = typeof a.fecha === 'string' 
-                ? a.fecha.split('T')[0] 
+              const fechaAbono = typeof a.fecha === 'string'
+                ? a.fecha.split('T')[0]
                 : format(new Date(a.fecha), 'yyyy-MM-dd');
               return fechaAbono < fechaSeleccionadaStr;
             });
@@ -605,7 +607,7 @@ const DiaDeCobro = () => {
             if (abonoMulta.fecha) {
               try {
                 let fechaObj = null;
-                
+
                 if (typeof abonoMulta.fecha === 'string') {
                   if (abonoMulta.fecha.includes('T')) {
                     fechaAbonoNormalizada = abonoMulta.fecha.split('T')[0];
@@ -647,15 +649,15 @@ const DiaDeCobro = () => {
           if (abonosMultaHoy.length > 0) {
             // Agrupar abonos de multa por multaId para calcular el total pagado por multa
             const multasPagadas = new Map();
-            
+
             abonosMultaHoy.forEach(abonoMulta => {
               // Buscar la multa, intentando diferentes formas de comparación de ID
-              const multa = credito.multas?.find(m => 
-                m.id === abonoMulta.multaId || 
+              const multa = credito.multas?.find(m =>
+                m.id === abonoMulta.multaId ||
                 m.id?.toString() === abonoMulta.multaId?.toString() ||
                 String(m.id) === String(abonoMulta.multaId)
               );
-              
+
               if (!multa) {
                 // Si no se encuentra la multa, crear un item con información básica del abono
                 const key = `${cliente.id}-${credito.id}-multa-${abonoMulta.multaId || 'sin-id'}`;
@@ -688,7 +690,7 @@ const DiaDeCobro = () => {
                 }
                 return;
               }
-              
+
               if (!multasPagadas.has(abonoMulta.multaId)) {
                 multasPagadas.set(abonoMulta.multaId, {
                   multaId: abonoMulta.multaId,
@@ -706,7 +708,7 @@ const DiaDeCobro = () => {
               // Buscar si hay un item de cuota para este crédito en el mismo día
               let itemExistente = null;
               let keyExistente = null;
-              
+
               // Buscar el primer item de este crédito que tenga cuota
               for (const [key, item] of itemsMap.entries()) {
                 if (item.creditoId === credito.id && item.nroCuota) {
@@ -887,7 +889,7 @@ const DiaDeCobro = () => {
   };
 
   // Tabla de Cobros del día en lista única con numeración
-  const TablaCobrosLista = ({ items, onCambioOrden, ordenFecha, onProrrogaDias, onProrrogaFecha }) => (
+  const TablaCobrosLista = ({ items, onCambioOrden, ordenFecha, onProrrogaDias, onProrrogaFecha, actualizarCliente }) => (
     <div className="overflow-x-auto">
       <table className="w-full text-sm text-left text-gray-500">
         <thead className="text-xs text-white uppercase bg-slate-800">
@@ -902,6 +904,7 @@ const DiaDeCobro = () => {
             <th scope="col" className="px-4 py-3">Saldo Pendiente (Total)</th>
             <th scope="col" className="px-4 py-3">Vencido</th>
             <th scope="col" className="px-4 py-3">Modalidad</th>
+            <th scope="col" className="px-4 py-3 text-center">RF</th>
             <th scope="col" className="px-4 py-3 text-center">Acciones</th>
           </tr>
         </thead>
@@ -913,11 +916,16 @@ const DiaDeCobro = () => {
               rawOrden === undefined || rawOrden === null ? '' : String(rawOrden);
 
             // Determinar clase de color según la cartera del cliente
-            const carteraRowClass = item.clienteCartera === 'K2'
+            let carteraRowClass = item.clienteCartera === 'K2'
               ? 'bg-green-100 hover:bg-green-200 border-b'
               : item.clienteCartera === 'K3'
-              ? 'bg-orange-100 hover:bg-orange-200 border-b'
-              : 'bg-blue-100 hover:bg-blue-200 border-b';
+                ? 'bg-orange-100 hover:bg-orange-200 border-b'
+                : 'bg-blue-100 hover:bg-blue-200 border-b';
+
+            // Si el cliente tiene RF activo, sobrescribir con color morado claro
+            if (item.clienteRF === 'RF') {
+              carteraRowClass = 'bg-purple-100 hover:bg-purple-200 border-b';
+            }
 
             return (
               <tr key={`${item.clienteId}-${item.creditoId}-${index}`} className={carteraRowClass}>
@@ -982,6 +990,31 @@ const DiaDeCobro = () => {
                 </td>
                 <td className="px-4 py-4 capitalize">
                   {item.creditoTipo}
+                </td>
+                <td className="px-4 py-4 text-center">
+                  <div className="relative flex justify-center">
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        // Actualizar RF: '' -> 'RF' -> ''
+                        const currentValue = item.clienteRF || '';
+                        const newValue = currentValue === 'RF' ? '' : 'RF';
+
+                        try {
+                          await actualizarCliente(item.clienteId, { rf: newValue });
+                        } catch (error) {
+                          console.error('Error actualizando RF:', error);
+                          alert('Error al actualizar RF');
+                        }
+                      }}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex items-center gap-1 min-w-[70px] justify-between"
+                    >
+                      <span className={item.clienteRF === 'RF' ? 'font-medium text-purple-700' : 'text-gray-400'}>
+                        {item.clienteRF === 'RF' ? 'RF' : '-'}
+                      </span>
+                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                    </button>
+                  </div>
                 </td>
                 <td className="px-4 py-4 text-center">
                   <div className="flex flex-col items-center gap-1">
@@ -1189,6 +1222,7 @@ const DiaDeCobro = () => {
                 ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
                 onProrrogaDias={handleProrrogaDias}
                 onProrrogaFecha={handleProrrogaFecha}
+                actualizarCliente={actualizarCliente}
               />
             )}
           </div>
@@ -1220,6 +1254,7 @@ const DiaDeCobro = () => {
                 ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
                 onProrrogaDias={handleProrrogaDias}
                 onProrrogaFecha={handleProrrogaFecha}
+                actualizarCliente={actualizarCliente}
               />
             )}
           </div>
@@ -1262,6 +1297,7 @@ const DiaDeCobro = () => {
                 ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
                 onProrrogaDias={handleProrrogaDias}
                 onProrrogaFecha={handleProrrogaFecha}
+                actualizarCliente={actualizarCliente}
               />
             )}
           </div>
@@ -1274,47 +1310,47 @@ const DiaDeCobro = () => {
           <CheckCircle className="h-6 w-6 text-green-600" />
           <h2 className="text-2xl font-bold text-gray-900">Pagados</h2>
         </div>
-        
+
         {/* Card K1 - Mostrar para administradores, CEO y domiciliarios de Tuluá */}
         {!esDomiciliarioBuga && (
-            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-              <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white/20 p-2 rounded-lg">
-                    <Users className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold">Cartera K1</h3>
-                    <p className="text-blue-100 text-sm">{clientesPagados.K1.items.length} {clientesPagados.K1.items.length === 1 ? 'pago' : 'pagos'}</p>
-                  </div>
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+            <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-lg">
+                  <Users className="h-6 w-6" />
                 </div>
-                <div className="text-right">
-                  <p className="text-blue-100 text-sm">Total Recogido</p>
-                  <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K1.total)}</p>
+                <div>
+                  <h3 className="text-xl font-bold">Cartera K1</h3>
+                  <p className="text-blue-100 text-sm">{clientesPagados.K1.items.length} {clientesPagados.K1.items.length === 1 ? 'pago' : 'pagos'}</p>
                 </div>
               </div>
-              {clientesPagados.K1.items.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                  <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg">No hay pagos registrados para K1</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left text-gray-500">
-                    <thead className="text-xs text-white uppercase bg-slate-800">
-                      <tr>
-                        <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
-                        <th scope="col" className="px-4 py-3">Cliente</th>
-                        <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
-                        <th scope="col" className="px-4 py-3 text-center">Cuota</th>
-                        <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
-                        <th scope="col" className="px-4 py-3 text-center">Multa</th>
-                        <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
-                        <th scope="col" className="px-4 py-3 text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {clientesPagados.K1.items.map((item, index) => (
+              <div className="text-right">
+                <p className="text-blue-100 text-sm">Total Recogido</p>
+                <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K1.total)}</p>
+              </div>
+            </div>
+            {clientesPagados.K1.items.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                <p className="text-lg">No hay pagos registrados para K1</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-gray-500">
+                  <thead className="text-xs text-white uppercase bg-slate-800">
+                    <tr>
+                      <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
+                      <th scope="col" className="px-4 py-3">Cliente</th>
+                      <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
+                      <th scope="col" className="px-4 py-3 text-center">Cuota</th>
+                      <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                      <th scope="col" className="px-4 py-3 text-center">Multa</th>
+                      <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
+                      <th scope="col" className="px-4 py-3 text-center">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {clientesPagados.K1.items.map((item, index) => (
                       <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-blue-50 hover:bg-blue-100">
                         <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
                           {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
@@ -1347,11 +1383,10 @@ const DiaDeCobro = () => {
                         </td>
                         <td className="px-4 py-4 text-center">
                           {item.tipoPago ? (
-                            <span className={`px-2 py-1 rounded font-medium ${
-                              item.tipoPago === 'completo' 
-                                ? 'bg-green-200 text-green-800' 
-                                : 'bg-yellow-200 text-yellow-800'
-                            }`}>
+                            <span className={`px-2 py-1 rounded font-medium ${item.tipoPago === 'completo'
+                              ? 'bg-green-200 text-green-800'
+                              : 'bg-yellow-200 text-yellow-800'
+                              }`}>
                               {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
                             </span>
                           ) : (
@@ -1384,53 +1419,53 @@ const DiaDeCobro = () => {
                         </td>
                       </tr>
                     ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Card K2 - Mostrar para administradores, CEO y domiciliarios de Tuluá */}
         {!esDomiciliarioBuga && (
-            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-              <div className="bg-green-600 text-white px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white/20 p-2 rounded-lg">
-                    <Users className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold">Cartera K2</h3>
-                    <p className="text-green-100 text-sm">{clientesPagados.K2.items.length} {clientesPagados.K2.items.length === 1 ? 'pago' : 'pagos'}</p>
-                  </div>
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+            <div className="bg-green-600 text-white px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-lg">
+                  <Users className="h-6 w-6" />
                 </div>
-                <div className="text-right">
-                  <p className="text-green-100 text-sm">Total Recogido</p>
-                  <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K2.total)}</p>
+                <div>
+                  <h3 className="text-xl font-bold">Cartera K2</h3>
+                  <p className="text-green-100 text-sm">{clientesPagados.K2.items.length} {clientesPagados.K2.items.length === 1 ? 'pago' : 'pagos'}</p>
                 </div>
               </div>
-              {clientesPagados.K2.items.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                  <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg">No hay pagos registrados para K2</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left text-gray-500">
-                    <thead className="text-xs text-white uppercase bg-slate-800">
-                      <tr>
-                        <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
-                        <th scope="col" className="px-4 py-3">Cliente</th>
-                        <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
-                        <th scope="col" className="px-4 py-3 text-center">Cuota</th>
-                        <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
-                        <th scope="col" className="px-4 py-3 text-center">Multa</th>
-                        <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
-                        <th scope="col" className="px-4 py-3 text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {clientesPagados.K2.items.map((item, index) => (
+              <div className="text-right">
+                <p className="text-green-100 text-sm">Total Recogido</p>
+                <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K2.total)}</p>
+              </div>
+            </div>
+            {clientesPagados.K2.items.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                <p className="text-lg">No hay pagos registrados para K2</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-gray-500">
+                  <thead className="text-xs text-white uppercase bg-slate-800">
+                    <tr>
+                      <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
+                      <th scope="col" className="px-4 py-3">Cliente</th>
+                      <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
+                      <th scope="col" className="px-4 py-3 text-center">Cuota</th>
+                      <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                      <th scope="col" className="px-4 py-3 text-center">Multa</th>
+                      <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
+                      <th scope="col" className="px-4 py-3 text-center">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {clientesPagados.K2.items.map((item, index) => (
                       <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-green-50 hover:bg-green-100">
                         <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
                           {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
@@ -1463,11 +1498,10 @@ const DiaDeCobro = () => {
                         </td>
                         <td className="px-4 py-4 text-center">
                           {item.tipoPago ? (
-                            <span className={`px-2 py-1 rounded font-medium ${
-                              item.tipoPago === 'completo' 
-                                ? 'bg-green-200 text-green-800' 
-                                : 'bg-yellow-200 text-yellow-800'
-                            }`}>
+                            <span className={`px-2 py-1 rounded font-medium ${item.tipoPago === 'completo'
+                              ? 'bg-green-200 text-green-800'
+                              : 'bg-yellow-200 text-yellow-800'
+                              }`}>
                               {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
                             </span>
                           ) : (
@@ -1500,53 +1534,53 @@ const DiaDeCobro = () => {
                         </td>
                       </tr>
                     ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Card K3 - Mostrar para administradores, CEO y domiciliarios de Buga */}
         {(esDomiciliarioBuga || esAdminOCeo) && (
-            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-              <div className="bg-orange-600 text-white px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white/20 p-2 rounded-lg">
-                    <Users className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold">Cartera K3</h3>
-                    <p className="text-orange-100 text-sm">{clientesPagados.K3.items.length} {clientesPagados.K3.items.length === 1 ? 'pago' : 'pagos'}</p>
-                  </div>
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+            <div className="bg-orange-600 text-white px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-lg">
+                  <Users className="h-6 w-6" />
                 </div>
-                <div className="text-right">
-                  <p className="text-orange-100 text-sm">Total Recogido</p>
-                  <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K3.total)}</p>
+                <div>
+                  <h3 className="text-xl font-bold">Cartera K3</h3>
+                  <p className="text-orange-100 text-sm">{clientesPagados.K3.items.length} {clientesPagados.K3.items.length === 1 ? 'pago' : 'pagos'}</p>
                 </div>
               </div>
-              {clientesPagados.K3.items.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                  <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg">No hay pagos registrados para K3</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left text-gray-500">
-                    <thead className="text-xs text-white uppercase bg-slate-800">
-                      <tr>
-                        <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
-                        <th scope="col" className="px-4 py-3">Cliente</th>
-                        <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
-                        <th scope="col" className="px-4 py-3 text-center">Cuota</th>
-                        <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
-                        <th scope="col" className="px-4 py-3 text-center">Multa</th>
-                        <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
-                        <th scope="col" className="px-4 py-3 text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {clientesPagados.K3.items.map((item, index) => (
+              <div className="text-right">
+                <p className="text-orange-100 text-sm">Total Recogido</p>
+                <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K3.total)}</p>
+              </div>
+            </div>
+            {clientesPagados.K3.items.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                <p className="text-lg">No hay pagos registrados para K3</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-gray-500">
+                  <thead className="text-xs text-white uppercase bg-slate-800">
+                    <tr>
+                      <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
+                      <th scope="col" className="px-4 py-3">Cliente</th>
+                      <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
+                      <th scope="col" className="px-4 py-3 text-center">Cuota</th>
+                      <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                      <th scope="col" className="px-4 py-3 text-center">Multa</th>
+                      <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
+                      <th scope="col" className="px-4 py-3 text-center">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {clientesPagados.K3.items.map((item, index) => (
                       <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-orange-50 hover:bg-orange-100">
                         <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
                           {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
@@ -1579,11 +1613,10 @@ const DiaDeCobro = () => {
                         </td>
                         <td className="px-4 py-4 text-center">
                           {item.tipoPago ? (
-                            <span className={`px-2 py-1 rounded font-medium ${
-                              item.tipoPago === 'completo' 
-                                ? 'bg-green-200 text-green-800' 
-                                : 'bg-yellow-200 text-yellow-800'
-                            }`}>
+                            <span className={`px-2 py-1 rounded font-medium ${item.tipoPago === 'completo'
+                              ? 'bg-green-200 text-green-800'
+                              : 'bg-yellow-200 text-yellow-800'
+                              }`}>
                               {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
                             </span>
                           ) : (
@@ -1616,11 +1649,11 @@ const DiaDeCobro = () => {
                         </td>
                       </tr>
                     ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         )}
       </div>
 

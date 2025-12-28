@@ -556,8 +556,13 @@ const CajaSection = ({
                     <td className="border border-gray-400 px-4 py-3">
                       {inicioCaja ? (
                         <div className="flex items-center justify-between">
-                          <div className="text-sm font-bold text-gray-800">
-                            {formatearMoneda(inicioCaja.valor || 0)}
+                          <div>
+                            <div className="text-lg font-bold text-gray-800">
+                              {formatearMoneda(inicioCaja.valor || 0)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {inicioCaja.descripcion || 'Sin descripción'}
+                            </div>
                           </div>
                           <button
                             onClick={() => onEliminarMovimiento(inicioCaja.id)}
@@ -574,11 +579,11 @@ const CajaSection = ({
                       {gasto ? (
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-sm font-medium text-gray-700">
-                              {gasto.descripcion || 'Sin descripción'}
-                            </div>
-                            <div className="text-xs font-semibold text-red-600">
+                            <div className="text-lg font-bold text-red-600">
                               {formatearMoneda(gasto.valor)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {gasto.descripcion || 'Sin descripción'}
                             </div>
                           </div>
                           <button
@@ -596,11 +601,11 @@ const CajaSection = ({
                       {prestamo ? (
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-sm font-medium text-gray-700">
-                              {prestamo.descripcion || 'Sin descripción'}
+                            <div className="text-lg font-bold text-blue-600">
+                              {formatearMoneda(prestamo.valor)}
                             </div>
                             <div className="text-xs text-gray-500">
-                              Préstamo/RF
+                              {prestamo.descripcion || 'Sin descripción'}
                             </div>
                           </div>
                           <button
@@ -613,8 +618,8 @@ const CajaSection = ({
                         </div>
                       ) : null}
                     </td>
-                    {/* 4. Por (monto del préstamo) */}
-                    <td className="border border-gray-400 px-4 py-3">
+                    {/* 4. Por (monto del préstamo) - Ocultar en pantallas pequeñas o mantener como referencia */}
+                    <td className="border border-gray-400 px-4 py-3 hidden sm:table-cell">
                       {prestamo ? (
                         <div className="text-sm font-bold text-blue-600">
                           {formatearMoneda(prestamo.valor)}
@@ -721,17 +726,17 @@ const FlujoCajas = () => {
     return movimientosCaja
       .map((mov) => {
         let fechaNormalizada = mov.fecha;
-        
+
         if (mov.fecha) {
-            // Estrategia: Usar siempre la fecha UTC del servidor (YYYY-MM-DD)
-            // Esto evita que la conversión a hora local cambie el día visualizado
-            // independientemente de la hora a la que se guardó.
-            if (typeof mov.fecha === 'string' && mov.fecha.length >= 10) {
-                fechaNormalizada = mov.fecha.substring(0, 10);
-            } else if (mov.fecha instanceof Date) {
-                // Si ya es objeto Date, formatearlo a ISO y cortar
-                fechaNormalizada = mov.fecha.toISOString().substring(0, 10);
-            }
+          // Estrategia: Usar siempre la fecha UTC del servidor (YYYY-MM-DD)
+          // Esto evita que la conversión a hora local cambie el día visualizado
+          // independientemente de la hora a la que se guardó.
+          if (typeof mov.fecha === 'string' && mov.fecha.length >= 10) {
+            fechaNormalizada = mov.fecha.substring(0, 10);
+          } else if (mov.fecha instanceof Date) {
+            // Si ya es objeto Date, formatearlo a ISO y cortar
+            fechaNormalizada = mov.fecha.toISOString().substring(0, 10);
+          }
         }
 
         return {
@@ -905,10 +910,10 @@ const FlujoCajas = () => {
     // Calcular papelería acumulada por caja
     todosPrestamos.forEach(mov => {
       // Verificar que papeleria existe y es un número válido (puede ser 0)
-      const papeleria = mov.papeleria !== undefined && mov.papeleria !== null 
-        ? parseFloat(mov.papeleria) 
+      const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+        ? parseFloat(mov.papeleria)
         : 0;
-      
+
       if (mov.caja == 1) {
         datos.caja1.papeleriaAcumulada += papeleria;
       } else if (mov.caja == 2) {
@@ -971,7 +976,7 @@ const FlujoCajas = () => {
         if (mov.caja == 1) datos.caja1.saldoAcumulado -= parseFloat(montoARestar || 0);
         if (mov.caja == 2) datos.caja2.saldoAcumulado -= parseFloat(montoARestar || 0);
         if (mov.caja == 3) datos.caja3.saldoAcumulado -= parseFloat(montoARestar || 0);
-        
+
         // Restar también la papelería del saldo final
         const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
           ? mov.papeleria
@@ -1040,8 +1045,8 @@ const FlujoCajas = () => {
       const papeleriaDisponible = cajaSeleccionada === 1
         ? datosCajas.caja1.papeleriaAcumulada
         : cajaSeleccionada === 2
-        ? datosCajas.caja2.papeleriaAcumulada
-        : datosCajas.caja3.papeleriaAcumulada;
+          ? datosCajas.caja2.papeleriaAcumulada
+          : datosCajas.caja3.papeleriaAcumulada;
 
       if (monto > papeleriaDisponible) {
         alert(`No hay suficiente saldo en la papelería. Disponible: ${formatearMoneda(papeleriaDisponible)}`);
@@ -1144,7 +1149,7 @@ const FlujoCajas = () => {
           try {
             const transacciones = await getPapeleriaTransactions();
             const fechaPrestamo = movimiento.fecha ? new Date(movimiento.fecha) : new Date(0);
-            
+
             // Buscar todos los retiros de papelería de la misma caja que se hicieron después del préstamo
             const retirosAEliminar = transacciones.filter(tx => {
               if (tx.tipo !== 'retiro' || tx.caja !== movimiento.caja || !tx.movimientoId) {
@@ -1174,13 +1179,13 @@ const FlujoCajas = () => {
         } else {
           // Para otros tipos de movimientos, buscar transacción de papelería asociada directamente
           try {
-        const transacciones = await getPapeleriaTransactions();
-        const transaccionRelacionada = transacciones.find(
-          tx => tx.movimientoId === movimientoId
-        );
+            const transacciones = await getPapeleriaTransactions();
+            const transaccionRelacionada = transacciones.find(
+              tx => tx.movimientoId === movimientoId
+            );
 
-        // Eliminar la transacción de papelería si existe
-        if (transaccionRelacionada) {
+            // Eliminar la transacción de papelería si existe
+            if (transaccionRelacionada) {
               await deletePapeleriaTransaction(transaccionRelacionada.id || transaccionRelacionada._id);
             }
           } catch (error) {
@@ -1224,8 +1229,8 @@ const FlujoCajas = () => {
                 onClick={irHoy}
                 disabled={esHoy}
                 className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${esHoy
-                    ? 'bg-blue-500 text-white cursor-default'
-                    : 'bg-white/10 hover:bg-white/20'
+                  ? 'bg-blue-500 text-white cursor-default'
+                  : 'bg-white/10 hover:bg-white/20'
                   }`}
               >
                 Hoy
@@ -1367,8 +1372,8 @@ const FlujoCajas = () => {
           montoDisponible={cajaSeleccionada === 1
             ? datosCajas.caja1.papeleriaAcumulada
             : cajaSeleccionada === 2
-            ? datosCajas.caja2.papeleriaAcumulada
-            : datosCajas.caja3.papeleriaAcumulada}
+              ? datosCajas.caja2.papeleriaAcumulada
+              : datosCajas.caja3.papeleriaAcumulada}
           montoDisponibleLabel="Saldo disponible en papelería"
           textoBotonConfirmar="Confirmar Retiro"
           mostrarBotonCancelar={true}

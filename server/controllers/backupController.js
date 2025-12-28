@@ -48,7 +48,7 @@ export const exportData = async (req, res, next) => {
             coordenadasTrabajoActualizada: cliente.coordenadasTrabajoActualizada,
             esArchivado: cliente.esArchivado,
             etiqueta: cliente.etiqueta,
-            rf: cliente.rf
+            rf: cliente.rf || ""
         }));
 
         // Formato de backup compatible con el JSON original
@@ -345,13 +345,21 @@ const performImport = async (data) => {
 
     if (data.personas?.length) {
         // Upsert sin borrar existentes: si username ya existe, se deja y no se borra nada.
-        const ops = data.personas.map(p => ({
-            updateOne: {
-                filter: { username: p.username },
-                update: { $setOnInsert: { ...p, _id: p.id || p._id } },
-                upsert: true
-            }
-        }));
+        const ops = data.personas.map(p => {
+            const personaData = { ...p, _id: p.id || p._id };
+            // Eliminar timestamps para evitar conflicto con la gestión automática de Mongoose
+            delete personaData.createdAt;
+            delete personaData.updatedAt;
+            delete personaData.__v;
+
+            return {
+                updateOne: {
+                    filter: { username: p.username },
+                    update: { $setOnInsert: personaData },
+                    upsert: true
+                }
+            };
+        });
         try {
             await Persona.bulkWrite(ops, { ordered: false });
         } catch (e) { console.error('Error importando personas:', e.message); }
