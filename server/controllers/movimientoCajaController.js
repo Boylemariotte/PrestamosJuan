@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import MovimientoCaja from '../models/MovimientoCaja.js';
+import Papeleria from '../models/Papeleria.js';
 
 /**
  * @desc    Obtener todos los movimientos de caja
@@ -138,6 +139,25 @@ export const createMovimientoCaja = async (req, res, next) => {
 
     const movimiento = await MovimientoCaja.create(movimientoData);
 
+    // Si es un préstamo y tiene valor de papelería, crear transacción de papelería automática
+    if (movimiento.tipo === 'prestamo' && movimiento.papeleria && movimiento.papeleria > 0) {
+      try {
+        await Papeleria.create({
+          tipo: 'ingreso',
+          descripcion: `Papelería préstamo - ${movimiento.descripcion || 'Sin descripción'}`,
+          cantidad: movimiento.papeleria,
+          fecha: movimiento.fecha,
+          movimientoId: movimiento._id, // Enlazar con el movimiento original
+          caja: movimiento.caja,
+          tipoMovimiento: 'ingreso',
+          ciudadPapeleria: movimiento.caja === 3 ? 'Guadalajara de Buga' : 'Tuluá'
+        });
+      } catch (papeleriaError) {
+        console.error('Error creando transacción de papelería automática:', papeleriaError);
+        // No fallamos la request principal, pero logueamos el error
+      }
+    }
+
     res.status(201).json({
       success: true,
       data: movimiento
@@ -207,12 +227,23 @@ export const deleteMovimientoCaja = async (req, res, next) => {
       });
     }
 
-    await MovimientoCaja.findOneAndDelete({
+    const movimientoEliminado = await MovimientoCaja.findOneAndDelete({
       $or: [
         { _id: req.params.id },
         { id: req.params.id }
       ]
     });
+
+    // Eliminar transacción de papelería asociada si existe
+    try {
+      if (movimientoEliminado) {
+        await Papeleria.findOneAndDelete({
+          movimientoId: movimientoEliminado._id
+        });
+      }
+    } catch (papeleriaError) {
+      console.error('Error eliminando transacción de papelería automática:', papeleriaError);
+    }
 
     res.status(200).json({
       success: true,

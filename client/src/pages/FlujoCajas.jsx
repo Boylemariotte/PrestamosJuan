@@ -1138,66 +1138,11 @@ const FlujoCajas = () => {
 
   const handleEliminarMovimiento = useCallback(async (movimientoId) => {
     if (window.confirm('¿Estás seguro de eliminar este movimiento?')) {
-      // Buscar el movimiento para ver su tipo
-      const movimiento = movimientosCaja.find(mov => mov.id === movimientoId);
-
-      if (movimiento) {
-        // Si es un préstamo, eliminar todos los retiros de papelería de la misma caja
-        // que se crearon después de este préstamo, porque esos retiros provienen del fondo
-        // acumulado que incluye la papelería de este préstamo
-        if (movimiento.tipo === 'prestamo') {
-          try {
-            const transacciones = await getPapeleriaTransactions();
-            const fechaPrestamo = movimiento.fecha ? new Date(movimiento.fecha) : new Date(0);
-
-            // Buscar todos los retiros de papelería de la misma caja que se hicieron después del préstamo
-            const retirosAEliminar = transacciones.filter(tx => {
-              if (tx.tipo !== 'retiro' || tx.caja !== movimiento.caja || !tx.movimientoId) {
-                return false;
-              }
-              // Solo retiros creados desde FlujoCajas (tienen movimientoId)
-              // y que se hicieron después o en la misma fecha que el préstamo
-              const fechaRetiro = tx.fecha ? new Date(tx.fecha) : new Date(0);
-              return fechaRetiro >= fechaPrestamo;
-            });
-
-            // Eliminar todos los retiros encontrados
-            for (const retiro of retirosAEliminar) {
-              try {
-                await deletePapeleriaTransaction(retiro.id || retiro._id);
-                // También eliminar el movimiento de caja del retiro
-                if (retiro.movimientoId) {
-                  await eliminarMovimientoCaja(retiro.movimientoId);
-                }
-              } catch (error) {
-                console.error(`Error eliminando retiro ${retiro.id}:`, error);
-              }
-            }
-          } catch (error) {
-            console.error('Error obteniendo transacciones de papelería:', error);
-          }
-        } else {
-          // Para otros tipos de movimientos, buscar transacción de papelería asociada directamente
-          try {
-            const transacciones = await getPapeleriaTransactions();
-            const transaccionRelacionada = transacciones.find(
-              tx => tx.movimientoId === movimientoId
-            );
-
-            // Eliminar la transacción de papelería si existe
-            if (transaccionRelacionada) {
-              await deletePapeleriaTransaction(transaccionRelacionada.id || transaccionRelacionada._id);
-            }
-          } catch (error) {
-            console.error('Error obteniendo transacciones de papelería:', error);
-          }
-        }
-      }
-
-      // Eliminar el movimiento de la caja
+      // La eliminación en cascada de papelería o movimientos asociados
+      // ahora es manejada por el backend en movimientoCajaController
       eliminarMovimientoCaja(movimientoId);
     }
-  }, [eliminarMovimientoCaja, movimientosCaja]);
+  }, [eliminarMovimientoCaja]);
 
   const fechaFormateada = useMemo(() =>
     format(fechaSeleccionada, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es }),

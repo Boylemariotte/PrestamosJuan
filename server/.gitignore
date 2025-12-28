@@ -14,6 +14,7 @@ dist-ssr
 .env
 migrarFechasPago.js
 migrarFechasAbonosMulta.js
+migrarPapeleria.js
 
 # Editor directories and files
 .vscode/*
