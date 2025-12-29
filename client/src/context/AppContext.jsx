@@ -620,9 +620,10 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const eliminarMovimientoCaja = async (id) => {
+  const eliminarMovimientoCaja = async (id, motivo) => {
     try {
-      await api.delete(`/movimientos-caja/${id}`);
+      // Usar un objeto opcional con body para pasar el motivo
+      await api.delete(`/movimientos-caja/${id}`, { body: { motivo } });
       setMovimientosCaja(prev => prev.filter(m => (m.id !== id && m._id !== id)));
     } catch (error) {
       console.error('Error eliminando caja:', error);

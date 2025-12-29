@@ -1,5 +1,6 @@
 import Cliente from '../models/Cliente.js';
 import Credito from '../models/Credito.js';
+import { registrarBorrado } from './historialBorradoController.js';
 
 /**
  * @desc    Obtener todos los clientes
@@ -201,6 +202,19 @@ export const deleteCliente = async (req, res, next) => {
 
     // Eliminar el cliente
     await Cliente.findByIdAndDelete(req.params.id);
+
+    // Registrar en historial
+    await registrarBorrado({
+      tipo: 'cliente',
+      idOriginal: req.params.id,
+      detalles: cliente, // Snapshot completo del cliente antes de borrar
+      usuario: req.user._id,
+      usuarioNombre: req.user.nombre,
+      metadata: {
+        nombreItem: cliente.nombre,
+        documento: cliente.documento
+      }
+    });
 
     res.status(200).json({
       success: true,

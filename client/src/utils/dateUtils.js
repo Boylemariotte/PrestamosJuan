@@ -1,3 +1,6 @@
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+
 /**
  * Utilidades para manejo de fechas en zona horaria local (Colombia)
  */
@@ -39,4 +42,26 @@ export const fechaAFormatoLocal = (fecha) => {
   const month = String(fecha.getMonth() + 1).padStart(2, '0');
   const day = String(fecha.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+};
+
+/**
+ * Formatea una fecha de forma completa (ej: 25 de Diciembre, 2023 10:30 AM)
+ * @param {Date|string} fecha 
+ * @returns {string}
+ */
+export const formatearFechaCompleta = (fecha) => {
+  if (!fecha) return 'N/A';
+  const d = typeof fecha === 'string' ? new Date(fecha) : fecha;
+  return format(d, "d 'de' MMMM, yyyy h:mm a", { locale: es });
+};
+
+/**
+ * Formatea una fecha de forma corta (ej: 25/12/23)
+ * @param {Date|string} fecha 
+ * @returns {string}
+ */
+export const formatearFechaCorta = (fecha) => {
+  if (!fecha) return 'N/A';
+  const d = typeof fecha === 'string' ? new Date(fecha) : fecha;
+  return format(d, "dd/MM/yy", { locale: es });
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Users, TrendingUp, CheckCircle, BarChart3, Settings, LogOut, User, Calendar, ChevronDown, Wallet, Route, ClipboardList, UserPlus, Archive } from 'lucide-react';
+import { Users, TrendingUp, CheckCircle, BarChart3, Settings, LogOut, User, Calendar, ChevronDown, Wallet, Route, ClipboardList, UserPlus, Archive, History } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
 
@@ -47,7 +47,8 @@ const Navbar = () => {
     { path: '/creditos-activos', label: 'Créditos Activos', icon: TrendingUp },
     { path: '/usuarios', label: 'Gestión de usuarios', icon: UserPlus }, // New Item
     { path: '/estadisticas', label: 'Estadísticas', icon: BarChart3 },
-    { path: '/configuracion', label: 'Configuración', icon: Settings },
+    { path: '/historial-borrados', label: 'Historial de borrados', icon: History },
+    { path: '/configuracion', label: 'Configuración', icon: Settings }
   ];
 
   // Filtrar items del nav según permisos y rol de usuario
@@ -56,14 +57,15 @@ const Navbar = () => {
       // Ocultar varias opciones para domiciliarios
       if (user?.role === 'domiciliario') {
         // Ocultar: Caja, Papelería, Archivados, Usuarios
-        if (item.path === '/caja' || item.path === '/papeleria' || 
-            item.path === '/archivados' || item.path === '/usuarios') {
+        if (item.path === '/caja' || item.path === '/papeleria' ||
+          item.path === '/archivados' || item.path === '/usuarios' || item.path === '/historial-borrados') {
           return false;
         }
       }
       if (item.path === '/estadisticas') return hasPermission('verEstadisticas');
       if (item.path === '/configuracion') return hasPermission('verConfiguracion');
       if (item.path === '/usuarios') return user?.role === 'ceo'; // Only CEO
+      if (item.path === '/historial-borrados') return user?.role === 'ceo' || user?.role === 'administrador';
       return true;
     });
   };

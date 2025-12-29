@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import MovimientoCaja from '../models/MovimientoCaja.js';
 import Papeleria from '../models/Papeleria.js';
+import { registrarBorrado } from './historialBorradoController.js';
 
 /**
  * @desc    Obtener todos los movimientos de caja
@@ -239,6 +240,21 @@ export const deleteMovimientoCaja = async (req, res, next) => {
       if (movimientoEliminado) {
         await Papeleria.findOneAndDelete({
           movimientoId: movimientoEliminado._id
+        });
+
+        // Registrar en historial
+        await registrarBorrado({
+          tipo: 'movimiento-caja',
+          idOriginal: req.params.id,
+          detalles: movimientoEliminado,
+          usuario: req.user._id,
+          usuarioNombre: req.user.nombre,
+          metadata: {
+            nombreItem: movimientoEliminado.descripcion || 'Sin descripción',
+            valor: movimientoEliminado.valor,
+            tipoCaja: movimientoEliminado.tipo,
+            motivo: req.body.motivo || 'No especificado'
+          }
         });
       }
     } catch (papeleriaError) {

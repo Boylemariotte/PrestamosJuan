@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Credito from '../models/Credito.js';
 import Cliente from '../models/Cliente.js';
+import { registrarBorrado } from './historialBorradoController.js';
 
 /**
  * @desc    Obtener todos los créditos
@@ -264,7 +265,7 @@ export const updateCredito = async (req, res, next) => {
  */
 export const deleteCredito = async (req, res, next) => {
   try {
-    const credito = await Credito.findById(req.params.id);
+    const credito = await Credito.findById(req.params.id).populate('cliente');
 
     if (!credito) {
       return res.status(404).json({
@@ -282,6 +283,20 @@ export const deleteCredito = async (req, res, next) => {
 
     // Eliminar el crédito de la colección
     await Credito.findByIdAndDelete(req.params.id);
+
+    // Registrar en historial
+    await registrarBorrado({
+      tipo: 'credito',
+      idOriginal: req.params.id,
+      detalles: credito,
+      usuario: req.user._id,
+      usuarioNombre: req.user.nombre,
+      metadata: {
+        clienteId: credito.cliente?._id || credito.cliente,
+        nombreCliente: credito.cliente?.nombre || 'Desconocido',
+        monto: credito.monto
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -595,7 +610,7 @@ export const agregarNota = async (req, res, next) => {
 export const eliminarNota = async (req, res, next) => {
   try {
     const { id, notaId } = req.params;
-    const credito = await Credito.findById(id);
+    const credito = await Credito.findById(id).populate('cliente');
 
     if (!credito) {
       return res.status(404).json({
@@ -612,8 +627,23 @@ export const eliminarNota = async (req, res, next) => {
       });
     }
 
+    const notaEliminada = credito.notas[notaIndex];
     credito.notas = credito.notas.filter(n => n.id !== notaId);
     await credito.save();
+
+    // Registrar en historial
+    await registrarBorrado({
+      tipo: 'nota',
+      idOriginal: notaId,
+      detalles: notaEliminada,
+      usuario: req.user._id,
+      usuarioNombre: req.user.nombre,
+      metadata: {
+        creditoId: id,
+        textoNota: notaEliminada.texto,
+        nombreCliente: credito.cliente?.nombre || 'Desconocido'
+      }
+    });
 
     // Sincronizar con el embebido en cliente
     await syncCreditoToCliente(id);
@@ -715,18 +745,41 @@ export const agregarAbono = async (req, res, next) => {
  */
 export const eliminarAbono = async (req, res, next) => {
   try {
-    let credito = await Credito.findById(req.params.id);
+    let credito = await Credito.findById(req.params.id).populate('cliente');
     if (!credito) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
 
     const abonoId = req.params.abonoId;
 
     // Buscar en abonos de cuotas
     const abonoEncontrado = credito.abonos.find(a => a.id === abonoId);
+    let abonoEliminado = null;
+
     if (abonoEncontrado) {
+      abonoEliminado = { ...abonoEncontrado };
       credito.abonos = credito.abonos.filter(a => a.id !== abonoId);
     } else {
       // Buscar en abonos de multas
-      credito.abonosMulta = (credito.abonosMulta || []).filter(a => a.id !== abonoId);
+      const abonoMultaEncontrado = (credito.abonosMulta || []).find(a => a.id === abonoId);
+      if (abonoMultaEncontrado) {
+        abonoEliminado = { ...abonoMultaEncontrado };
+        credito.abonosMulta = (credito.abonosMulta || []).filter(a => a.id !== abonoId);
+      }
+    }
+
+    if (abonoEliminado) {
+      // Registrar en historial
+      await registrarBorrado({
+        tipo: 'abono',
+        idOriginal: abonoId,
+        detalles: abonoEliminado,
+        usuario: req.user._id,
+        usuarioNombre: req.user.nombre,
+        metadata: {
+          creditoId: req.params.id,
+          valorAbono: abonoEliminado.valor,
+          nombreCliente: credito.cliente?.nombre || 'Desconocido'
+        }
+      });
     }
 
     // Recalcular todo el estado del crédito tras eliminar abono
@@ -925,14 +978,32 @@ export const editarMulta = async (req, res, next) => {
 export const eliminarMulta = async (req, res, next) => {
   try {
     const { multaId } = req.params;
-    let credito = await Credito.findById(req.params.id);
+    let credito = await Credito.findById(req.params.id).populate('cliente');
     if (!credito) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
 
+    const multaEliminada = (credito.multas || []).find(m => m.id === multaId);
+
     // Eliminar la multa
-    credito.multas = credito.multas.filter(m => m.id !== multaId);
+    credito.multas = (credito.multas || []).filter(m => m.id !== multaId);
 
     // Eliminar también todos los abonosMulta asociados a esta multa
     credito.abonosMulta = (credito.abonosMulta || []).filter(a => a.multaId !== multaId);
+
+    if (multaEliminada) {
+      // Registrar en historial
+      await registrarBorrado({
+        tipo: 'multa',
+        idOriginal: multaId,
+        detalles: multaEliminada,
+        usuario: req.user._id,
+        usuarioNombre: req.user.nombre,
+        metadata: {
+          creditoId: req.params.id,
+          valorMulta: multaEliminada.valor,
+          nombreCliente: credito.cliente?.nombre || 'Desconocido'
+        }
+      });
+    }
 
     // Recalcular saldos y totalAPagar (sin la multa eliminada y sus abonos)
     credito = recalcularCreditoCompleto(credito);

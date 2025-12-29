@@ -5,6 +5,7 @@ import { es } from 'date-fns/locale';
 import { useApp } from '../context/AppContext';
 import { formatearMoneda, calcularPapeleria, calcularMontoEntregado } from '../utils/creditCalculations';
 import { savePapeleriaTransaction, getPapeleriaTransactions, deletePapeleriaTransaction } from '../utils/papeleriaStorage';
+import MotivoEliminacionModal from '../components/Cajas/MotivoEliminacionModal';
 
 // Componente Modal reutilizable
 const Modal = ({ titulo, onClose, children, color = 'blue' }) => (
@@ -720,6 +721,8 @@ const FlujoCajas = () => {
   const [fechaSeleccionada, setFechaSeleccionada] = useState(hoy);
   const [modalAbierto, setModalAbierto] = useState(null);
   const [cajaSeleccionada, setCajaSeleccionada] = useState(null);
+  const [movimientoAEliminar, setMovimientoAEliminar] = useState(null);
+  const [modalEliminarAbierto, setModalEliminarAbierto] = useState(false);
 
   // Normalizar movimientos provenientes del backend (fecha a yyyy-MM-dd y tipoMovimiento por defecto)
   const movimientosFlujo = useMemo(() => {
@@ -1141,13 +1144,24 @@ const FlujoCajas = () => {
     }
   }, [cajaSeleccionada, fechaFormato, agregarMovimientoCaja, handleCerrarModal, datosCajas]);
 
-  const handleEliminarMovimiento = useCallback(async (movimientoId) => {
-    if (window.confirm('¿Estás seguro de eliminar este movimiento?')) {
-      // La eliminación en cascada de papelería o movimientos asociados
-      // ahora es manejada por el backend en movimientoCajaController
-      eliminarMovimientoCaja(movimientoId);
+  const handleEliminarMovimiento = useCallback((movimientoId) => {
+    setMovimientoAEliminar(movimientoId);
+    setModalEliminarAbierto(true);
+  }, []);
+
+  const confirmarEliminacion = useCallback(async (motivo) => {
+    if (!movimientoAEliminar) return;
+
+    try {
+      // Llamar al backend pasando el motivo
+      await eliminarMovimientoCaja(movimientoAEliminar, motivo);
+      setMovimientoAEliminar(null);
+      setModalEliminarAbierto(false);
+    } catch (error) {
+      console.error('Error eliminando movimiento:', error);
+      alert('No se pudo eliminar el movimiento.');
     }
-  }, [eliminarMovimientoCaja]);
+  }, [movimientoAEliminar, eliminarMovimientoCaja]);
 
   const fechaFormateada = useMemo(() =>
     format(fechaSeleccionada, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es }),
@@ -1329,6 +1343,17 @@ const FlujoCajas = () => {
           mostrarBotonCancelar={true}
         />
       )}
+
+      {/* Modal de Motivo de Eliminación */}
+      <MotivoEliminacionModal
+        isOpen={modalEliminarAbierto}
+        onClose={() => {
+          setModalEliminarAbierto(false);
+          setMovimientoAEliminar(null);
+        }}
+        onConfirm={confirmarEliminacion}
+        titulo="Eliminar Movimiento de Caja"
+      />
     </div>
   );
 };

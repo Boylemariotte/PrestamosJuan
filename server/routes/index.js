@@ -10,6 +10,7 @@ import papeleriaRoutes from './papeleriaRoutes.js';
 import backupRoutes from './backupRoutes.js';
 import prorrogaRoutes from './prorrogaRoutes.js';
 import ordenCobroRoutes from './ordenCobroRoutes.js';
+import historialBorradoRoutes from './historialBorradoRoutes.js';
 
 const router = express.Router();
 
@@ -27,6 +28,7 @@ router.use('/papeleria', papeleriaRoutes);
 router.use('/backup', backupRoutes);
 router.use('/prorrogas', prorrogaRoutes);
 router.use('/ordenes-cobro', ordenCobroRoutes);
+router.use('/historial-borrados', historialBorradoRoutes);
 
 // Ruta de salud del servidor
 router.get('/health', (req, res) => {

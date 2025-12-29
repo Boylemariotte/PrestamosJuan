@@ -24,6 +24,18 @@ const GestionUsuarios = () => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
+    // Bloquear scroll del cuerpo cuando el modal está abierto
+    useEffect(() => {
+        if (isEditModalOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'unset';
+        }
+        return () => {
+            document.body.style.overflow = 'unset';
+        };
+    }, [isEditModalOpen]);
+
     useEffect(() => {
         fetchUsers();
     }, []);
@@ -311,119 +323,122 @@ const GestionUsuarios = () => {
 
             {/* Modal de Edición */}
             {isEditModalOpen && editingUser && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-fade-in">
-                    <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden">
-                        <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                            <h3 className="text-lg font-bold text-gray-900">Editar Usuario</h3>
-                            <button onClick={() => setIsEditModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200">
+                        {/* Header Fijo */}
+                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white flex-shrink-0">
+                            <h3 className="text-xl font-bold text-slate-800">Editar Usuario</h3>
+                            <button
+                                onClick={() => setIsEditModalOpen(false)}
+                                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all"
+                            >
                                 <X className="h-5 w-5" />
                             </button>
                         </div>
 
-                        <form onSubmit={handleUpdateUser} className="p-6 space-y-4">
-                            {error && (
-                                <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-100">
-                                    {error}
-                                </div>
-                            )}
+                        {/* Contenido con Scroll - Aseguramos que el scroll sea interno */}
+                        <div className="flex-1 overflow-y-auto p-6 bg-white min-h-0 custom-scrollbar">
+                            <form onSubmit={handleUpdateUser} id="edit-user-form" className="space-y-6">
+                                {error && (
+                                    <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-100 italic">
+                                        {error}
+                                    </div>
+                                )}
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
-                                <input type="text" name="nombre" value={editingUser.nombre} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg focus:ring-sky-500" />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                                <input type="email" name="email" value={editingUser.email} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg focus:ring-sky-500" />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
-                                    <select name="role" value={editingUser.role} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500">
-                                        <option value="domiciliario">Domiciliario</option>
-                                        <option value="administrador">Administrador</option>
-                                        {/* CEO solo puede ser asignado si ya es CEO o por base de datos, 
-                                            pero aquí permitimos mantenerlo si ya lo es */}
-                                        {editingUser.role === 'ceo' && <option value="ceo">CEO</option>}
-                                    </select>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
+                                    <input type="text" name="nombre" value={editingUser.nombre} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg focus:ring-sky-500 focus:border-sky-500" />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-                                    <select
-                                        name="activo"
-                                        value={editingUser.activo}
-                                        onChange={(e) => {
-                                            setEditingUser(prev => ({ ...prev, activo: e.target.value === 'true' }));
-                                        }}
-                                        className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500"
-                                    >
-                                        <option value="true">Activo</option>
-                                        <option value="false">Inactivo</option>
-                                    </select>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                    <input type="email" name="email" value={editingUser.email} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg focus:ring-sky-500 focus:border-sky-500" />
                                 </div>
-                            </div>
 
-                            {editingUser.role === 'domiciliario' && (
-                                <>
+                                <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Ciudad</label>
-                                        <select name="ciudad" value={editingUser.ciudad || ''} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500">
-                                            <option value="">Seleccione una ciudad</option>
-                                            <option value="Tuluá">Tuluá</option>
-                                            <option value="Guadalajara de Buga">Guadalajara de Buga</option>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
+                                        <select name="role" value={editingUser.role} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500">
+                                            <option value="domiciliario">Domiciliario</option>
+                                            <option value="administrador">Administrador</option>
+                                            {editingUser.role === 'ceo' && <option value="ceo">CEO</option>}
                                         </select>
                                     </div>
-                                    <div className="mt-4">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Ocultar fecha de prórroga</label>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
                                         <select
-                                            name="ocultarProrroga"
-                                            value={editingUser.ocultarProrroga === undefined ? true : editingUser.ocultarProrroga}
+                                            name="activo"
+                                            value={editingUser.activo}
                                             onChange={(e) => {
-                                                setEditingUser(prev => ({ ...prev, ocultarProrroga: e.target.value === 'true' }));
+                                                setEditingUser(prev => ({ ...prev, activo: e.target.value === 'true' }));
                                             }}
                                             className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500"
                                         >
-                                            <option value="true">Sí (Ocultar)</option>
-                                            <option value="false">No (Mostrar)</option>
+                                            <option value="true">Activo</option>
+                                            <option value="false">Inactivo</option>
                                         </select>
-                                        <p className="text-xs text-gray-500 mt-1">
-                                            Si seleccionas "Sí", el botón de prórroga no aparecerá para este usuario.
-                                        </p>
                                     </div>
-                                </>
-                            )}
+                                </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Usuario</label>
-                                <input type="text" name="username" value={editingUser.username} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg focus:ring-sky-500" />
-                            </div>
+                                {editingUser.role === 'domiciliario' && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Ciudad</label>
+                                            <select name="ciudad" value={editingUser.ciudad || ''} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500">
+                                                <option value="">Seleccione una ciudad</option>
+                                                <option value="Tuluá">Tuluá</option>
+                                                <option value="Guadalajara de Buga">Guadalajara de Buga</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Ocultar prórroga</label>
+                                            <select
+                                                name="ocultarProrroga"
+                                                value={editingUser.ocultarProrroga === undefined ? true : editingUser.ocultarProrroga}
+                                                onChange={(e) => {
+                                                    setEditingUser(prev => ({ ...prev, ocultarProrroga: e.target.value === 'true' }));
+                                                }}
+                                                className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500"
+                                            >
+                                                <option value="true">Sí (Ocultar)</option>
+                                                <option value="false">No (Mostrar)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Nueva Contraseña
-                                    <span className="text-xs text-gray-500 font-normal ml-1">(Dejar en blanco para no cambiar)</span>
-                                </label>
-                                <input
-                                    type="password"
-                                    name="password"
-                                    onChange={handleChange}
-                                    className="w-full px-3 py-2 border rounded-lg focus:ring-sky-500"
-                                    placeholder="Nueva contraseña"
-                                    minLength={6}
-                                />
-                            </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Usuario</label>
+                                    <input type="text" name="username" value={editingUser.username} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg focus:ring-sky-500 focus:border-sky-500" />
+                                </div>
 
-                            <div className="flex justify-end gap-3 pt-4">
-                                <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">
-                                    Cancelar
-                                </button>
-                                <button type="submit" disabled={loading} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm">
-                                    {loading ? 'Guardando...' : 'Guardar Cambios'}
-                                </button>
-                            </div>
-                        </form>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Nueva Contraseña
+                                        <span className="text-xs text-gray-500 font-normal ml-1">(Opcional)</span>
+                                    </label>
+                                    <input
+                                        type="password"
+                                        name="password"
+                                        onChange={handleChange}
+                                        className="w-full px-3 py-2 border rounded-lg focus:ring-sky-500"
+                                        placeholder="Solo si deseas cambiarla"
+                                        minLength={6}
+                                    />
+                                </div>
+                            </form>
+                        </div>
+
+                        {/* Footer Fijo */}
+                        <div className="p-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50 flex-shrink-0">
+                            <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors font-medium">
+                                Cancelar
+                            </button>
+                            <button form="edit-user-form" type="submit" disabled={loading} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition-all font-bold disabled:opacity-50">
+                                {loading ? 'Guardando...' : 'Guardar Cambios'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

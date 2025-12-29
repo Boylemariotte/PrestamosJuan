@@ -52,13 +52,7 @@ const cuotaEmbebidaSchema = new mongoose.Schema({
     fechaCreacion: Date
   }],
   saldoPendiente: { type: Number, default: 0 },
-  tieneAbono: { type: Boolean, default: false },
-  multas: [{
-    id: String,
-    valor: Number,
-    motivo: String,
-    fecha: Date
-  }]
+  tieneAbono: { type: Boolean, default: false }
 }, { _id: false });
 
 const abonoEmbebidoSchema = new mongoose.Schema({
@@ -91,6 +85,14 @@ const notaEmbebidaSchema = new mongoose.Schema({
   fecha: Date
 }, { _id: false });
 
+const multaEmbebidaSchema = new mongoose.Schema({
+  id: String,
+  valor: Number,
+  motivo: String,
+  fecha: Date,
+  pagada: { type: Boolean, default: false }
+}, { _id: false });
+
 const creditoEmbebidoSchema = new mongoose.Schema({
   id: { type: String, required: true },
   monto: Number,
@@ -105,6 +107,7 @@ const creditoEmbebidoSchema = new mongoose.Schema({
   cuotas: [cuotaEmbebidaSchema],
   abonos: [abonoEmbebidoSchema],
   abonosMulta: [abonoMultaEmbebidoSchema],
+  multas: [multaEmbebidaSchema],
   descuentos: [descuentoEmbebidoSchema],
   notas: [notaEmbebidaSchema],
   etiqueta: String,

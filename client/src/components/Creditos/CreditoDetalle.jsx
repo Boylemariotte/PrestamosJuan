@@ -40,9 +40,10 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
   // Estado local para mantener el crédito actualizado (especialmente para multas)
   const [creditoActualizado, setCreditoActualizado] = useState(credito);
   const [cargandoCredito, setCargandoCredito] = useState(false);
+  const skipSyncNext = useRef(false); // Ref para evitar que el siguiente sync de contexto sobrescriba cambios locales recientes
 
-  // Estado para forzar actualización cuando cambien las multas
-  const [multasVersion, setMultasVersion] = useState(0);
+
+
 
   // Cargar el crédito directamente del backend al montar para asegurar que tenga multas
   useEffect(() => {
@@ -91,40 +92,35 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [creditoDesdeContext, soloLectura]);
 
-  // Actualizar creditoActualizado cuando cambie el crédito del contexto
-  // Pero solo si el crédito del contexto tiene multas (para evitar sobrescribir el del backend)
+  // Unificar sincronización: Actualizar creditoActualizado cuando cambie el contexto o las propiedades críticas
   useEffect(() => {
     const nuevoCredito = creditoDesdeContext || creditoInicial;
+    if (!nuevoCredito) return;
 
-    // Si hay un cambio en el contexto, actualizar el estado local
-    // Esto es crítico para que se reflejen cambios como agregar/eliminar notas, abonos, etc.
-    if (nuevoCredito) {
-      // Verificamos si realmente hubo un cambio significativo para evitar re-renders innecesarios si es posible,
-      // pero ante la duda, sincronizamos si el objeto es diferente.
-      // Específicamente para las notas:
-      const notasActuales = JSON.stringify(creditoActualizado?.notas || []);
-      const notasNuevas = JSON.stringify(nuevoCredito.notas || []);
+    // Si acabamos de actualizar localmente, ignoramos este sync para permitir que el backend/contexto se estabilice
+    if (skipSyncNext.current) {
+      console.log('CreditoDetalle - Omitiendo sync por skipSyncNext');
+      skipSyncNext.current = false;
+      return;
+    }
 
-      const multasActuales = JSON.stringify(creditoActualizado?.multas || []);
-      const multasNuevas = JSON.stringify(nuevoCredito.multas || []);
+    // Solo sincronizar si hay cambios reales en los datos críticos para evitar re-renders infinitos
+    const checks = [
+      JSON.stringify(creditoActualizado?.multas || []) !== JSON.stringify(nuevoCredito.multas || []),
+      JSON.stringify(creditoActualizado?.notas || []) !== JSON.stringify(nuevoCredito.notas || []),
+      JSON.stringify(creditoActualizado?.abonos || []) !== JSON.stringify(nuevoCredito.abonos || []),
+      JSON.stringify(creditoActualizado?.abonosMulta || []) !== JSON.stringify(nuevoCredito.abonosMulta || []),
+      creditoActualizado?.id !== nuevoCredito.id
+    ];
 
-      const abonosActuales = JSON.stringify(creditoActualizado?.abonos || []);
-      const abonosNuevos = JSON.stringify(nuevoCredito.abonos || []);
-
-      if (notasActuales !== notasNuevas || multasActuales !== multasNuevas || abonosActuales !== abonosNuevos) {
-        setCreditoActualizado(nuevoCredito);
-      }
+    if (checks.some(change => change)) {
+      setCreditoActualizado(nuevoCredito);
     }
   }, [creditoDesdeContext, creditoInicial, creditoActualizado]);
 
-  // Forzar actualización cuando cambien las multas del crédito
-  useEffect(() => {
-    if (creditoActualizado?.multas) {
-      const multasKey = creditoActualizado.multas.map(m => `${m.id}-${m.pagada}-${m.valor}`).join(',');
-      // Actualizar versión cuando cambien las multas
-      setMultasVersion(Date.now());
-    }
-  }, [creditoActualizado?.multas]);
+
+  // Eliminar efectos redundantes y multasVersion
+
 
   // Estados para el formulario
   const [formData, setFormData] = useState({
@@ -320,57 +316,35 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     }
   };
 
-  const handleAgregarNota = (e) => {
+  const handleAgregarNota = async (e) => {
     e.preventDefault();
-    if (nuevaNota.trim()) {
-      agregarNota(clienteId, credito.id, nuevaNota.trim());
-      setNuevaNota('');
-    }
-  };
-
-  const handleEliminarNota = (notaId) => {
-    if (confirm('¿Estás seguro de eliminar esta nota?')) {
-      eliminarNota(clienteId, credito.id, notaId);
-    }
-  };
-
-  const handleAgregarMulta = async () => {
-    if (!valorMulta || parseFloat(valorMulta) <= 0) {
-      alert('Por favor ingresa un valor válido para la multa');
-      return;
-    }
+    if (!nuevaNota.trim()) return;
     try {
-      const creditoActualizadoRespuesta = await agregarMulta(clienteId, credito.id, parseFloat(valorMulta), motivoMulta);
-      // Si la respuesta incluye el crédito actualizado, usarlo directamente
-      if (creditoActualizadoRespuesta && creditoActualizadoRespuesta.multas) {
-        console.log('CreditoDetalle - Usando crédito de respuesta:', creditoActualizadoRespuesta);
-        setCreditoActualizado(creditoActualizadoRespuesta);
-      } else {
-        // Si no, obtener directamente del backend
-        try {
-          const response = await api.get(`/creditos/${credito.id}`);
-          if (response.success && response.data) {
-            console.log('CreditoDetalle - Obtenido crédito del backend:', response.data);
-            setCreditoActualizado(response.data);
-          }
-        } catch (err) {
-          console.error('Error obteniendo crédito del backend:', err);
-          // Fallback: esperar un poco para que fetchData complete
-          setTimeout(() => {
-            const nuevoCredito = obtenerCredito(clienteId, credito.id);
-            if (nuevoCredito) {
-              setCreditoActualizado(nuevoCredito);
-            }
-          }, 1000);
-        }
-      }
-    } catch (error) {
-      console.error('Error agregando multa:', error);
+      skipSyncNext.current = true;
+      await agregarNota(clienteId, credito.id, nuevaNota);
+      setNuevaNota('');
+      // Recargar para ver cambios
+      const response = await api.get(`/creditos/${credito.id}`);
+      if (response.success) setCreditoActualizado(response.data);
+    } catch (err) {
+      skipSyncNext.current = false;
     }
-    setMostrarFormularioMulta(null);
-    setValorMulta('');
-    setMotivoMulta('');
   };
+
+  const handleEliminarNota = async (notaId) => {
+    if (confirm('¿Estás seguro de eliminar esta nota?')) {
+      try {
+        skipSyncNext.current = true;
+        await eliminarNota(clienteId, credito.id, notaId);
+        const response = await api.get(`/creditos/${credito.id}`);
+        if (response.success) setCreditoActualizado(response.data);
+      } catch (err) {
+        skipSyncNext.current = false;
+      }
+    }
+  };
+
+
 
   const handleEditarMulta = (multa) => {
     // Extraer el motivo sin la referencia a cuota para edición
@@ -388,11 +362,12 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     if (!multaParaEditar) return;
 
     try {
+      skipSyncNext.current = true;
       const creditoActualizadoRespuesta = await editarMulta(
         clienteId,
         credito.id,
         multaParaEditar.id,
-        parseFloat(valor),
+        valor,
         fecha,
         motivo
       );
@@ -400,14 +375,11 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
       if (creditoActualizadoRespuesta) {
         setCreditoActualizado(creditoActualizadoRespuesta);
       } else {
-        setTimeout(() => {
-          const nuevoCredito = obtenerCredito(clienteId, credito.id);
-          if (nuevoCredito) {
-            setCreditoActualizado(nuevoCredito);
-          }
-        }, 500);
+        const response = await api.get(`/creditos/${credito.id}`);
+        if (response.success) setCreditoActualizado(response.data);
       }
     } catch (error) {
+      skipSyncNext.current = false;
       console.error('Error editando multa:', error);
     }
 
@@ -417,20 +389,19 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
   const handleEliminarMulta = async (multaId) => {
     if (confirm('¿Estás seguro de eliminar esta multa?')) {
       try {
+        skipSyncNext.current = true;
         const creditoActualizadoRespuesta = await eliminarMulta(clienteId, credito.id, multaId);
         if (creditoActualizadoRespuesta) {
           setCreditoActualizado(creditoActualizadoRespuesta);
         } else {
-          setTimeout(() => {
-            const nuevoCredito = obtenerCredito(clienteId, credito.id);
-            if (nuevoCredito) {
-              setCreditoActualizado(nuevoCredito);
-            }
-          }, 500);
+          const response = await api.get(`/creditos/${credito.id}`);
+          if (response.success) setCreditoActualizado(response.data);
         }
       } catch (error) {
+        skipSyncNext.current = false;
         console.error('Error eliminando multa:', error);
       }
+
     }
     // Cerrar el modal de edición si está abierto
     setMultaParaEditar(null);
@@ -462,20 +433,19 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
 
     // Pasar multaId para que el backend agregue el abono a abonosMulta (independiente de abonos de cuotas)
     try {
+      skipSyncNext.current = true;
       await agregarAbono(clienteId, credito.id, valorNumerico, descFinal, fecha, 'multa', null, multa.id);
 
       // Obtener el crédito actualizado del backend
-      try {
-        const response = await api.get(`/creditos/${credito.id}`);
-        if (response.success && response.data) {
-          setCreditoActualizado(response.data);
-        }
-      } catch (err) {
-        console.error('Error obteniendo crédito del backend:', err);
+      const response = await api.get(`/creditos/${credito.id}`);
+      if (response.success && response.data) {
+        setCreditoActualizado(response.data);
       }
     } catch (error) {
+      skipSyncNext.current = false;
       console.error('Error agregando abono de multa:', error);
     }
+
 
     setMultaParaPagar(null);
   };
@@ -493,19 +463,38 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
 
     // Simplemente agregar el abono con la fecha especificada
     // aplicarAbonosAutomaticamente se encargará de calcular cómo se distribuye
-    agregarAbono(clienteId, credito.id, parseFloat(valorAbono), descripcionAbono, fechaAbono);
+    const processAbono = async () => {
+      try {
+        skipSyncNext.current = true;
+        await agregarAbono(clienteId, credito.id, parseFloat(valorAbono), descripcionAbono, fechaAbono);
+        const response = await api.get(`/creditos/${credito.id}`);
+        if (response.success) setCreditoActualizado(response.data);
+      } catch (err) {
+        skipSyncNext.current = false;
+      }
+    };
+    processAbono();
 
     setMostrarFormularioAbono(false);
     setValorAbono('');
     setDescripcionAbono('');
     setFechaAbono(new Date().toISOString().split('T')[0]);
+
   };
 
-  const handleEliminarAbono = (abonoId) => {
+  const handleEliminarAbono = async (abonoId) => {
     if (confirm('¿Estás seguro de eliminar este abono?')) {
-      eliminarAbono(clienteId, credito.id, abonoId);
+      try {
+        skipSyncNext.current = true;
+        await eliminarAbono(clienteId, credito.id, abonoId);
+        const response = await api.get(`/creditos/${credito.id}`);
+        if (response.success) setCreditoActualizado(response.data);
+      } catch (err) {
+        skipSyncNext.current = false;
+      }
     }
   };
+
 
   const handleEditarAbono = (abono) => {
     // Asegurarse de que el abono tenga el ID del abono original
@@ -626,14 +615,25 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     }
 
     // Si es abono de multa, no enviar nroCuota
-    editarAbono(clienteId, credito.id, abonoId, {
-      valor: valorNumerico,
-      fecha: fechaNormalizada,
-      descripcion,
-      nroCuota: esAbonoMulta ? null : (nroCuota ? parseInt(nroCuota, 10) : null)
-    });
+    const processEdit = async () => {
+      try {
+        skipSyncNext.current = true;
+        await editarAbono(clienteId, credito.id, abonoId, {
+          valor: valorNumerico,
+          fecha: fechaNormalizada,
+          descripcion,
+          nroCuota: esAbonoMulta ? null : (nroCuota ? parseInt(nroCuota, 10) : null)
+        });
+        const response = await api.get(`/creditos/${credito.id}`);
+        if (response.success) setCreditoActualizado(response.data);
+      } catch (err) {
+        skipSyncNext.current = false;
+      }
+    };
+    processEdit();
 
     setAbonoEnEdicion(null);
+
   };
 
   const handleAgregarDescuento = () => {
@@ -699,56 +699,44 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
 
     try {
       setProcesandoPago(true);
+      skipSyncNext.current = true;
       // Siempre agregamos como abono para mantener el historial visual y la lógica de asignación específica
       await agregarAbono(clienteId, credito.id, valorNumerico, descFinal, fecha);
+      const response = await api.get(`/creditos/${credito.id}`);
+      if (response.success) setCreditoActualizado(response.data);
       setCuotaParaPagar(null);
     } catch (error) {
+      skipSyncNext.current = false;
       console.error('Error procesando pago:', error);
       alert('Error al procesar el pago. Por favor, intente nuevamente.');
     } finally {
       setProcesandoPago(false);
     }
+
   };
 
   const handleConfirmarMulta = async ({ valor, fecha, motivo }) => {
     // Se agrega la multa independiente (sin nroCuota)
     const motivoFinal = fecha ? `${motivo} (${fecha})` : motivo;
     try {
+      skipSyncNext.current = true;
       const creditoActualizadoRespuesta = await agregarMulta(clienteId, credito.id, parseFloat(valor), motivoFinal);
       // Si la respuesta incluye el crédito actualizado, usarlo directamente
       if (creditoActualizadoRespuesta) {
         setCreditoActualizado(creditoActualizadoRespuesta);
       } else {
-        // Si no, esperar un poco para que fetchData complete y luego actualizar
-        setTimeout(() => {
-          const nuevoCredito = obtenerCredito(clienteId, credito.id);
-          if (nuevoCredito) {
-            setCreditoActualizado(nuevoCredito);
-          }
-        }, 500);
+        const response = await api.get(`/creditos/${credito.id}`);
+        if (response.success) setCreditoActualizado(response.data);
       }
     } catch (error) {
+      skipSyncNext.current = false;
       console.error('Error agregando multa:', error);
     }
+
     setMostrarModalNuevaMulta(false);
   };
 
-  // Actualizar creditoActualizado cuando cambie el crédito del contexto
-  // Pero solo si no acabamos de actualizarlo manualmente (para evitar sobrescribir)
-  useEffect(() => {
-    const nuevoCredito = creditoDesdeContext || creditoInicial;
-    if (nuevoCredito && nuevoCredito.id === creditoActualizado.id) {
-      // Solo actualizar si las multas son diferentes (para evitar loops)
-      const multasActuales = creditoActualizado.multas || [];
-      const multasNuevas = nuevoCredito.multas || [];
-      if (multasActuales.length !== multasNuevas.length ||
-        multasActuales.map(m => m.id).join(',') !== multasNuevas.map(m => m.id).join(',')) {
-        setCreditoActualizado(nuevoCredito);
-      }
-    } else if (nuevoCredito) {
-      setCreditoActualizado(nuevoCredito);
-    }
-  }, [creditoDesdeContext, creditoInicial]);
+
 
   // Multas independientes del crédito (ya no están en cuotas)
   const todasLasMultas = useMemo(() => {
@@ -795,7 +783,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
       const fechaB = b.fecha ? new Date(b.fecha) : new Date(0);
       return fechaB - fechaA;
     });
-  }, [creditoActualizado, multasVersion]);
+  }, [creditoActualizado]);
 
   // Calcular progreso considerando cuotas pagadas con abonos (sin multas)
   const progreso = (() => {
@@ -1138,7 +1126,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
               <div className="bg-white rounded-lg p-6 w-96 shadow-2xl">
                 <EditorFecha
                   cuota={cuotasActualizadas.find(c => c.nroCuota === mostrarEditorFecha)}
-                  credito={credito}
+                  credito={creditoActualizado}
                   nuevaFecha={nuevaFecha}
                   onFechaChange={setNuevaFecha}
                   onGuardar={handleGuardarFecha}
@@ -1153,7 +1141,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
             <RenovacionForm
               // Pasamos el crédito con cuotasActualizadas para que la deuda pendiente
               // se calcule usando los abonos aplicados (abonoAplicado) por cuota
-              creditoAnterior={{ ...credito, cuotas: cuotasActualizadas }}
+              creditoAnterior={{ ...creditoActualizado, cuotas: cuotasActualizadas }}
               onSubmit={handleRenovar}
               onClose={() => setMostrarFormularioRenovacion(false)}
             />
