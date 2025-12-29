@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, Wallet, Plus, DollarSign, FileText, X, Trash2, CheckCircle, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { Calendar, ChevronLeft, ChevronRight, Wallet, Plus, DollarSign, FileText, X, Trash2, CheckCircle, ArrowDownCircle, ArrowUpCircle, AlertCircle } from 'lucide-react';
 import { format, startOfDay, addDays, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useApp } from '../context/AppContext';
@@ -280,6 +280,105 @@ const ModalForm = ({
   );
 };
 
+// Componente para seleccionar ciudad y añadir a papelería
+const ModalIngresoPapeleria = ({ onClose, onSave, fechaSeleccionada }) => {
+  const [monto, setMonto] = useState('');
+  const [descripcion, setDescripcion] = useState('');
+  const [ciudad, setCiudad] = useState('Tuluá');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!monto || parseFloat(monto) <= 0) return;
+    onSave(parseFloat(monto), descripcion, ciudad);
+    onClose();
+  };
+
+  return (
+    <Modal titulo="Añadir Plata a Papelería" onClose={onClose} color="orange">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Ciudad *
+          </label>
+          <select
+            value={ciudad}
+            onChange={(e) => setCiudad(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            required
+          >
+            <option value="Tuluá">Tuluá</option>
+            <option value="Guadalajara de Buga">Guadalajara de Buga</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Monto *
+          </label>
+          <input
+            type="number"
+            value={monto}
+            onChange={(e) => setMonto(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            placeholder="0.00"
+            autoFocus
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Descripción
+          </label>
+          <input
+            type="text"
+            value={descripcion}
+            onChange={(e) => setDescripcion(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            placeholder="Ej: Aporte de capital"
+          />
+        </div>
+        <div className="flex justify-end space-x-3 mt-6">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 text-sm font-medium text-white bg-orange-600 border border-transparent rounded-md hover:bg-orange-700 flex items-center gap-2"
+          >
+            <CheckCircle className="h-4 w-4" />
+            Confirmar Ingreso
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+};
+
+// Componente Toast para alertas personalizadas
+const Toast = ({ mensaje, tipo = 'success', onClose }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose();
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const bgColor = tipo === 'success' ? 'bg-green-600' : 'bg-red-600';
+
+  return (
+    <div className={`fixed bottom-8 right-8 ${bgColor} text-white px-6 py-3 rounded-lg shadow-2xl z-[100] flex items-center gap-3 animate-pulse`}>
+      {tipo === 'success' ? <CheckCircle className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
+      <span className="font-medium">{mensaje}</span>
+      <button onClick={onClose} className="ml-2 hover:opacity-80">
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
+};
+
 // Componente CajaSection optimizado
 const CajaSection = ({
   titulo,
@@ -294,6 +393,7 @@ const CajaSection = ({
   onAgregarGasto,
   onAgregarPrestamo,
   onRetirarPapeleria,
+  onAgregarPapeleria,
   onEliminarMovimiento,
   movimientosCaja
 }) => {
@@ -702,13 +802,22 @@ const CajaSection = ({
               </div>
             </div>
           </div>
-          <button
-            onClick={() => onRetirarPapeleria(numero)}
-            className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-1"
-          >
-            <Plus className="h-4 w-4" />
-            Retirar
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onRetirarPapeleria(numero)}
+              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              Retirar
+            </button>
+            <button
+              onClick={onAgregarPapeleria}
+              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              Añadir
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -716,13 +825,14 @@ const CajaSection = ({
 };
 
 const FlujoCajas = () => {
-  const { movimientosCaja, agregarMovimientoCaja, eliminarMovimientoCaja } = useApp();
+  const { movimientosCaja, agregarMovimientoCaja, eliminarMovimientoCaja, fetchData } = useApp();
   const hoy = useMemo(() => startOfDay(new Date()), []);
   const [fechaSeleccionada, setFechaSeleccionada] = useState(hoy);
   const [modalAbierto, setModalAbierto] = useState(null);
   const [cajaSeleccionada, setCajaSeleccionada] = useState(null);
   const [movimientoAEliminar, setMovimientoAEliminar] = useState(null);
   const [modalEliminarAbierto, setModalEliminarAbierto] = useState(false);
+  const [toast, setToast] = useState(null);
 
   // Normalizar movimientos provenientes del backend (fecha a yyyy-MM-dd y tipoMovimiento por defecto)
   const movimientosFlujo = useMemo(() => {
@@ -1038,6 +1148,10 @@ const FlujoCajas = () => {
     setCajaSeleccionada(null);
   }, []);
 
+  const handleAgregarPapeleria = useCallback(() => {
+    setModalAbierto('ingresoPapeleria');
+  }, []);
+
   const handleGuardar = useCallback(async (tipo, monto, descripcion, datosAdicionales = {}) => {
     if (!monto || monto <= 0) return;
 
@@ -1144,6 +1258,30 @@ const FlujoCajas = () => {
     }
   }, [cajaSeleccionada, fechaFormato, agregarMovimientoCaja, handleCerrarModal, datosCajas]);
 
+  const handleGuardarIngresoPapeleria = useCallback(async (monto, descripcion, ciudad) => {
+    try {
+      const fechaParaGuardar = new Date(fechaSeleccionada);
+      fechaParaGuardar.setHours(12, 0, 0, 0);
+
+      await savePapeleriaTransaction({
+        tipo: 'ingreso',
+        cantidad: monto,
+        descripcion: descripcion || 'Ingreso manual papelería',
+        fecha: fechaParaGuardar.toISOString(),
+        ciudadPapeleria: ciudad
+      });
+
+      handleCerrarModal();
+      // Recargar datos para ver el nuevo saldo
+      fetchData();
+      // Mostrar toast de éxito
+      setToast({ mensaje: 'Monto añadido correctamente', tipo: 'success' });
+    } catch (error) {
+      console.error('Error guardando ingreso de papelería:', error);
+      setToast({ mensaje: 'No se pudo guardar el ingreso', tipo: 'error' });
+    }
+  }, [fechaSeleccionada, handleCerrarModal, fetchData]);
+
   const handleEliminarMovimiento = useCallback((movimientoId) => {
     setMovimientoAEliminar(movimientoId);
     setModalEliminarAbierto(true);
@@ -1241,6 +1379,7 @@ const FlujoCajas = () => {
           onAgregarGasto={() => handleAgregarGasto(1)}
           onAgregarPrestamo={() => handleAgregarPrestamo(1)}
           onRetirarPapeleria={handleRetirarPapeleria}
+          onAgregarPapeleria={handleAgregarPapeleria}
           onEliminarMovimiento={handleEliminarMovimiento}
           movimientosCaja={movimientosFlujo}
         />
@@ -1258,6 +1397,7 @@ const FlujoCajas = () => {
           onAgregarGasto={() => handleAgregarGasto(2)}
           onAgregarPrestamo={() => handleAgregarPrestamo(2)}
           onRetirarPapeleria={handleRetirarPapeleria}
+          onAgregarPapeleria={handleAgregarPapeleria}
           onEliminarMovimiento={handleEliminarMovimiento}
           movimientosCaja={movimientosFlujo}
         />
@@ -1275,6 +1415,7 @@ const FlujoCajas = () => {
           onAgregarGasto={() => handleAgregarGasto(3)}
           onAgregarPrestamo={() => handleAgregarPrestamo(3)}
           onRetirarPapeleria={handleRetirarPapeleria}
+          onAgregarPapeleria={handleAgregarPapeleria}
           onEliminarMovimiento={handleEliminarMovimiento}
           movimientosCaja={movimientosFlujo}
         />
@@ -1344,6 +1485,14 @@ const FlujoCajas = () => {
         />
       )}
 
+      {modalAbierto === 'ingresoPapeleria' && (
+        <ModalIngresoPapeleria
+          onClose={handleCerrarModal}
+          onSave={handleGuardarIngresoPapeleria}
+          fechaSeleccionada={fechaSeleccionada}
+        />
+      )}
+
       {/* Modal de Motivo de Eliminación */}
       <MotivoEliminacionModal
         isOpen={modalEliminarAbierto}
@@ -1354,6 +1503,14 @@ const FlujoCajas = () => {
         onConfirm={confirmarEliminacion}
         titulo="Eliminar Movimiento de Caja"
       />
+
+      {toast && (
+        <Toast
+          mensaje={toast.mensaje}
+          tipo={toast.tipo}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 };
