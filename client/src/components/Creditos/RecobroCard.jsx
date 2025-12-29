@@ -6,7 +6,7 @@ const RecobroCard = ({ todasLasMultas, onNuevaMulta, onPagarMulta, onEditarMulta
   return (
     <div key="recobro" className="border-2 border-blue-600 rounded-lg p-3 flex flex-col min-h-36 w-full print-grid-item">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-blue-600 font-bold text-xs uppercase tracking-wide">RECOBRO</span>
+        <span className="text-blue-600 font-bold text-xs uppercase tracking-wide">MULTAS</span>
         <div className="flex items-center gap-2">
           {todasLasMultas.length > 0 && (
             <span className="text-blue-500 text-xs font-semibold">
@@ -31,17 +31,17 @@ const RecobroCard = ({ todasLasMultas, onNuevaMulta, onPagarMulta, onEditarMulta
           todasLasMultas.map((multa) => {
             const fechaBase = multa.fecha ? (multa.fecha.includes('T') ? multa.fecha.split('T')[0] : multa.fecha) : null;
             const fechaFormateada = fechaBase ? formatearFechaCorta(fechaBase) : '-';
-            
+
             // Determinar el estado de la multa: pagada (verde), parcialmente pagada (amarillo), sin pagar (rojo)
             const esPagada = multa.pagada || (multa.saldoPendiente !== undefined && multa.saldoPendiente <= 0);
             const esParcial = multa.parcialmentePagada || (multa.saldoPendiente !== undefined && multa.saldoPendiente > 0 && multa.saldoPendiente < multa.valor);
-            
+
             // Clases CSS según el estado
             const bgColor = esPagada ? 'bg-green-50 border-green-300' : esParcial ? 'bg-yellow-50 border-yellow-300' : 'bg-red-50 border-red-200';
             const textColor = esPagada ? 'text-green-700' : esParcial ? 'text-yellow-700' : 'text-red-700';
             const textColorDark = esPagada ? 'text-green-900' : esParcial ? 'text-yellow-900' : 'text-red-900';
             const textColorLight = esPagada ? 'text-green-600' : esParcial ? 'text-yellow-600' : 'text-red-600';
-            
+
             return (
               <div key={multa.id} className={`border rounded-md p-2 text-left ${bgColor}`}>
                 <div className="flex items-center justify-between text-xs font-semibold">

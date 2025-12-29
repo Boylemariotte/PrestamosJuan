@@ -588,6 +588,49 @@ export const agregarNota = async (req, res, next) => {
 };
 
 /**
+ * @desc    Eliminar una nota de un crédito
+ * @route   DELETE /api/creditos/:id/notas/:notaId
+ * @access  Private
+ */
+export const eliminarNota = async (req, res, next) => {
+  try {
+    const { id, notaId } = req.params;
+    const credito = await Credito.findById(id);
+
+    if (!credito) {
+      return res.status(404).json({
+        success: false,
+        error: 'Crédito no encontrado'
+      });
+    }
+
+    const notaIndex = credito.notas.findIndex(n => n.id === notaId);
+    if (notaIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        error: 'Nota no encontrada'
+      });
+    }
+
+    credito.notas = credito.notas.filter(n => n.id !== notaId);
+    await credito.save();
+
+    // Sincronizar con el embebido en cliente
+    await syncCreditoToCliente(id);
+
+    const creditoActualizado = await Credito.findById(credito._id)
+      .populate('cliente');
+
+    res.status(200).json({
+      success: true,
+      data: creditoActualizado
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * @desc    Agregar un abono a un crédito
  * @route   POST /api/creditos/:id/abonos
  * @access  Private

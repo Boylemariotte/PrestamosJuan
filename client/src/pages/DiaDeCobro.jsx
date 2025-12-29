@@ -9,11 +9,12 @@ import { format, parseISO, startOfDay, addDays, subDays, isBefore } from 'date-f
 import { es } from 'date-fns/locale';
 import { formatearMoneda, calcularTotalMultasCuota, aplicarAbonosAutomaticamente, determinarEstadoCredito, formatearFechaCorta } from '../utils/creditCalculations';
 import CreditoDetalle from '../components/Creditos/CreditoDetalle';
+import MotivoProrrogaModal from '../components/Creditos/MotivoProrrogaModal';
 import api, { prorrogaService } from '../services/api';
 
 const DiaDeCobro = () => {
   const navigate = useNavigate();
-  const { clientes, obtenerCliente, obtenerCredito, actualizarCliente } = useApp();
+  const { clientes, obtenerCliente, obtenerCredito, actualizarCliente, agregarNota } = useApp();
   const { user } = useAuth();
   const hoy = startOfDay(new Date());
 
@@ -47,6 +48,10 @@ const DiaDeCobro = () => {
   // Estado para prórrogas de cuotas, sin modificar la fecha original del crédito
   // Estructura: { [`clienteId-creditoId-nroCuota`]: 'YYYY-MM-DD' }
   const [prorrogasCuotas, setProrrogasCuotas] = useState({});
+
+  // Estados para el Modal de Motivo de Prórroga
+  const [modalProrrogaOpen, setModalProrrogaOpen] = useState(false);
+  const [datosProrrogaPendiente, setDatosProrrogaPendiente] = useState(null);
 
   // Cargar visitas y orden de cobro desde localStorage
   useEffect(() => {
@@ -844,7 +849,8 @@ const DiaDeCobro = () => {
 
   const handleProrrogaDias = (clienteId, creditoId, dias) => {
     const nuevaFecha = format(addDays(parseISO(fechaSeleccionadaStr), dias), 'yyyy-MM-dd');
-    aplicarProrrogaCuotasDelDia(clienteId, creditoId, nuevaFecha);
+    setDatosProrrogaPendiente({ clienteId, creditoId, nuevaFecha });
+    setModalProrrogaOpen(true);
   };
 
   const handleProrrogaFecha = (clienteId, creditoId, nuevaFechaStr) => {
@@ -857,7 +863,32 @@ const DiaDeCobro = () => {
       return;
     }
 
-    aplicarProrrogaCuotasDelDia(clienteId, creditoId, valor);
+    setDatosProrrogaPendiente({ clienteId, creditoId, nuevaFecha: valor });
+    setModalProrrogaOpen(true);
+  };
+
+  const handleConfirmarProrroga = async (motivo) => {
+    if (!datosProrrogaPendiente) return;
+
+    const { clienteId, creditoId, nuevaFecha } = datosProrrogaPendiente;
+
+    // 1. Aplicar la prórroga (lógica original)
+    await aplicarProrrogaCuotasDelDia(clienteId, creditoId, nuevaFecha);
+
+    // 2. Agregar la nota
+    if (agregarNota) {
+      try {
+        const textoNota = `Fecha de cobro pospuesta - ${motivo}`;
+        await agregarNota(clienteId, creditoId, textoNota);
+      } catch (error) {
+        console.error('Error al guardar la nota de prórroga:', error);
+        toast.warning('La prórroga se aplicó pero hubo un error al guardar la nota');
+      }
+    }
+
+    // 3. Limpiar estado y cerrar modal
+    setDatosProrrogaPendiente(null);
+    setModalProrrogaOpen(false);
   };
 
   const abrirDetalle = async (clienteId, creditoId) => {
@@ -1025,28 +1056,34 @@ const DiaDeCobro = () => {
                       Ver Detalle
                     </button>
                     <div className="flex items-center gap-1 mt-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const input = document.getElementById(`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`);
-                          if (input) {
-                            if (input.showPicker) {
-                              input.showPicker();
-                            } else {
-                              input.click();
-                            }
-                          }
-                        }}
-                        className="p-1 rounded-full border border-slate-300 bg-slate-50 hover:bg-slate-100"
-                      >
-                        <Calendar className="h-4 w-4 text-slate-700" />
-                      </button>
-                      <input
-                        id={`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`}
-                        type="date"
-                        className="hidden"
-                        onChange={(e) => onProrrogaFecha(item.clienteId, item.creditoId, e.target.value)}
-                      />
+                      {/* Mostrar botón de prórroga solo si no es domiciliario O si siendo domiciliario tiene permitido verla */}
+                      {(user?.role !== 'domiciliario' || user?.ocultarProrroga === false) && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const input = document.getElementById(`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`);
+                              if (input) {
+                                if (input.showPicker) {
+                                  input.showPicker();
+                                } else {
+                                  input.click();
+                                }
+                              }
+                            }}
+                            className="p-1 rounded-full border border-slate-300 bg-slate-50 hover:bg-slate-100"
+                            title="Prorrogar fecha"
+                          >
+                            <Calendar className="h-4 w-4 text-slate-700" />
+                          </button>
+                          <input
+                            id={`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`}
+                            type="date"
+                            className="hidden"
+                            onChange={(e) => onProrrogaFecha(item.clienteId, item.creditoId, e.target.value)}
+                          />
+                        </>
+                      )}
                     </div>
                   </div>
                 </td>
@@ -1669,6 +1706,16 @@ const DiaDeCobro = () => {
           }}
         />
       )}
+
+      {/* Modal para Motivo de Prórroga */}
+      <MotivoProrrogaModal
+        isOpen={modalProrrogaOpen}
+        onClose={() => {
+          setModalProrrogaOpen(false);
+          setDatosProrrogaPendiente(null);
+        }}
+        onConfirm={handleConfirmarProrroga}
+      />
     </div>
   );
 };

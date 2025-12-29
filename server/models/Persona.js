@@ -109,7 +109,7 @@ const personaSchema = new mongoose.Schema({
   ciudad: {
     type: String,
     enum: ['Tuluá', 'Guadalajara de Buga'],
-    required: function() {
+    required: function () {
       return this.role === 'domiciliario';
     },
     trim: true
@@ -121,6 +121,10 @@ const personaSchema = new mongoose.Schema({
   fechaCreacion: {
     type: Date,
     default: Date.now
+  },
+  ocultarProrroga: {
+    type: Boolean,
+    default: true
   }
 }, {
   timestamps: true,
@@ -135,40 +139,40 @@ personaSchema.index({ role: 1 });
 personaSchema.index({ activo: 1 });
 
 // Hash de contraseña antes de guardar
-personaSchema.pre('save', async function(next) {
+personaSchema.pre('save', async function (next) {
   if (!this.isModified('password')) {
     return next();
   }
-  
+
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
 
 // Método para comparar contraseñas
-personaSchema.methods.matchPassword = async function(enteredPassword) {
+personaSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
 // Método para obtener permisos
-personaSchema.methods.getPermissions = function() {
+personaSchema.methods.getPermissions = function () {
   return PERMISSIONS[this.role] || {};
 };
 
 // Método para verificar permiso
-personaSchema.methods.hasPermission = function(permission) {
+personaSchema.methods.hasPermission = function (permission) {
   const permissions = this.getPermissions();
   return permissions[permission] || false;
 };
 
 // Método para verificar jerarquía de roles
-personaSchema.methods.canAccess = function(requiredRole) {
+personaSchema.methods.canAccess = function (requiredRole) {
   const roleHierarchy = {
     domiciliario: 1,
     administrador: 2,
     ceo: 3
   };
-  
+
   return roleHierarchy[this.role] >= roleHierarchy[requiredRole];
 };
 

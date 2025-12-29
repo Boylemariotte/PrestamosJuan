@@ -58,7 +58,9 @@ export const getPersona = async (req, res, next) => {
 
     const personaData = {
       ...persona.toObject(),
-      permissions: persona.getPermissions()
+      ...persona.toObject(),
+      permissions: persona.getPermissions(),
+      ocultarProrroga: persona.ocultarProrroga
     };
 
     res.status(200).json({
@@ -156,8 +158,9 @@ export const createPersona = async (req, res, next) => {
     };
 
     // Incluir ciudad solo si es domiciliario
-    if (persona.role === 'domiciliario' && persona.ciudad) {
-      personaData.ciudad = persona.ciudad;
+    if (persona.role === 'domiciliario') {
+      if (persona.ciudad) personaData.ciudad = persona.ciudad;
+      personaData.ocultarProrroga = persona.ocultarProrroga;
     }
 
     res.status(201).json({
@@ -176,7 +179,7 @@ export const createPersona = async (req, res, next) => {
  */
 export const updatePersona = async (req, res, next) => {
   try {
-    const { nombre, email, role, activo, password, ciudad } = req.body;
+    const { nombre, email, role, activo, password, ciudad, ocultarProrroga } = req.body;
     const personaId = req.params.id;
 
     // Verificar que la persona existe
@@ -288,6 +291,11 @@ export const updatePersona = async (req, res, next) => {
       persona.ciudad = ciudad;
     }
 
+    // Actualizar ocultarProrroga solo si el role es domiciliario
+    if (nuevoRole === 'domiciliario' && ocultarProrroga !== undefined) {
+      persona.ocultarProrroga = ocultarProrroga;
+    }
+
     await persona.save();
 
     const personaData = {
@@ -301,8 +309,9 @@ export const updatePersona = async (req, res, next) => {
     };
 
     // Incluir ciudad solo si es domiciliario
-    if (persona.role === 'domiciliario' && persona.ciudad) {
-      personaData.ciudad = persona.ciudad;
+    if (persona.role === 'domiciliario') {
+      if (persona.ciudad) personaData.ciudad = persona.ciudad;
+      personaData.ocultarProrroga = persona.ocultarProrroga;
     }
 
     res.status(200).json({

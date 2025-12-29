@@ -36,14 +36,14 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
   // Obtener el crédito actualizado del contexto
   const creditoDesdeContext = obtenerCredito(clienteId, creditoInicial.id);
   const credito = creditoDesdeContext || creditoInicial;
-  
+
   // Estado local para mantener el crédito actualizado (especialmente para multas)
   const [creditoActualizado, setCreditoActualizado] = useState(credito);
   const [cargandoCredito, setCargandoCredito] = useState(false);
-  
+
   // Estado para forzar actualización cuando cambien las multas
   const [multasVersion, setMultasVersion] = useState(0);
-  
+
   // Cargar el crédito directamente del backend al montar para asegurar que tenga multas
   useEffect(() => {
     const cargarCreditoDelBackend = async () => {
@@ -67,7 +67,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
         setCargandoCredito(false);
       }
     };
-    
+
     // Siempre cargar del backend para asegurar que tenga todos los datos actualizados (incluyendo multas)
     if (creditoInicial && creditoInicial.id) {
       cargarCreditoDelBackend();
@@ -90,25 +90,33 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [creditoDesdeContext, soloLectura]);
-  
+
   // Actualizar creditoActualizado cuando cambie el crédito del contexto
   // Pero solo si el crédito del contexto tiene multas (para evitar sobrescribir el del backend)
   useEffect(() => {
     const nuevoCredito = creditoDesdeContext || creditoInicial;
-    if (nuevoCredito && nuevoCredito.multas && nuevoCredito.multas.length > 0) {
-      const multasActuales = creditoActualizado.multas || [];
-      const multasNuevas = nuevoCredito.multas || [];
-      const multasActualesIds = multasActuales.map(m => m.id).sort().join(',');
-      const multasNuevasIds = multasNuevas.map(m => m.id).sort().join(',');
-      
-      // Solo actualizar si las multas son diferentes y el nuevo tiene más multas
-      if (multasNuevasIds !== multasActualesIds || multasNuevas.length > multasActuales.length) {
-        console.log('CreditoDetalle - Actualizando desde contexto:', nuevoCredito);
+
+    // Si hay un cambio en el contexto, actualizar el estado local
+    // Esto es crítico para que se reflejen cambios como agregar/eliminar notas, abonos, etc.
+    if (nuevoCredito) {
+      // Verificamos si realmente hubo un cambio significativo para evitar re-renders innecesarios si es posible,
+      // pero ante la duda, sincronizamos si el objeto es diferente.
+      // Específicamente para las notas:
+      const notasActuales = JSON.stringify(creditoActualizado?.notas || []);
+      const notasNuevas = JSON.stringify(nuevoCredito.notas || []);
+
+      const multasActuales = JSON.stringify(creditoActualizado?.multas || []);
+      const multasNuevas = JSON.stringify(nuevoCredito.multas || []);
+
+      const abonosActuales = JSON.stringify(creditoActualizado?.abonos || []);
+      const abonosNuevos = JSON.stringify(nuevoCredito.abonos || []);
+
+      if (notasActuales !== notasNuevas || multasActuales !== multasNuevas || abonosActuales !== abonosNuevos) {
         setCreditoActualizado(nuevoCredito);
       }
     }
-  }, [creditoDesdeContext, creditoInicial]);
-  
+  }, [creditoDesdeContext, creditoInicial, creditoActualizado]);
+
   // Forzar actualización cuando cambien las multas del crédito
   useEffect(() => {
     if (creditoActualizado?.multas) {
@@ -276,7 +284,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
       // Usar formato YYYY-MM-DDTHH:mm:ss para crear fecha local explícitamente
       const [year, month, day] = nuevaFecha.split('-').map(Number);
       const fechaLocal = new Date(year, month - 1, day, 12, 0, 0, 0);
-      
+
       editarFechaCuota(clienteId, credito.id, mostrarEditorFecha, fechaLocal.toISOString());
       // Pequeño delay para asegurar que el estado se actualice
       setTimeout(() => {
@@ -368,7 +376,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     // Extraer el motivo sin la referencia a cuota para edición
     const motivoSinRef = multa.motivo ? multa.motivo.replace(/\s*\(Ref\. Cuota #\d+\)/, '') : '';
     const fechaBase = multa.fecha ? (multa.fecha.includes('T') ? multa.fecha.split('T')[0] : multa.fecha) : new Date().toISOString().split('T')[0];
-    
+
     setMultaParaEditar({
       ...multa,
       motivo: motivoSinRef,
@@ -378,17 +386,17 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
 
   const handleGuardarEdicionMulta = async (valor, fecha, motivo) => {
     if (!multaParaEditar) return;
-    
+
     try {
       const creditoActualizadoRespuesta = await editarMulta(
-        clienteId, 
-        credito.id, 
-        multaParaEditar.id, 
-        parseFloat(valor), 
-        fecha, 
+        clienteId,
+        credito.id,
+        multaParaEditar.id,
+        parseFloat(valor),
+        fecha,
         motivo
       );
-      
+
       if (creditoActualizadoRespuesta) {
         setCreditoActualizado(creditoActualizadoRespuesta);
       } else {
@@ -402,7 +410,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     } catch (error) {
       console.error('Error editando multa:', error);
     }
-    
+
     setMultaParaEditar(null);
   };
 
@@ -433,7 +441,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     const abonosMulta = (creditoActualizado.abonosMulta || []).filter(a => a.multaId === multa.id);
     const totalAbonado = abonosMulta.reduce((sum, a) => sum + a.valor, 0);
     const saldoPendiente = multa.valor - totalAbonado;
-    
+
     setMultaParaPagar({
       multa,
       valorPendiente: saldoPendiente > 0 ? saldoPendiente : multa.valor
@@ -455,7 +463,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     // Pasar multaId para que el backend agregue el abono a abonosMulta (independiente de abonos de cuotas)
     try {
       await agregarAbono(clienteId, credito.id, valorNumerico, descFinal, fecha, 'multa', null, multa.id);
-      
+
       // Obtener el crédito actualizado del backend
       try {
         const response = await api.get(`/creditos/${credito.id}`);
@@ -502,12 +510,12 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
   const handleEditarAbono = (abono) => {
     // Asegurarse de que el abono tenga el ID del abono original
     let abonoConId = { ...abono };
-    
+
     // Si el abono no tiene ID, buscarlo en abonos de cuotas o abonos de multas
     if (!abonoConId.id) {
       const fechaAbono = abono.fecha ? (typeof abono.fecha === 'string' ? abono.fecha.split('T')[0] : new Date(abono.fecha).toISOString().split('T')[0]) : null;
       const valorAbono = abono.valor || abono.valorAplicado;
-      
+
       // Buscar primero en abonos de cuotas
       if (credito.abonos) {
         const abonoOriginal = credito.abonos.find(a => {
@@ -517,12 +525,12 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
           const valorCoincide = Math.abs(a.valor - valorAbono) < 0.01;
           return fechaCoincide && valorCoincide;
         });
-        
+
         if (abonoOriginal && abonoOriginal.id) {
           abonoConId.id = abonoOriginal.id;
         }
       }
-      
+
       // Si no se encontró en abonos de cuotas, buscar en abonos de multas
       if (!abonoConId.id && credito.abonosMulta) {
         const abonoMultaOriginal = credito.abonosMulta.find(a => {
@@ -532,13 +540,13 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
           const valorCoincide = Math.abs(a.valor - valorAbono) < 0.01;
           return fechaCoincide && valorCoincide;
         });
-        
+
         if (abonoMultaOriginal && abonoMultaOriginal.id) {
           abonoConId.id = abonoMultaOriginal.id;
         }
       }
     }
-    
+
     setAbonoEnEdicion(abonoConId);
   };
 
@@ -569,12 +577,12 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     // Si el abono no tiene id, intentar encontrarlo en abonos de cuotas o abonos de multas
     let abonoId = abonoEnEdicion.id;
     let esAbonoMulta = false;
-    
+
     if (!abonoId) {
       // Buscar primero en abonos de cuotas
       const valorOriginal = abonoEnEdicion.valor || abonoEnEdicion.valorAplicado || valorNumerico;
       const fechaOriginal = abonoEnEdicion.fecha ? (typeof abonoEnEdicion.fecha === 'string' ? abonoEnEdicion.fecha.split('T')[0] : new Date(abonoEnEdicion.fecha).toISOString().split('T')[0]) : null;
-      
+
       // Buscar en abonos de cuotas
       if (credito.abonos) {
         const abonoEncontrado = credito.abonos.find(a => {
@@ -584,12 +592,12 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
           const fechaCoincide = !fechaOriginal || fechaAbono === fechaOriginal;
           return valorCoincide && fechaCoincide;
         });
-        
+
         if (abonoEncontrado && abonoEncontrado.id) {
           abonoId = abonoEncontrado.id;
         }
       }
-      
+
       // Si no se encontró en abonos de cuotas, buscar en abonos de multas
       if (!abonoId && credito.abonosMulta) {
         const abonoMultaEncontrado = credito.abonosMulta.find(a => {
@@ -599,7 +607,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
           const fechaCoincide = !fechaOriginal || fechaAbono === fechaOriginal;
           return valorCoincide && fechaCoincide;
         });
-        
+
         if (abonoMultaEncontrado && abonoMultaEncontrado.id) {
           abonoId = abonoMultaEncontrado.id;
           esAbonoMulta = true;
@@ -733,8 +741,8 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
       // Solo actualizar si las multas son diferentes (para evitar loops)
       const multasActuales = creditoActualizado.multas || [];
       const multasNuevas = nuevoCredito.multas || [];
-      if (multasActuales.length !== multasNuevas.length || 
-          multasActuales.map(m => m.id).join(',') !== multasNuevas.map(m => m.id).join(',')) {
+      if (multasActuales.length !== multasNuevas.length ||
+        multasActuales.map(m => m.id).join(',') !== multasNuevas.map(m => m.id).join(',')) {
         setCreditoActualizado(nuevoCredito);
       }
     } else if (nuevoCredito) {
@@ -745,16 +753,16 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
   // Multas independientes del crédito (ya no están en cuotas)
   const todasLasMultas = useMemo(() => {
     // Intentar usar creditoActualizado primero, luego credito, luego creditoInicial
-    const creditoConMultas = creditoActualizado?.multas ? creditoActualizado : 
-                             credito?.multas ? credito : 
-                             creditoInicial?.multas ? creditoInicial : null;
+    const creditoConMultas = creditoActualizado?.multas ? creditoActualizado :
+      credito?.multas ? credito :
+        creditoInicial?.multas ? creditoInicial : null;
     const multas = creditoConMultas?.multas || [];
     const abonosMulta = creditoConMultas?.abonosMulta || []; // Usar abonosMulta (independiente)
-    
+
     if (multas.length === 0) {
       return [];
     }
-    
+
     return multas.map(multa => {
       // Calcular abonos aplicados a esta multa usando abonosMulta (independiente de abonos de cuotas)
       const abonosDeEstaMulta = abonosMulta.filter(a => a.multaId === multa.id);
@@ -762,7 +770,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
       const saldoPendiente = multa.valor - totalAbonado;
       const pagada = saldoPendiente <= 0;
       const parcialmentePagada = totalAbonado > 0 && saldoPendiente > 0;
-      
+
       // Extraer nroCuota del motivo si existe (formato: "motivo (Ref. Cuota #X)")
       let nroCuota = null;
       const motivo = multa.motivo || '';
@@ -770,7 +778,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
       if (match) {
         nroCuota = parseInt(match[1], 10);
       }
-      
+
       return {
         id: multa.id,
         valor: multa.valor,

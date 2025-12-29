@@ -9,14 +9,15 @@ import { format, parseISO, startOfDay, addDays, subDays, isBefore } from 'date-f
 import { es } from 'date-fns/locale';
 import { formatearMoneda, calcularTotalMultasCuota, aplicarAbonosAutomaticamente, determinarEstadoCredito, formatearFechaCorta } from '../utils/creditCalculations';
 import CreditoDetalle from '../components/Creditos/CreditoDetalle';
+import MotivoProrrogaModal from '../components/Creditos/MotivoProrrogaModal';
 import api, { prorrogaService } from '../services/api';
 
 const Rutas = () => {
   const navigate = useNavigate();
-  const { clientes, obtenerCliente, obtenerCredito } = useApp();
+  const { clientes, obtenerCliente, obtenerCredito, agregarNota } = useApp();
   const { user } = useAuth();
   const hoy = startOfDay(new Date());
-  
+
   // Verificar el tipo de usuario para determinar qué carteras mostrar
   const esDomiciliarioBuga = user && user.role === 'domiciliario' && user.ciudad === 'Guadalajara de Buga';
   const esDomiciliarioTula = user && user.role === 'domiciliario' && user.ciudad === 'Tuluá';
@@ -43,6 +44,10 @@ const Rutas = () => {
   // Estado para prórrogas de cuotas, sin modificar la fecha original del crédito
   // Estructura: { [`clienteId-creditoId-nroCuota`]: 'YYYY-MM-DD' }
   const [prorrogasCuotas, setProrrogasCuotas] = useState({});
+
+  // Estados para el Modal de Motivo de Prórroga
+  const [modalProrrogaOpen, setModalProrrogaOpen] = useState(false);
+  const [datosProrrogaPendiente, setDatosProrrogaPendiente] = useState(null);
 
   // Cargar visitas y orden de cobro desde localStorage
   useEffect(() => {
@@ -254,7 +259,7 @@ const Rutas = () => {
 
           // Check fecha - comparar strings normalizados
           if (fechaReferencia === fechaSeleccionadaStr) return tieneSaldo;
-          
+
           // Para fechas vencidas, comparar strings directamente (más seguro que Date)
           return tieneSaldo && fechaReferencia <= fechaSeleccionadaStr;
         });
@@ -447,7 +452,7 @@ const Rutas = () => {
     const pagadosK1 = [];
     const pagadosK2 = [];
     const pagadosK3 = [];
-    
+
     // Mapa para rastrear items por cliente-credito-cuota para combinar pagos de cuota y multa
     const itemsMap = new Map();
 
@@ -466,7 +471,7 @@ const Rutas = () => {
           if (cuota.fechaPago) {
             try {
               let fechaObj = null;
-              
+
               if (typeof cuota.fechaPago === 'string') {
                 if (cuota.fechaPago.includes('T')) {
                   fechaPagoNormalizada = cuota.fechaPago.split('T')[0];
@@ -502,8 +507,8 @@ const Rutas = () => {
 
           // Buscar abonos en la fecha seleccionada (independientemente de si la cuota está pagada o no)
           const abonosHoy = (cuota.abonosCuota || []).filter(a => {
-            const fechaAbono = typeof a.fecha === 'string' 
-              ? a.fecha.split('T')[0] 
+            const fechaAbono = typeof a.fecha === 'string'
+              ? a.fecha.split('T')[0]
               : format(new Date(a.fecha), 'yyyy-MM-dd');
             return fechaAbono === fechaSeleccionadaStr;
           });
@@ -515,8 +520,8 @@ const Rutas = () => {
             // Calcular el saldo pendiente antes del abono de hoy
             // Para esto, necesitamos sumar todos los abonos anteriores a la fecha seleccionada
             const abonosAnteriores = (cuota.abonosCuota || []).filter(a => {
-              const fechaAbono = typeof a.fecha === 'string' 
-                ? a.fecha.split('T')[0] 
+              const fechaAbono = typeof a.fecha === 'string'
+                ? a.fecha.split('T')[0]
                 : format(new Date(a.fecha), 'yyyy-MM-dd');
               return fechaAbono < fechaSeleccionadaStr;
             });
@@ -585,7 +590,7 @@ const Rutas = () => {
             if (abonoMulta.fecha) {
               try {
                 let fechaObj = null;
-                
+
                 if (typeof abonoMulta.fecha === 'string') {
                   if (abonoMulta.fecha.includes('T')) {
                     fechaAbonoNormalizada = abonoMulta.fecha.split('T')[0];
@@ -627,15 +632,15 @@ const Rutas = () => {
           if (abonosMultaHoy.length > 0) {
             // Agrupar abonos de multa por multaId para calcular el total pagado por multa
             const multasPagadas = new Map();
-            
+
             abonosMultaHoy.forEach(abonoMulta => {
               // Buscar la multa, intentando diferentes formas de comparación de ID
-              const multa = credito.multas?.find(m => 
-                m.id === abonoMulta.multaId || 
+              const multa = credito.multas?.find(m =>
+                m.id === abonoMulta.multaId ||
                 m.id?.toString() === abonoMulta.multaId?.toString() ||
                 String(m.id) === String(abonoMulta.multaId)
               );
-              
+
               if (!multa) {
                 // Si no se encuentra la multa, crear un item con información básica del abono
                 const key = `${cliente.id}-${credito.id}-multa-${abonoMulta.multaId || 'sin-id'}`;
@@ -668,7 +673,7 @@ const Rutas = () => {
                 }
                 return;
               }
-              
+
               if (!multasPagadas.has(abonoMulta.multaId)) {
                 multasPagadas.set(abonoMulta.multaId, {
                   multaId: abonoMulta.multaId,
@@ -686,7 +691,7 @@ const Rutas = () => {
               // Buscar si hay un item de cuota para este crédito en el mismo día
               let itemExistente = null;
               let keyExistente = null;
-              
+
               // Buscar el primer item de este crédito que tenga cuota
               for (const [key, item] of itemsMap.entries()) {
                 if (item.creditoId === credito.id && item.nroCuota) {
@@ -822,7 +827,8 @@ const Rutas = () => {
 
   const handleProrrogaDias = (clienteId, creditoId, dias) => {
     const nuevaFecha = format(addDays(parseISO(fechaSeleccionadaStr), dias), 'yyyy-MM-dd');
-    aplicarProrrogaCuotasDelDia(clienteId, creditoId, nuevaFecha);
+    setDatosProrrogaPendiente({ clienteId, creditoId, nuevaFecha });
+    setModalProrrogaOpen(true);
   };
 
   const handleProrrogaFecha = (clienteId, creditoId, nuevaFechaStr) => {
@@ -835,7 +841,32 @@ const Rutas = () => {
       return;
     }
 
-    aplicarProrrogaCuotasDelDia(clienteId, creditoId, valor);
+    setDatosProrrogaPendiente({ clienteId, creditoId, nuevaFecha: valor });
+    setModalProrrogaOpen(true);
+  };
+
+  const handleConfirmarProrroga = async (motivo) => {
+    if (!datosProrrogaPendiente) return;
+
+    const { clienteId, creditoId, nuevaFecha } = datosProrrogaPendiente;
+
+    // 1. Aplicar la prórroga (lógica original)
+    await aplicarProrrogaCuotasDelDia(clienteId, creditoId, nuevaFecha);
+
+    // 2. Agregar la nota
+    if (agregarNota) {
+      try {
+        const textoNota = `Fecha de cobro pospuesta - ${motivo}`;
+        await agregarNota(clienteId, creditoId, textoNota);
+      } catch (error) {
+        console.error('Error al guardar la nota de prórroga:', error);
+        toast.warning('La prórroga se aplicó pero hubo un error al guardar la nota');
+      }
+    }
+
+    // 3. Limpiar estado y cerrar modal
+    setDatosProrrogaPendiente(null);
+    setModalProrrogaOpen(false);
   };
 
   const abrirDetalle = async (clienteId, creditoId) => {
@@ -896,8 +927,8 @@ const Rutas = () => {
             const carteraRowClass = item.clienteCartera === 'K2'
               ? 'bg-green-100 hover:bg-green-200 border-b'
               : item.clienteCartera === 'K3'
-              ? 'bg-orange-100 hover:bg-orange-200 border-b'
-              : 'bg-blue-100 hover:bg-blue-200 border-b';
+                ? 'bg-orange-100 hover:bg-orange-200 border-b'
+                : 'bg-blue-100 hover:bg-blue-200 border-b';
 
             return (
               <tr key={`${item.clienteId}-${item.creditoId}-${index}`} className={carteraRowClass}>
@@ -972,28 +1003,34 @@ const Rutas = () => {
                       Ver Detalle
                     </button>
                     <div className="flex items-center gap-1 mt-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const input = document.getElementById(`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`);
-                          if (input) {
-                            if (input.showPicker) {
-                              input.showPicker();
-                            } else {
-                              input.click();
-                            }
-                          }
-                        }}
-                        className="p-1 rounded-full border border-slate-300 bg-slate-50 hover:bg-slate-100"
-                      >
-                        <Calendar className="h-4 w-4 text-slate-700" />
-                      </button>
-                      <input
-                        id={`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`}
-                        type="date"
-                        className="hidden"
-                        onChange={(e) => onProrrogaFecha(item.clienteId, item.creditoId, e.target.value)}
-                      />
+                      {/* Mostrar botón de prórroga solo si no es domiciliario O si siendo domiciliario tiene permitido verla */}
+                      {(user?.role !== 'domiciliario' || user?.ocultarProrroga === false) && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const input = document.getElementById(`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`);
+                              if (input) {
+                                if (input.showPicker) {
+                                  input.showPicker();
+                                } else {
+                                  input.click();
+                                }
+                              }
+                            }}
+                            className="p-1 rounded-full border border-slate-300 bg-slate-50 hover:bg-slate-100"
+                            title="Prorrogar fecha"
+                          >
+                            <Calendar className="h-4 w-4 text-slate-700" />
+                          </button>
+                          <input
+                            id={`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`}
+                            type="date"
+                            className="hidden"
+                            onChange={(e) => onProrrogaFecha(item.clienteId, item.creditoId, e.target.value)}
+                          />
+                        </>
+                      )}
                     </div>
                   </div>
                 </td>
@@ -1143,342 +1180,339 @@ const Rutas = () => {
 
       {/* Sección Pagados - Siempre visible si hay pagos */}
       {((esAdminOCeo && (clientesPagados.K1.items.length > 0 || clientesPagados.K2.items.length > 0 || clientesPagados.K3.items.length > 0)) ||
-        (!esDomiciliarioBuga && !esAdminOCeo && (clientesPagados.K1.items.length > 0 || clientesPagados.K2.items.length > 0)) || 
+        (!esDomiciliarioBuga && !esAdminOCeo && (clientesPagados.K1.items.length > 0 || clientesPagados.K2.items.length > 0)) ||
         (esDomiciliarioBuga && clientesPagados.K3.items.length > 0)) && (
-        <div className="space-y-6 mt-8 pt-8 border-t-2 border-gray-300">
-          <div className="flex items-center gap-3 mb-4">
-            <CheckCircle className="h-6 w-6 text-green-600" />
-            <h2 className="text-2xl font-bold text-gray-900">Pagados</h2>
+          <div className="space-y-6 mt-8 pt-8 border-t-2 border-gray-300">
+            <div className="flex items-center gap-3 mb-4">
+              <CheckCircle className="h-6 w-6 text-green-600" />
+              <h2 className="text-2xl font-bold text-gray-900">Pagados</h2>
+            </div>
+
+            {/* Card K1 - Mostrar para administradores, CEO y domiciliarios de Tuluá */}
+            {!esDomiciliarioBuga && clientesPagados.K1.items.length > 0 && (
+              <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+                <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-white/20 p-2 rounded-lg">
+                      <Users className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold">Cartera K1</h3>
+                      <p className="text-blue-100 text-sm">{clientesPagados.K1.items.length} {clientesPagados.K1.items.length === 1 ? 'pago' : 'pagos'}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-blue-100 text-sm">Total Recogido</p>
+                    <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K1.total)}</p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left text-gray-500">
+                    <thead className="text-xs text-white uppercase bg-slate-800">
+                      <tr>
+                        <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
+                        <th scope="col" className="px-4 py-3">Cliente</th>
+                        <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
+                        <th scope="col" className="px-4 py-3 text-center">Cuota</th>
+                        <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                        <th scope="col" className="px-4 py-3 text-center">Multa</th>
+                        <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
+                        <th scope="col" className="px-4 py-3 text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {clientesPagados.K1.items.map((item, index) => (
+                        <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-blue-50 hover:bg-blue-100">
+                          <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
+                            {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
+                              <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
+                              <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
+                                <Phone className="h-3 w-3" />
+                                <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono || 'N/A'}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
+                                <MapPin className="h-3 w-3" />
+                                {item.clienteBarrio || 'Sin barrio'}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 font-bold text-green-600 text-base">
+                            {item.montoPagado > 0 ? formatearMoneda(item.montoPagado) : <span className="text-gray-400">-</span>}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            {item.nroCuota ? (
+                              <span className="bg-blue-200 text-blue-800 px-2 py-1 rounded font-medium">
+                                #{item.nroCuota}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            {item.tipoPago ? (
+                              <span className={`px-2 py-1 rounded font-medium ${item.tipoPago === 'completo'
+                                ? 'bg-green-200 text-green-800'
+                                : 'bg-yellow-200 text-yellow-800'
+                                }`}>
+                                {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            {item.tieneMulta ? (
+                              <span className="bg-red-200 text-red-800 px-2 py-1 rounded font-medium text-xs">
+                                {item.multaMotivo || 'Multa'}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center font-bold">
+                            {item.montoPagadoMulta > 0 ? (
+                              <span className="text-orange-600">{formatearMoneda(item.montoPagadoMulta)}</span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <button
+                              onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
+                              className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
+                            >
+                              Ver Detalle
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Card K2 - Mostrar para administradores, CEO y domiciliarios de Tuluá */}
+            {!esDomiciliarioBuga && clientesPagados.K2.items.length > 0 && (
+              <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+                <div className="bg-green-600 text-white px-6 py-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-white/20 p-2 rounded-lg">
+                      <Users className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold">Cartera K2</h3>
+                      <p className="text-green-100 text-sm">{clientesPagados.K2.items.length} {clientesPagados.K2.items.length === 1 ? 'pago' : 'pagos'}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-green-100 text-sm">Total Recogido</p>
+                    <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K2.total)}</p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left text-gray-500">
+                    <thead className="text-xs text-white uppercase bg-slate-800">
+                      <tr>
+                        <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
+                        <th scope="col" className="px-4 py-3">Cliente</th>
+                        <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
+                        <th scope="col" className="px-4 py-3 text-center">Cuota</th>
+                        <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                        <th scope="col" className="px-4 py-3 text-center">Multa</th>
+                        <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
+                        <th scope="col" className="px-4 py-3 text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {clientesPagados.K2.items.map((item, index) => (
+                        <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-green-50 hover:bg-green-100">
+                          <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
+                            {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
+                              <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
+                              <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
+                                <Phone className="h-3 w-3" />
+                                <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono || 'N/A'}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
+                                <MapPin className="h-3 w-3" />
+                                {item.clienteBarrio || 'Sin barrio'}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 font-bold text-green-600 text-base">
+                            {item.montoPagado > 0 ? formatearMoneda(item.montoPagado) : <span className="text-gray-400">-</span>}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            {item.nroCuota ? (
+                              <span className="bg-green-200 text-green-800 px-2 py-1 rounded font-medium">
+                                #{item.nroCuota}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            {item.tipoPago ? (
+                              <span className={`px-2 py-1 rounded font-medium ${item.tipoPago === 'completo'
+                                ? 'bg-green-200 text-green-800'
+                                : 'bg-yellow-200 text-yellow-800'
+                                }`}>
+                                {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            {item.tieneMulta ? (
+                              <span className="bg-red-200 text-red-800 px-2 py-1 rounded font-medium text-xs">
+                                {item.multaMotivo || 'Multa'}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center font-bold">
+                            {item.montoPagadoMulta > 0 ? (
+                              <span className="text-orange-600">{formatearMoneda(item.montoPagadoMulta)}</span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <button
+                              onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
+                              className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
+                            >
+                              Ver Detalle
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Card K3 - Mostrar para administradores, CEO y domiciliarios de Buga */}
+            {(esDomiciliarioBuga || esAdminOCeo) && clientesPagados.K3.items.length > 0 && (
+              <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+                <div className="bg-orange-600 text-white px-6 py-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-white/20 p-2 rounded-lg">
+                      <Users className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold">Cartera K3</h3>
+                      <p className="text-orange-100 text-sm">{clientesPagados.K3.items.length} {clientesPagados.K3.items.length === 1 ? 'pago' : 'pagos'}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-orange-100 text-sm">Total Recogido</p>
+                    <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K3.total)}</p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left text-gray-500">
+                    <thead className="text-xs text-white uppercase bg-slate-800">
+                      <tr>
+                        <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
+                        <th scope="col" className="px-4 py-3">Cliente</th>
+                        <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
+                        <th scope="col" className="px-4 py-3 text-center">Cuota</th>
+                        <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                        <th scope="col" className="px-4 py-3 text-center">Multa</th>
+                        <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
+                        <th scope="col" className="px-4 py-3 text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {clientesPagados.K3.items.map((item, index) => (
+                        <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-orange-50 hover:bg-orange-100">
+                          <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
+                            {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
+                              <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
+                              <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
+                                <Phone className="h-3 w-3" />
+                                <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono || 'N/A'}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
+                                <MapPin className="h-3 w-3" />
+                                {item.clienteBarrio || 'Sin barrio'}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 font-bold text-green-600 text-base">
+                            {item.montoPagado > 0 ? formatearMoneda(item.montoPagado) : <span className="text-gray-400">-</span>}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            {item.nroCuota ? (
+                              <span className="bg-orange-200 text-orange-800 px-2 py-1 rounded font-medium">
+                                #{item.nroCuota}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            {item.tipoPago ? (
+                              <span className={`px-2 py-1 rounded font-medium ${item.tipoPago === 'completo'
+                                ? 'bg-green-200 text-green-800'
+                                : 'bg-yellow-200 text-yellow-800'
+                                }`}>
+                                {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            {item.tieneMulta ? (
+                              <span className="bg-red-200 text-red-800 px-2 py-1 rounded font-medium text-xs">
+                                {item.multaMotivo || 'Multa'}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center font-bold">
+                            {item.montoPagadoMulta > 0 ? (
+                              <span className="text-orange-600">{formatearMoneda(item.montoPagadoMulta)}</span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <button
+                              onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
+                              className="text-orange-600 hover:text-orange-800 font-medium hover:underline text-sm"
+                            >
+                              Ver Detalle
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
-          
-          {/* Card K1 - Mostrar para administradores, CEO y domiciliarios de Tuluá */}
-          {!esDomiciliarioBuga && clientesPagados.K1.items.length > 0 && (
-            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-              <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white/20 p-2 rounded-lg">
-                    <Users className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold">Cartera K1</h3>
-                    <p className="text-blue-100 text-sm">{clientesPagados.K1.items.length} {clientesPagados.K1.items.length === 1 ? 'pago' : 'pagos'}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-blue-100 text-sm">Total Recogido</p>
-                  <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K1.total)}</p>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left text-gray-500">
-                  <thead className="text-xs text-white uppercase bg-slate-800">
-                    <tr>
-                      <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
-                      <th scope="col" className="px-4 py-3">Cliente</th>
-                      <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
-                      <th scope="col" className="px-4 py-3 text-center">Cuota</th>
-                      <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
-                      <th scope="col" className="px-4 py-3 text-center">Multa</th>
-                      <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
-                      <th scope="col" className="px-4 py-3 text-center">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {clientesPagados.K1.items.map((item, index) => (
-                      <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-blue-50 hover:bg-blue-100">
-                        <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
-                          {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
-                            <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
-                            <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
-                              <Phone className="h-3 w-3" />
-                              <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono || 'N/A'}</span>
-                            </div>
-                            <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
-                              <MapPin className="h-3 w-3" />
-                              {item.clienteBarrio || 'Sin barrio'}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 font-bold text-green-600 text-base">
-                          {item.montoPagado > 0 ? formatearMoneda(item.montoPagado) : <span className="text-gray-400">-</span>}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.nroCuota ? (
-                            <span className="bg-blue-200 text-blue-800 px-2 py-1 rounded font-medium">
-                              #{item.nroCuota}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.tipoPago ? (
-                            <span className={`px-2 py-1 rounded font-medium ${
-                              item.tipoPago === 'completo' 
-                                ? 'bg-green-200 text-green-800' 
-                                : 'bg-yellow-200 text-yellow-800'
-                            }`}>
-                              {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.tieneMulta ? (
-                            <span className="bg-red-200 text-red-800 px-2 py-1 rounded font-medium text-xs">
-                              {item.multaMotivo || 'Multa'}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center font-bold">
-                          {item.montoPagadoMulta > 0 ? (
-                            <span className="text-orange-600">{formatearMoneda(item.montoPagadoMulta)}</span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <button
-                            onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
-                            className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
-                          >
-                            Ver Detalle
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Card K2 - Mostrar para administradores, CEO y domiciliarios de Tuluá */}
-          {!esDomiciliarioBuga && clientesPagados.K2.items.length > 0 && (
-            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-              <div className="bg-green-600 text-white px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white/20 p-2 rounded-lg">
-                    <Users className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold">Cartera K2</h3>
-                    <p className="text-green-100 text-sm">{clientesPagados.K2.items.length} {clientesPagados.K2.items.length === 1 ? 'pago' : 'pagos'}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-green-100 text-sm">Total Recogido</p>
-                  <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K2.total)}</p>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left text-gray-500">
-                  <thead className="text-xs text-white uppercase bg-slate-800">
-                    <tr>
-                      <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
-                      <th scope="col" className="px-4 py-3">Cliente</th>
-                      <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
-                      <th scope="col" className="px-4 py-3 text-center">Cuota</th>
-                      <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
-                      <th scope="col" className="px-4 py-3 text-center">Multa</th>
-                      <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
-                      <th scope="col" className="px-4 py-3 text-center">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {clientesPagados.K2.items.map((item, index) => (
-                      <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-green-50 hover:bg-green-100">
-                        <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
-                          {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
-                            <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
-                            <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
-                              <Phone className="h-3 w-3" />
-                              <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono || 'N/A'}</span>
-                            </div>
-                            <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
-                              <MapPin className="h-3 w-3" />
-                              {item.clienteBarrio || 'Sin barrio'}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 font-bold text-green-600 text-base">
-                          {item.montoPagado > 0 ? formatearMoneda(item.montoPagado) : <span className="text-gray-400">-</span>}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.nroCuota ? (
-                            <span className="bg-green-200 text-green-800 px-2 py-1 rounded font-medium">
-                              #{item.nroCuota}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.tipoPago ? (
-                            <span className={`px-2 py-1 rounded font-medium ${
-                              item.tipoPago === 'completo' 
-                                ? 'bg-green-200 text-green-800' 
-                                : 'bg-yellow-200 text-yellow-800'
-                            }`}>
-                              {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.tieneMulta ? (
-                            <span className="bg-red-200 text-red-800 px-2 py-1 rounded font-medium text-xs">
-                              {item.multaMotivo || 'Multa'}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center font-bold">
-                          {item.montoPagadoMulta > 0 ? (
-                            <span className="text-orange-600">{formatearMoneda(item.montoPagadoMulta)}</span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <button
-                            onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
-                            className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
-                          >
-                            Ver Detalle
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Card K3 - Mostrar para administradores, CEO y domiciliarios de Buga */}
-          {(esDomiciliarioBuga || esAdminOCeo) && clientesPagados.K3.items.length > 0 && (
-            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-              <div className="bg-orange-600 text-white px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white/20 p-2 rounded-lg">
-                    <Users className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold">Cartera K3</h3>
-                    <p className="text-orange-100 text-sm">{clientesPagados.K3.items.length} {clientesPagados.K3.items.length === 1 ? 'pago' : 'pagos'}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-orange-100 text-sm">Total Recogido</p>
-                  <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K3.total)}</p>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left text-gray-500">
-                  <thead className="text-xs text-white uppercase bg-slate-800">
-                    <tr>
-                      <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
-                      <th scope="col" className="px-4 py-3">Cliente</th>
-                      <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
-                      <th scope="col" className="px-4 py-3 text-center">Cuota</th>
-                      <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
-                      <th scope="col" className="px-4 py-3 text-center">Multa</th>
-                      <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
-                      <th scope="col" className="px-4 py-3 text-center">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {clientesPagados.K3.items.map((item, index) => (
-                      <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-orange-50 hover:bg-orange-100">
-                        <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
-                          {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
-                            <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
-                            <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
-                              <Phone className="h-3 w-3" />
-                              <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono || 'N/A'}</span>
-                            </div>
-                            <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
-                              <MapPin className="h-3 w-3" />
-                              {item.clienteBarrio || 'Sin barrio'}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 font-bold text-green-600 text-base">
-                          {item.montoPagado > 0 ? formatearMoneda(item.montoPagado) : <span className="text-gray-400">-</span>}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.nroCuota ? (
-                            <span className="bg-orange-200 text-orange-800 px-2 py-1 rounded font-medium">
-                              #{item.nroCuota}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.tipoPago ? (
-                            <span className={`px-2 py-1 rounded font-medium ${
-                              item.tipoPago === 'completo' 
-                                ? 'bg-green-200 text-green-800' 
-                                : 'bg-yellow-200 text-yellow-800'
-                            }`}>
-                              {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.tieneMulta ? (
-                            <span className="bg-red-200 text-red-800 px-2 py-1 rounded font-medium text-xs">
-                              {item.multaMotivo || 'Multa'}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center font-bold">
-                          {item.montoPagadoMulta > 0 ? (
-                            <span className="text-orange-600">{formatearMoneda(item.montoPagadoMulta)}</span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <button
-                            onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
-                            className="text-orange-600 hover:text-orange-800 font-medium hover:underline text-sm"
-                          >
-                            Ver Detalle
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+        )}
 
       {/* Modal Detalle */}
       {creditoSeleccionado && clienteSeleccionado && (
@@ -1492,6 +1526,16 @@ const Rutas = () => {
           }}
         />
       )}
+
+      {/* Modal para Motivo de Prórroga */}
+      <MotivoProrrogaModal
+        isOpen={modalProrrogaOpen}
+        onClose={() => {
+          setModalProrrogaOpen(false);
+          setDatosProrrogaPendiente(null);
+        }}
+        onConfirm={handleConfirmarProrroga}
+      />
     </div>
   );
 };

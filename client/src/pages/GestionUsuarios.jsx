@@ -117,7 +117,8 @@ const GestionUsuarios = () => {
                 role: editingUser.role,
                 activo: editingUser.activo,
                 ...(editingUser.password && { password: editingUser.password }), // Add password if exists
-                ...(editingUser.role === 'domiciliario' && editingUser.ciudad && { ciudad: editingUser.ciudad }) // Add ciudad if domiciliario
+                ...(editingUser.role === 'domiciliario' && editingUser.ciudad && { ciudad: editingUser.ciudad }), // Add ciudad if domiciliario
+                ...(editingUser.role === 'domiciliario' && { ocultarProrroga: editingUser.ocultarProrroga }) // Add ocultarProrroga if domiciliario
             };
 
             const response = await api.put(`/personas/${editingUser.id}`, payload);
@@ -365,14 +366,33 @@ const GestionUsuarios = () => {
                             </div>
 
                             {editingUser.role === 'domiciliario' && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Ciudad</label>
-                                    <select name="ciudad" value={editingUser.ciudad || ''} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500">
-                                        <option value="">Seleccione una ciudad</option>
-                                        <option value="Tuluá">Tuluá</option>
-                                        <option value="Guadalajara de Buga">Guadalajara de Buga</option>
-                                    </select>
-                                </div>
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Ciudad</label>
+                                        <select name="ciudad" value={editingUser.ciudad || ''} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500">
+                                            <option value="">Seleccione una ciudad</option>
+                                            <option value="Tuluá">Tuluá</option>
+                                            <option value="Guadalajara de Buga">Guadalajara de Buga</option>
+                                        </select>
+                                    </div>
+                                    <div className="mt-4">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Ocultar fecha de prórroga</label>
+                                        <select
+                                            name="ocultarProrroga"
+                                            value={editingUser.ocultarProrroga === undefined ? true : editingUser.ocultarProrroga}
+                                            onChange={(e) => {
+                                                setEditingUser(prev => ({ ...prev, ocultarProrroga: e.target.value === 'true' }));
+                                            }}
+                                            className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500"
+                                        >
+                                            <option value="true">Sí (Ocultar)</option>
+                                            <option value="false">No (Mostrar)</option>
+                                        </select>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Si seleccionas "Sí", el botón de prórroga no aparecerá para este usuario.
+                                        </p>
+                                    </div>
+                                </>
                             )}
 
                             <div>

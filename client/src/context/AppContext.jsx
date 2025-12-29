@@ -25,7 +25,7 @@ export const useApp = () => {
 };
 
 export const AppProvider = ({ children }) => {
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading, user } = useAuth();
   const [clientes, setClientes] = useState([]);
   const [movimientosCaja, setMovimientosCaja] = useState([]);
   const [alertas, setAlertas] = useState([]);
@@ -47,16 +47,19 @@ export const AppProvider = ({ children }) => {
         setClientes(clientesRes.data);
       }
 
-      // Cargar movimientos de caja
-      const movimientosRes = await api.get('/movimientos-caja');
-      if (movimientosRes.success) {
-        setMovimientosCaja(movimientosRes.data);
-      }
+      // Cargar movimientos de caja (Solo si tiene permiso o no es domiciliario)
+      // Nota: Domiciliarios no ven caja según PERMISSIONS en Persona.js
+      if (user && user.role !== 'domiciliario') {
+        const movimientosRes = await api.get('/movimientos-caja');
+        if (movimientosRes.success) {
+          setMovimientosCaja(movimientosRes.data);
+        }
 
-      // Cargar alertas
-      const alertasRes = await api.get('/alertas');
-      if (alertasRes.success) {
-        setAlertas(alertasRes.data);
+        // Cargar alertas (Solo si tiene permiso o no es domiciliario)
+        const alertasRes = await api.get('/alertas');
+        if (alertasRes.success) {
+          setAlertas(alertasRes.data);
+        }
       }
     } catch (error) {
       // Si es error de autenticación, no hacer nada (el usuario será redirigido)
@@ -583,7 +586,15 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const eliminarNota = async () => { /* Implementar DELETE si necesario */ };
+  const eliminarNota = async (clienteId, creditoId, notaId) => {
+    try {
+      const response = await api.delete(`/creditos/${creditoId}/notas/${notaId}`);
+      if (response.success) await fetchData();
+    } catch (error) {
+      console.error('Error eliminando nota:', error);
+      throw error;
+    }
+  };
 
   // --- CAJA ---
 

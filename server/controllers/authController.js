@@ -62,7 +62,8 @@ export const login = async (req, res, next) => {
       role: persona.role,
       permissions: persona.getPermissions(),
       ultimoAcceso: persona.ultimoAcceso,
-      ciudad: persona.ciudad || null
+      ciudad: persona.ciudad || null,
+      ocultarProrroga: persona.ocultarProrroga
     };
 
     res.status(200).json({
@@ -100,7 +101,8 @@ export const getMe = async (req, res, next) => {
       permissions: persona.getPermissions(),
       ultimoAcceso: persona.ultimoAcceso,
       fechaCreacion: persona.fechaCreacion,
-      ciudad: persona.ciudad || null
+      ciudad: persona.ciudad || null,
+      ocultarProrroga: persona.ocultarProrroga
     };
 
     res.status(200).json({
