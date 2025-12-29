@@ -130,7 +130,7 @@ export const createMovimientoCaja = async (req, res, next) => {
     }
     if (movimientoData.fecha) {
       const fecha = new Date(movimientoData.fecha);
-      fecha.setHours(0, 0, 0, 0);
+      fecha.setHours(12, 0, 0, 0);
       movimientoData.fecha = fecha;
     }
     if (!movimientoData.tipoMovimiento) {
