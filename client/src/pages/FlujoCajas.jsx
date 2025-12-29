@@ -995,7 +995,12 @@ const FlujoCajas = () => {
   const irHoy = useCallback(() => setFechaSeleccionada(hoy), [hoy]);
   const irMañana = useCallback(() => setFechaSeleccionada(prev => addDays(prev, 1)), []);
   const cambiarFecha = useCallback((e) => {
-    const nuevaFecha = new Date(e.target.value);
+    // Solución al problema de timezone: crear la fecha localmente
+    // new Date('2025-12-30') crea un UTC 00:00 que en local puede ser día anterior
+    // new Date(y, m, d) crea fecha local
+    if (!e.target.value) return;
+    const [year, month, day] = e.target.value.split('-').map(Number);
+    const nuevaFecha = new Date(year, month - 1, day);
     setFechaSeleccionada(startOfDay(nuevaFecha));
   }, []);
 
