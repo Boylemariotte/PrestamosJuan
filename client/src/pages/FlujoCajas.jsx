@@ -406,12 +406,26 @@ const CajaSection = ({
 
   // Agrupar todos los movimientos en filas: emparejar inicios de caja, gastos y préstamos
   const filasMovimientos = useMemo(() => {
-    const iniciosCaja = [...movimientos].filter(mov => mov.tipo === 'inicioCaja')
+    let iniciosCaja = [...movimientos].filter(mov => mov.tipo === 'inicioCaja')
       .sort((a, b) => {
         const fechaA = new Date(a.fechaCreacion || a.id);
         const fechaB = new Date(b.fechaCreacion || b.id);
         return fechaA - fechaB;
       });
+
+    // Inyectar Saldo Anterior como un movimiento virtual de "Ingreso"
+    if (saldoAnterior > 0) {
+      const fechaAnterior = subDays(new Date(fechaSeleccionada), 1);
+      const movimientoSaldoAnterior = {
+        id: 'saldo-anterior-virtual',
+        tipo: 'inicioCaja',
+        valor: saldoAnterior,
+        descripcion: `Ingreso caja dia ${format(fechaAnterior, 'yyyy-MM-dd')}`,
+        isVirtual: true // Flag para identificar que no es de BD y no permitir borrar
+      };
+      // Agregar al principio
+      iniciosCaja = [movimientoSaldoAnterior, ...iniciosCaja];
+    }
 
     const gastos = [...movimientos].filter(mov => mov.tipo === 'gasto')
       .sort((a, b) => {
@@ -441,7 +455,7 @@ const CajaSection = ({
     }
 
     return filas;
-  }, [movimientos]);
+  }, [movimientos, saldoAnterior, fechaSeleccionada]);
 
   // Calcular totales
   const totales = useMemo(() => {
@@ -497,7 +511,10 @@ const CajaSection = ({
       mov.caja === numero && mov.tipoMovimiento === 'flujoCaja'
     );
 
-    let saldoAcumulado = 0;
+    // Inicializar con saldo anterior si existe, ya que ahora se visualiza como un ingreso
+    // NOTA: Si saldoAnterior ya incluye el cálculo de días previos, sumarlo aquí es correcto
+    // para que coincida con la visualización de la tabla que inicia con ese saldo.
+    let saldoAcumulado = saldoAnterior > 0 ? parseFloat(saldoAnterior) : 0;
 
     todosMovimientosCaja.forEach(mov => {
       if (mov.tipo === 'inicioCaja') {
@@ -527,7 +544,7 @@ const CajaSection = ({
     });
 
     return saldoAcumulado;
-  }, [movimientosCaja, numero]);
+  }, [movimientosCaja, numero, saldoAnterior]);
 
   // Calcular total de filas para el rowSpan
   // Ya no se usa rowSpan, pero se mantiene por si acaso
@@ -665,13 +682,15 @@ const CajaSection = ({
                               {inicioCaja.descripcion || 'Sin descripción'}
                             </div>
                           </div>
-                          <button
-                            onClick={() => onEliminarMovimiento(inicioCaja.id)}
-                            className="text-red-500 hover:text-red-700 ml-2"
-                            title="Eliminar inicio de caja"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          {!inicioCaja.isVirtual && (
+                            <button
+                              onClick={() => onEliminarMovimiento(inicioCaja.id)}
+                              className="text-red-500 hover:text-red-700 ml-2"
+                              title="Eliminar inicio de caja"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                       ) : null}
                     </td>
@@ -748,43 +767,54 @@ const CajaSection = ({
               })}
 
               {/* Fila de totales (estilo de la maqueta) */}
-              {
-                <tr className="bg-gray-100 border-t-2 border-gray-500 font-bold">
-                  <td className="border border-gray-400 px-4 py-3">
-                    <div className="text-sm text-gray-600">Saldo Final:</div>
-                    <div className="text-base font-bold text-blue-600">
-                      {formatearMoneda(saldoAcumulado)}
-                    </div>
-                  </td>
-                  <td className="border border-gray-400 px-4 py-3">
-                    <div className="text-sm text-gray-600">Total Gastos:</div>
-                    <div className="text-base font-bold text-red-600">
-                      -{formatearMoneda(totales.gastos)}
-                    </div>
-                  </td>
-                  <td className="border border-gray-400 px-4 py-3">
-                    {/* Celda vacía para Préstamos y RF */}
-                  </td>
-                  <td className="border border-gray-400 px-4 py-3">
-                    <div className="text-sm text-gray-600">Total Préstamos:</div>
-                    <div className="text-base font-bold text-blue-600">
-                      {formatearMoneda(totales.por)}
-                    </div>
-                  </td>
-                  <td className="border border-gray-400 px-4 py-3">
-                    <div className="text-sm text-gray-600">Total Papelería:</div>
-                    <div className="text-base font-bold text-orange-600">
-                      -{formatearMoneda(totales.pp)}
-                    </div>
-                  </td>
-                  <td className="border border-gray-400 px-4 py-3">
-                    <div className="text-sm text-gray-600">Total Entregado:</div>
-                    <div className="text-base font-bold text-green-600">
-                      -{formatearMoneda(totales.e)}
-                    </div>
-                  </td>
-                </tr>
-              }
+              {/* Nueva fila: Saldo Total Caja */}
+              <tr className="bg-blue-50 border-t-2 border-gray-400 font-bold">
+                <td className="border border-gray-400 px-4 py-3">
+                  <div className="text-sm text-gray-600">Saldo Total Caja:</div>
+                  <div className="text-base font-bold text-green-700">
+                    {formatearMoneda(totales.iniciosCaja)}
+                  </div>
+                </td>
+                <td colSpan="5" className="border border-gray-400 px-4 py-3 bg-gray-50">
+                  {/* Espacio vacío para mantener estética */}
+                </td>
+              </tr>
+
+              <tr className="bg-gray-100 border-t-2 border-gray-500 font-bold">
+                <td className="border border-gray-400 px-4 py-3">
+                  <div className="text-sm text-gray-600">Saldo Final:</div>
+                  <div className="text-base font-bold text-blue-600">
+                    {formatearMoneda(saldoAcumulado)}
+                  </div>
+                </td>
+                <td className="border border-gray-400 px-4 py-3">
+                  <div className="text-sm text-gray-600">Total Gastos:</div>
+                  <div className="text-base font-bold text-red-600">
+                    -{formatearMoneda(totales.gastos)}
+                  </div>
+                </td>
+                <td className="border border-gray-400 px-4 py-3">
+                  {/* Celda vacía para Préstamos y RF */}
+                </td>
+                <td className="border border-gray-400 px-4 py-3">
+                  <div className="text-sm text-gray-600">Total Préstamos:</div>
+                  <div className="text-base font-bold text-blue-600">
+                    {formatearMoneda(totales.por)}
+                  </div>
+                </td>
+                <td className="border border-gray-400 px-4 py-3">
+                  <div className="text-sm text-gray-600">Total Papelería:</div>
+                  <div className="text-base font-bold text-orange-600">
+                    -{formatearMoneda(totales.pp)}
+                  </div>
+                </td>
+                <td className="border border-gray-400 px-4 py-3">
+                  <div className="text-sm text-gray-600">Total Entregado:</div>
+                  <div className="text-base font-bold text-green-600">
+                    -{formatearMoneda(totales.e)}
+                  </div>
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -820,7 +850,7 @@ const CajaSection = ({
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 
