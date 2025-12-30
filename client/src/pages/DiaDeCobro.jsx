@@ -966,7 +966,7 @@ const DiaDeCobro = () => {
                 <td className="px-4 py-4 text-center">
                   <input
                     type="text"
-                    className="w-16 text-center border border-gray-300 rounded-md text-sm py-1 px-1"
+                    className="w-16 text-center border-2 border-gray-500 rounded-md text-base font-bold py-1 px-1 text-gray-900 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none"
                     value={valorOrden}
                     onChange={(e) => onCambioOrden(item.clienteId, e.target.value)}
                   />
@@ -1038,12 +1038,15 @@ const DiaDeCobro = () => {
                           alert('Error al actualizar RF');
                         }
                       }}
-                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex items-center gap-1 min-w-[70px] justify-between"
+                      className={`px-3 py-1.5 text-sm border rounded-md transition-all flex items-center gap-1 min-w-[70px] justify-between focus:outline-none focus:ring-2 focus:ring-offset-1 ${item.clienteRF === 'RF'
+                          ? 'bg-purple-700 border-purple-800 text-white hover:bg-purple-800 focus:ring-purple-500'
+                          : 'bg-white border-gray-300 text-gray-400 hover:bg-gray-50 focus:ring-blue-500'
+                        }`}
                     >
-                      <span className={item.clienteRF === 'RF' ? 'font-medium text-purple-700' : 'text-gray-400'}>
+                      <span className="font-bold">
                         {item.clienteRF === 'RF' ? 'RF' : '-'}
                       </span>
-                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                      <ChevronDown className={`h-4 w-4 ${item.clienteRF === 'RF' ? 'text-white' : 'text-gray-400'}`} />
                     </button>
                   </div>
                 </td>

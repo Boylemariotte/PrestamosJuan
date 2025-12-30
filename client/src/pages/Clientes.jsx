@@ -863,12 +863,15 @@ const Clientes = () => {
                                 alert('Error al actualizar RF');
                               }
                             }}
-                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex items-center gap-1 min-w-[80px] justify-between"
+                            className={`px-3 py-1.5 text-sm border rounded-md transition-all flex items-center gap-1 min-w-[80px] justify-between focus:outline-none focus:ring-2 focus:ring-offset-1 ${card.cliente.rf === 'RF'
+                                ? 'bg-purple-700 border-purple-800 text-white hover:bg-purple-800 focus:ring-purple-500'
+                                : 'bg-white border-gray-300 text-gray-400 hover:bg-gray-50 focus:ring-blue-500'
+                              }`}
                           >
-                            <span className={card.cliente.rf === 'RF' ? 'font-medium text-purple-700' : 'text-gray-400'}>
+                            <span className="font-bold">
                               {card.cliente.rf === 'RF' ? 'RF' : '-'}
                             </span>
-                            <ChevronDown className="h-4 w-4 text-gray-400" />
+                            <ChevronDown className={`h-4 w-4 ${card.cliente.rf === 'RF' ? 'text-white' : 'text-gray-400'}`} />
                           </button>
                         </div>
                       )}
