@@ -768,50 +768,78 @@ const CajaSection = ({
 
               {/* Fila de totales (estilo de la maqueta) */}
               {/* Nueva fila: Saldo Total Caja */}
-              <tr className="bg-blue-50 border-t-2 border-gray-400 font-bold">
-                <td className="border border-gray-400 px-4 py-3">
-                  <div className="text-sm text-gray-600">Saldo Total Caja:</div>
-                  <div className="text-base font-bold text-green-700">
-                    {formatearMoneda(totales.iniciosCaja)}
-                  </div>
+              {/* Nueva estructura reordenada */}
+              {/* FILA 1: Encabezados de Totales por Columna */}
+              <tr className="bg-gray-100 border-t-2 border-gray-500">
+                <td className="border border-gray-400 px-4 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide">
+                  Saldo Total Ingresos Caja
                 </td>
-                <td colSpan="5" className="border border-gray-400 px-4 py-3 bg-gray-50">
-                  {/* Espacio vacío para mantener estética */}
+                <td className="border border-gray-400 px-4 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide">
+                  Total Gastos
+                </td>
+                <td className="border border-gray-400 px-4 py-2">
+                  {/* Vacío */}
+                </td>
+                <td className="border border-gray-400 px-4 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide">
+                  Total Préstamos
+                </td>
+                <td className="border border-gray-400 px-4 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide">
+                  Total Papelería
+                </td>
+                <td className="border border-gray-400 px-4 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide">
+                  Total Entregado
                 </td>
               </tr>
 
-              <tr className="bg-gray-100 border-t-2 border-gray-500 font-bold">
+              {/* FILA 2: Valores de Totales por Columna */}
+              <tr className="bg-white">
                 <td className="border border-gray-400 px-4 py-3">
-                  <div className="text-sm text-gray-600">Saldo Final:</div>
-                  <div className="text-base font-bold text-blue-600">
-                    {formatearMoneda(saldoAcumulado)}
+                  <div className="text-lg font-bold text-green-700">
+                    {formatearMoneda(totales.iniciosCaja)}
                   </div>
                 </td>
                 <td className="border border-gray-400 px-4 py-3">
-                  <div className="text-sm text-gray-600">Total Gastos:</div>
-                  <div className="text-base font-bold text-red-600">
+                  <div className="text-lg font-bold text-red-600">
                     -{formatearMoneda(totales.gastos)}
                   </div>
                 </td>
                 <td className="border border-gray-400 px-4 py-3">
-                  {/* Celda vacía para Préstamos y RF */}
+                  {/* Celda vacía */}
                 </td>
                 <td className="border border-gray-400 px-4 py-3">
-                  <div className="text-sm text-gray-600">Total Préstamos:</div>
-                  <div className="text-base font-bold text-blue-600">
+                  <div className="text-lg font-bold text-blue-600">
                     {formatearMoneda(totales.por)}
                   </div>
                 </td>
                 <td className="border border-gray-400 px-4 py-3">
-                  <div className="text-sm text-gray-600">Total Papelería:</div>
-                  <div className="text-base font-bold text-orange-600">
+                  <div className="text-lg font-bold text-orange-600">
                     -{formatearMoneda(totales.pp)}
                   </div>
                 </td>
                 <td className="border border-gray-400 px-4 py-3">
-                  <div className="text-sm text-gray-600">Total Entregado:</div>
-                  <div className="text-base font-bold text-green-600">
+                  <div className="text-lg font-bold text-green-600">
                     -{formatearMoneda(totales.e)}
+                  </div>
+                </td>
+              </tr>
+
+              {/* Separador visual */}
+              <tr className="h-4 bg-gray-200">
+                <td colSpan="6" className="border border-gray-400"></td>
+              </tr>
+
+              {/* FILA 3: Encabezado Saldo Final (Full Width) */}
+              <tr className="bg-blue-100 border-t-2 border-gray-600">
+                <td colSpan="6" className="border border-gray-400 px-4 py-2 text-center text-sm font-bold text-gray-800 uppercase tracking-wider">
+                  Saldo Final Total
+                </td>
+              </tr>
+
+              {/* FILA 4: Valor Saldo Final (Full Width) */}
+              <tr className="bg-white border-b-2 border-gray-400">
+                <td colSpan="6" className="border border-gray-400 px-4 py-4 text-center">
+                  <div className="text-3xl font-extrabold text-blue-700">
+                    {formatearMoneda(saldoAcumulado)}
                   </div>
                 </td>
               </tr>
