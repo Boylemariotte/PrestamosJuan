@@ -89,15 +89,15 @@ export const createPersona = async (req, res, next) => {
       });
     }
 
-    // Validar ciudad si el rol es domiciliario
-    if (role === 'domiciliario' && !ciudad) {
+    // Validar ciudad si el rol es domiciliario o supervisor
+    if ((role === 'domiciliario' || role === 'supervisor') && !ciudad) {
       return res.status(400).json({
         success: false,
-        error: 'La ciudad es requerida para domiciliarios'
+        error: 'La ciudad es requerida para este rol'
       });
     }
 
-    if (role === 'domiciliario' && !['Tuluá', 'Guadalajara de Buga'].includes(ciudad)) {
+    if ((role === 'domiciliario' || role === 'supervisor') && !['Tuluá', 'Guadalajara de Buga'].includes(ciudad)) {
       return res.status(400).json({
         success: false,
         error: 'La ciudad debe ser "Tuluá" o "Guadalajara de Buga"'
@@ -123,7 +123,7 @@ export const createPersona = async (req, res, next) => {
     }
 
     // Validar rol
-    if (!['domiciliario', 'administrador', 'ceo'].includes(role)) {
+    if (!['domiciliario', 'supervisor', 'administrador', 'ceo'].includes(role)) {
       return res.status(400).json({
         success: false,
         error: 'Rol inválido'
@@ -139,8 +139,8 @@ export const createPersona = async (req, res, next) => {
       role
     };
 
-    // Solo agregar ciudad si el rol es domiciliario
-    if (role === 'domiciliario') {
+    // Solo agregar ciudad si el rol es domiciliario o supervisor
+    if (role === 'domiciliario' || role === 'supervisor') {
       personaDataToCreate.ciudad = ciudad;
     }
 
@@ -157,10 +157,12 @@ export const createPersona = async (req, res, next) => {
       permissions: persona.getPermissions()
     };
 
-    // Incluir ciudad solo si es domiciliario
-    if (persona.role === 'domiciliario') {
+    // Incluir ciudad solo si es domiciliario o supervisor
+    if (persona.role === 'domiciliario' || persona.role === 'supervisor') {
       if (persona.ciudad) personaData.ciudad = persona.ciudad;
-      personaData.ocultarProrroga = persona.ocultarProrroga;
+      if (persona.role === 'domiciliario') {
+        personaData.ocultarProrroga = persona.ocultarProrroga;
+      }
     }
 
     res.status(201).json({
@@ -256,14 +258,14 @@ export const updatePersona = async (req, res, next) => {
       persona.username = username.toLowerCase();
     }
 
-    // Validar ciudad si el rol es o será domiciliario
+    // Validar ciudad si el rol es o será domiciliario o supervisor
     const nuevoRole = role || persona.role;
-    if (nuevoRole === 'domiciliario') {
+    if (nuevoRole === 'domiciliario' || nuevoRole === 'supervisor') {
       const nuevaCiudad = ciudad !== undefined ? ciudad : persona.ciudad;
       if (!nuevaCiudad) {
         return res.status(400).json({
           success: false,
-          error: 'La ciudad es requerida para domiciliarios'
+          error: 'La ciudad es requerida para este rol'
         });
       }
       if (!['Tuluá', 'Guadalajara de Buga'].includes(nuevaCiudad)) {
@@ -279,15 +281,15 @@ export const updatePersona = async (req, res, next) => {
     if (email) persona.email = email.toLowerCase();
     if (role && req.user.role === 'ceo') {
       persona.role = role;
-      // Si cambia de domiciliario a otro rol, eliminar ciudad
-      if (role !== 'domiciliario') {
+      // Si cambia a un rol que no usa ciudad, eliminar ciudad
+      if (role !== 'domiciliario' && role !== 'supervisor') {
         persona.ciudad = undefined;
       }
     }
     if (activo !== undefined && req.user.role === 'ceo') persona.activo = activo;
 
-    // Actualizar ciudad solo si el rol es domiciliario
-    if (nuevoRole === 'domiciliario' && ciudad !== undefined) {
+    // Actualizar ciudad solo si el rol es domiciliario o supervisor
+    if ((nuevoRole === 'domiciliario' || nuevoRole === 'supervisor') && ciudad !== undefined) {
       persona.ciudad = ciudad;
     }
 
@@ -308,10 +310,12 @@ export const updatePersona = async (req, res, next) => {
       permissions: persona.getPermissions()
     };
 
-    // Incluir ciudad solo si es domiciliario
-    if (persona.role === 'domiciliario') {
+    // Incluir ciudad solo si es domiciliario o supervisor
+    if (persona.role === 'domiciliario' || persona.role === 'supervisor') {
       if (persona.ciudad) personaData.ciudad = persona.ciudad;
-      personaData.ocultarProrroga = persona.ocultarProrroga;
+      if (persona.role === 'domiciliario') {
+        personaData.ocultarProrroga = persona.ocultarProrroga;
+      }
     }
 
     res.status(200).json({

@@ -209,6 +209,10 @@ const clienteSchema = new mongoose.Schema({
   fechaCreacion: {
     type: Date,
     default: Date.now
+  },
+  enSupervision: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true,
@@ -216,13 +220,16 @@ const clienteSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// Hook pre-save para asegurar que esArchivado y etiqueta siempre estén definidos
+// Hook pre-save para asegurar que esArchivado, etiqueta y enSupervision siempre estén definidos
 clienteSchema.pre('save', function (next) {
   if (this.esArchivado === undefined || this.esArchivado === null) {
     this.esArchivado = false;
   }
   if (this.etiqueta === undefined || this.etiqueta === null) {
     this.etiqueta = 'sin-etiqueta';
+  }
+  if (this.enSupervision === undefined || this.enSupervision === null) {
+    this.enSupervision = false;
   }
   next();
 });

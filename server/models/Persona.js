@@ -65,6 +65,27 @@ export const PERMISSIONS = {
     limpiarDatos: true,
     verCaja: true,
     gestionarCaja: true
+  },
+  supervisor: {
+    verClientes: true,
+    verCreditosActivos: true,
+    verCreditosFinalizados: true,
+    registrarPagos: false,
+    agregarNotas: true,
+    agregarMultas: false,
+    crearClientes: false,
+    editarClientes: true,
+    eliminarClientes: false,
+    crearCreditos: false,
+    editarCreditos: false,
+    eliminarCreditos: false,
+    verEstadisticas: false,
+    verConfiguracion: false,
+    exportarDatos: false,
+    importarDatos: false,
+    limpiarDatos: false,
+    verCaja: false,
+    gestionarCaja: false
   }
 };
 
@@ -98,7 +119,7 @@ const personaSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['domiciliario', 'administrador', 'ceo'],
+    enum: ['domiciliario', 'supervisor', 'administrador', 'ceo'],
     required: [true, 'El rol es requerido'],
     default: 'domiciliario'
   },
@@ -110,7 +131,7 @@ const personaSchema = new mongoose.Schema({
     type: String,
     enum: ['Tuluá', 'Guadalajara de Buga'],
     required: function () {
-      return this.role === 'domiciliario';
+      return this.role === 'domiciliario' || this.role === 'supervisor';
     },
     trim: true
   },
@@ -133,8 +154,6 @@ const personaSchema = new mongoose.Schema({
 });
 
 // Índices
-personaSchema.index({ username: 1 });
-personaSchema.index({ email: 1 });
 personaSchema.index({ role: 1 });
 personaSchema.index({ activo: 1 });
 
@@ -169,8 +188,9 @@ personaSchema.methods.hasPermission = function (permission) {
 personaSchema.methods.canAccess = function (requiredRole) {
   const roleHierarchy = {
     domiciliario: 1,
-    administrador: 2,
-    ceo: 3
+    supervisor: 2,
+    administrador: 3,
+    ceo: 4
   };
 
   return roleHierarchy[this.role] >= roleHierarchy[requiredRole];

@@ -70,7 +70,7 @@ movimientoCajaSchema.index({ tipo: 1 });
 movimientoCajaSchema.index({ fechaCreacion: -1 });
 
 // Hook pre-save para generar id si no existe
-movimientoCajaSchema.pre('save', function(next) {
+movimientoCajaSchema.pre('save', function (next) {
   if (!this.id) {
     this.id = this._id?.toString() || `MOV-${new mongoose.Types.ObjectId().toString()}`;
   }
@@ -80,8 +80,7 @@ movimientoCajaSchema.pre('save', function(next) {
   next();
 });
 
-// Índices
-movimientoCajaSchema.index({ id: 1 }); // Índice para búsquedas por id
+// El índice para id se crea automáticamente por unique: true en la definición del campo
 
 const MovimientoCaja = mongoose.model('MovimientoCaja', movimientoCajaSchema);
 

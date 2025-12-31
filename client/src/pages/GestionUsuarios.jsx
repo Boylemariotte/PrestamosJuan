@@ -59,15 +59,15 @@ const GestionUsuarios = () => {
         const { name, value } = e.target;
         if (isEditModalOpen) {
             const updatedUser = { ...editingUser, [name]: value };
-            // Si se cambia el rol y no es domiciliario, limpiar ciudad
-            if (name === 'role' && value !== 'domiciliario') {
+            // Si se cambia el rol y no es domiciliario ni supervisor, limpiar ciudad
+            if (name === 'role' && value !== 'domiciliario' && value !== 'supervisor') {
                 updatedUser.ciudad = '';
             }
             setEditingUser(updatedUser);
         } else {
             const updatedData = { ...formData, [name]: value };
-            // Si se cambia el rol y no es domiciliario, limpiar ciudad
-            if (name === 'role' && value !== 'domiciliario') {
+            // Si se cambia el rol y no es domiciliario ni supervisor, limpiar ciudad
+            if (name === 'role' && value !== 'domiciliario' && value !== 'supervisor') {
                 updatedData.ciudad = '';
             }
             setFormData(updatedData);
@@ -83,10 +83,10 @@ const GestionUsuarios = () => {
         setSuccess('');
 
         try {
-            // Preparar datos para enviar, incluyendo ciudad solo si es domiciliario
+            // Preparar datos para enviar, incluyendo ciudad solo si es domiciliario o supervisor
             const dataToSend = {
                 ...formData,
-                ...(formData.role !== 'domiciliario' && { ciudad: undefined })
+                ...((formData.role !== 'domiciliario' && formData.role !== 'supervisor') && { ciudad: undefined })
             };
             const response = await api.post('/personas', dataToSend);
             if (response.success) {
@@ -129,7 +129,7 @@ const GestionUsuarios = () => {
                 role: editingUser.role,
                 activo: editingUser.activo,
                 ...(editingUser.password && { password: editingUser.password }), // Add password if exists
-                ...(editingUser.role === 'domiciliario' && editingUser.ciudad && { ciudad: editingUser.ciudad }), // Add ciudad if domiciliario
+                ...((editingUser.role === 'domiciliario' || editingUser.role === 'supervisor') && editingUser.ciudad && { ciudad: editingUser.ciudad }), // Add ciudad if domiciliario/supervisor
                 ...(editingUser.role === 'domiciliario' && { ocultarProrroga: editingUser.ocultarProrroga }) // Add ocultarProrroga if domiciliario
             };
 
@@ -219,7 +219,7 @@ const GestionUsuarios = () => {
                                                     <p className="font-medium text-gray-900">{user.nombre}</p>
                                                     <p className="text-xs text-gray-500">{user.email}</p>
                                                     <p className="text-xs text-blue-500">@{user.username}</p>
-                                                    {user.role === 'domiciliario' && user.ciudad && (
+                                                    {(user.role === 'domiciliario' || user.role === 'supervisor') && user.ciudad && (
                                                         <p className="text-xs text-gray-400 mt-1">📍 {user.ciudad}</p>
                                                     )}
                                                 </td>
@@ -227,7 +227,8 @@ const GestionUsuarios = () => {
                                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
                                                         ${user.role === 'ceo' ? 'bg-purple-100 text-purple-800' :
                                                             user.role === 'administrador' ? 'bg-blue-100 text-blue-800' :
-                                                                'bg-sky-100 text-sky-800'}`}>
+                                                                user.role === 'supervisor' ? 'bg-indigo-100 text-indigo-800' :
+                                                                    'bg-sky-100 text-sky-800'}`}>
                                                         {user.role}
                                                     </span>
                                                 </td>
@@ -297,11 +298,12 @@ const GestionUsuarios = () => {
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
                                     <select name="role" value={formData.role} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500">
                                         <option value="domiciliario">Domiciliario</option>
+                                        <option value="supervisor">Supervisor</option>
                                         <option value="administrador">Administrador</option>
                                     </select>
                                 </div>
 
-                                {formData.role === 'domiciliario' && (
+                                {(formData.role === 'domiciliario' || formData.role === 'supervisor') && (
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Ciudad</label>
                                         <select name="ciudad" value={formData.ciudad} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500">
@@ -360,6 +362,7 @@ const GestionUsuarios = () => {
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
                                         <select name="role" value={editingUser.role} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500">
                                             <option value="domiciliario">Domiciliario</option>
+                                            <option value="supervisor">Supervisor</option>
                                             <option value="administrador">Administrador</option>
                                             {editingUser.role === 'ceo' && <option value="ceo">CEO</option>}
                                         </select>
@@ -381,7 +384,7 @@ const GestionUsuarios = () => {
                                     </div>
                                 </div>
 
-                                {editingUser.role === 'domiciliario' && (
+                                {(editingUser.role === 'domiciliario' || editingUser.role === 'supervisor') && (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Ciudad</label>
@@ -391,20 +394,22 @@ const GestionUsuarios = () => {
                                                 <option value="Guadalajara de Buga">Guadalajara de Buga</option>
                                             </select>
                                         </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Ocultar prórroga</label>
-                                            <select
-                                                name="ocultarProrroga"
-                                                value={editingUser.ocultarProrroga === undefined ? true : editingUser.ocultarProrroga}
-                                                onChange={(e) => {
-                                                    setEditingUser(prev => ({ ...prev, ocultarProrroga: e.target.value === 'true' }));
-                                                }}
-                                                className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500"
-                                            >
-                                                <option value="true">Sí (Ocultar)</option>
-                                                <option value="false">No (Mostrar)</option>
-                                            </select>
-                                        </div>
+                                        {editingUser.role === 'domiciliario' && (
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Ocultar prórroga</label>
+                                                <select
+                                                    name="ocultarProrroga"
+                                                    value={editingUser.ocultarProrroga === undefined ? true : editingUser.ocultarProrroga}
+                                                    onChange={(e) => {
+                                                        setEditingUser(prev => ({ ...prev, ocultarProrroga: e.target.value === 'true' }));
+                                                    }}
+                                                    className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-sky-500"
+                                                >
+                                                    <option value="true">Sí (Ocultar)</option>
+                                                    <option value="false">No (Mostrar)</option>
+                                                </select>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
