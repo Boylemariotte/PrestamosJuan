@@ -176,52 +176,93 @@ const DiaDeCobro = () => {
 
 
 
-  // Manejar cambio de número de orden con efecto cascada
-  const handleActualizarOrdenCascada = (clienteId, nuevoOrden, listaActualItems) => {
-    const numeroInicio = Number(nuevoOrden);
+  // Manejar cambio de número de orden con efecto cascada (Global para la cartera)
+  const handleActualizarOrdenCascada = (clienteId, nuevoOrden) => {
+    const numeroNuevo = parseInt(nuevoOrden, 10);
 
     // Si se borra o es inválido, solo actualizamos ese registro a vacío
-    if (nuevoOrden === '' || isNaN(numeroInicio)) {
+    if (nuevoOrden === '' || isNaN(numeroNuevo)) {
       setOrdenCobro(prev => {
         const fechaKey = fechaSeleccionadaStr;
-        const ordenFechaActual = prev[fechaKey] || {};
+        const ordenFechaActual = { ...(prev[fechaKey] || {}) };
+        ordenFechaActual[clienteId] = '';
         return {
           ...prev,
-          [fechaKey]: {
-            ...ordenFechaActual,
-            [clienteId]: ''
-          }
+          [fechaKey]: ordenFechaActual
         };
       });
       return;
     }
 
-    // Lógica de cascada
-    setOrdenCobro(prev => {
-      const fechaKey = fechaSeleccionadaStr;
-      const ordenFechaActual = { ...(prev[fechaKey] || {}) }; // Copia para mutar
-
-      // Encontrar índice del item modificado en la lista ACTUAL mostrada
-      const indexInicio = listaActualItems.findIndex(item => item.clienteId === clienteId);
-
-      if (indexInicio === -1) {
-        // Fallback por si acaso: solo actualiza el item individual
-        ordenFechaActual[clienteId] = numeroInicio;
-      } else {
-        // Actualizar el item modificado y todos los siguientes en la lista visual
-        let contador = numeroInicio;
-        for (let i = indexInicio; i < listaActualItems.length; i++) {
-          const item = listaActualItems[i];
-          ordenFechaActual[item.clienteId] = contador;
-          contador++;
-        }
-      }
-
-      return {
-        ...prev,
-        [fechaKey]: ordenFechaActual
-      };
+    // 0. Recuperar TODOS los items del día (sin importar filtros de búsqueda)
+    // Flatten datosCobro.porBarrio
+    const todosLosItems = [];
+    Object.values(datosCobro.porBarrio).forEach(lista => {
+      todosLosItems.push(...lista);
     });
+
+    // 1. Identificar cartera del cliente objetivo
+    const targetItem = todosLosItems.find(i => i.clienteId === clienteId);
+    if (!targetItem) return; // No debería suceder si el cliente está en pantalla
+
+    const carteraObjetivo = targetItem.clienteCartera;
+
+    // 2. Definir grupo de reordenamiento
+    // K1 y K2 comparten la misma secuencia numérica. K3 es independiente.
+    const esGrupoCompartido = (carteraObjetivo === 'K1' || carteraObjetivo === 'K2');
+
+    // Filtrar solo los items del grupo correspondiente
+    const itemsDelGrupo = todosLosItems.filter(i => {
+      if (esGrupoCompartido) {
+        return i.clienteCartera === 'K1' || i.clienteCartera === 'K2';
+      }
+      return i.clienteCartera === carteraObjetivo; // Caso K3 (o cualquier otra futura)
+    });
+
+    // 3. Ordenar la lista completa actual según su orden guardado (para tener la secuencia base correcta)
+    const ordenFecha = ordenCobro[fechaSeleccionadaStr] || {};
+
+    const listaOrdenada = [...itemsDelGrupo].sort((a, b) => {
+      const ordenA = ordenFecha[a.clienteId];
+      const ordenB = ordenFecha[b.clienteId];
+
+      // Valuación para sort: Si tiene orden numérico, usarlo. Si no, al final (Infinity).
+      // Usar un número grande safe en lugar de Infinity para asegurar resta correcta si se necesita
+      const valA = (ordenA === undefined || ordenA === '' || ordenA === null) ? 999999 : Number(ordenA);
+      const valB = (ordenB === undefined || ordenB === '' || ordenB === null) ? 999999 : Number(ordenB);
+
+      if (valA !== valB) return valA - valB;
+      // Fallback alfabético para consistencia en items sin orden
+      return (a.clienteNombre || '').localeCompare(b.clienteNombre || '');
+    });
+
+    // 4. Remover el item que se está moviendo de su posición original
+    const currentIndex = listaOrdenada.findIndex(i => i.clienteId === clienteId);
+    if (currentIndex === -1) return;
+
+    const [itemMovido] = listaOrdenada.splice(currentIndex, 1);
+
+    // 5. Insertar en la nueva posición deseada
+    // El usuario ingresa índice base-1. Convertir a base-0.
+    // Clampear el índice entre 0 y el final de la lista remanente
+    let targetIndex = numeroNuevo - 1;
+    if (targetIndex < 0) targetIndex = 0;
+    if (targetIndex > listaOrdenada.length) targetIndex = listaOrdenada.length;
+
+    listaOrdenada.splice(targetIndex, 0, itemMovido);
+
+    // 6. Reasignar orden secuencial (1, 2, 3...) a toda la lista reorganizada
+    const nuevoOrdenMap = { ...(ordenCobro[fechaSeleccionadaStr] || {}) };
+
+    listaOrdenada.forEach((item, index) => {
+      nuevoOrdenMap[item.clienteId] = index + 1;
+    });
+
+    // 7. Guardar estado
+    setOrdenCobro(prev => ({
+      ...prev,
+      [fechaSeleccionadaStr]: nuevoOrdenMap
+    }));
   };
 
   // Procesar cobros agrupados por BARRIO
