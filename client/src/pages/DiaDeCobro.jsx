@@ -10,7 +10,7 @@ import { es } from 'date-fns/locale';
 import { formatearMoneda, calcularTotalMultasCuota, aplicarAbonosAutomaticamente, determinarEstadoCredito, formatearFechaCorta } from '../utils/creditCalculations';
 import CreditoDetalle from '../components/Creditos/CreditoDetalle';
 import MotivoProrrogaModal from '../components/Creditos/MotivoProrrogaModal';
-import api, { prorrogaService } from '../services/api';
+import api, { prorrogaService, ordenCobroService } from '../services/api';
 
 // Componente de input local para evitar re-renderizados mientras se escribe
 const OrdenInput = ({ valorInicial, onGuardar }) => {
@@ -99,22 +99,37 @@ const DiaDeCobro = () => {
     return () => window.removeEventListener('storage', cargarVisitas);
   }, []);
 
-  // Cargar orden de cobro al iniciar
+  // Cargar orden de cobro desde el servidor al cambiar la fecha
   useEffect(() => {
-    const savedOrden = localStorage.getItem('ordenCobro');
-    if (savedOrden) {
+    const cargarOrden = async () => {
       try {
-        setOrdenCobro(JSON.parse(savedOrden));
-      } catch (e) {
-        console.error('Error al parsear ordenCobro desde localStorage', e);
+        const response = await ordenCobroService.obtenerPorFecha(fechaSeleccionadaStr);
+        if (response.success) {
+          setOrdenCobro(prev => ({
+            ...prev,
+            [fechaSeleccionadaStr]: response.data
+          }));
+        }
+      } catch (error) {
+        console.error('Error al cargar órdenes de cobro desde el servidor:', error);
+        // Fallback: intentar cargar de localStorage por si acaso hay datos antiguos
+        const savedOrden = localStorage.getItem('ordenCobro');
+        if (savedOrden) {
+          try {
+            const parsed = JSON.parse(savedOrden);
+            if (parsed[fechaSeleccionadaStr]) {
+              setOrdenCobro(prev => ({
+                ...prev,
+                [fechaSeleccionadaStr]: parsed[fechaSeleccionadaStr]
+              }));
+            }
+          } catch (e) { }
+        }
       }
-    }
-  }, []);
+    };
 
-  // Guardar cambios de orden de cobro
-  useEffect(() => {
-    localStorage.setItem('ordenCobro', JSON.stringify(ordenCobro));
-  }, [ordenCobro]);
+    cargarOrden();
+  }, [fechaSeleccionadaStr]);
 
   // Cargar prórrogas desde el BACKEND al iniciar
   useEffect(() => {
@@ -176,8 +191,8 @@ const DiaDeCobro = () => {
 
 
 
-  // Manejar cambio de número de orden con efecto cascada (Global para la cartera)
-  const handleActualizarOrdenCascada = (clienteId, nuevoOrden) => {
+  // Manejar cambio de número de orden manual (Sin cascada)
+  const handleActualizarOrdenManual = async (clienteId, nuevoOrden) => {
     const numeroNuevo = parseInt(nuevoOrden, 10);
 
     // Si se borra o es inválido, solo actualizamos ese registro a vacío
@@ -191,78 +206,33 @@ const DiaDeCobro = () => {
           [fechaKey]: ordenFechaActual
         };
       });
+
+      // También eliminar de la base de datos
+      try {
+        await ordenCobroService.eliminar(fechaSeleccionadaStr, clienteId);
+      } catch (error) {
+        console.error('Error al eliminar orden de cobro:', error);
+      }
       return;
     }
 
-    // 0. Recuperar TODOS los items del día (sin importar filtros de búsqueda)
-    // Flatten datosCobro.porBarrio
-    const todosLosItems = [];
-    Object.values(datosCobro.porBarrio).forEach(lista => {
-      todosLosItems.push(...lista);
-    });
-
-    // 1. Identificar cartera del cliente objetivo
-    const targetItem = todosLosItems.find(i => i.clienteId === clienteId);
-    if (!targetItem) return; // No debería suceder si el cliente está en pantalla
-
-    const carteraObjetivo = targetItem.clienteCartera;
-
-    // 2. Definir grupo de reordenamiento
-    // K1 y K2 comparten la misma secuencia numérica. K3 es independiente.
-    const esGrupoCompartido = (carteraObjetivo === 'K1' || carteraObjetivo === 'K2');
-
-    // Filtrar solo los items del grupo correspondiente
-    const itemsDelGrupo = todosLosItems.filter(i => {
-      if (esGrupoCompartido) {
-        return i.clienteCartera === 'K1' || i.clienteCartera === 'K2';
-      }
-      return i.clienteCartera === carteraObjetivo; // Caso K3 (o cualquier otra futura)
-    });
-
-    // 3. Ordenar la lista completa actual según su orden guardado (para tener la secuencia base correcta)
-    const ordenFecha = ordenCobro[fechaSeleccionadaStr] || {};
-
-    const listaOrdenada = [...itemsDelGrupo].sort((a, b) => {
-      const ordenA = ordenFecha[a.clienteId];
-      const ordenB = ordenFecha[b.clienteId];
-
-      // Valuación para sort: Si tiene orden numérico, usarlo. Si no, al final (Infinity).
-      // Usar un número grande safe en lugar de Infinity para asegurar resta correcta si se necesita
-      const valA = (ordenA === undefined || ordenA === '' || ordenA === null) ? 999999 : Number(ordenA);
-      const valB = (ordenB === undefined || ordenB === '' || ordenB === null) ? 999999 : Number(ordenB);
-
-      if (valA !== valB) return valA - valB;
-      // Fallback alfabético para consistencia en items sin orden
-      return (a.clienteNombre || '').localeCompare(b.clienteNombre || '');
-    });
-
-    // 4. Remover el item que se está moviendo de su posición original
-    const currentIndex = listaOrdenada.findIndex(i => i.clienteId === clienteId);
-    if (currentIndex === -1) return;
-
-    const [itemMovido] = listaOrdenada.splice(currentIndex, 1);
-
-    // 5. Insertar en la nueva posición deseada
-    // El usuario ingresa índice base-1. Convertir a base-0.
-    // Clampear el índice entre 0 y el final de la lista remanente
-    let targetIndex = numeroNuevo - 1;
-    if (targetIndex < 0) targetIndex = 0;
-    if (targetIndex > listaOrdenada.length) targetIndex = listaOrdenada.length;
-
-    listaOrdenada.splice(targetIndex, 0, itemMovido);
-
-    // 6. Reasignar orden secuencial (1, 2, 3...) a toda la lista reorganizada
+    // Actualización individual (Sin afectar a los demás clientes)
     const nuevoOrdenMap = { ...(ordenCobro[fechaSeleccionadaStr] || {}) };
+    nuevoOrdenMap[clienteId] = numeroNuevo;
 
-    listaOrdenada.forEach((item, index) => {
-      nuevoOrdenMap[item.clienteId] = index + 1;
-    });
-
-    // 7. Guardar estado
+    // 7. Guardar estado local
     setOrdenCobro(prev => ({
       ...prev,
       [fechaSeleccionadaStr]: nuevoOrdenMap
     }));
+
+    // 8. Persistir en la base de datos
+    try {
+      await ordenCobroService.guardar(fechaSeleccionadaStr, nuevoOrdenMap);
+    } catch (error) {
+      console.error('Error al guardar orden en el servidor:', error);
+      toast.error('Error al sincronizar el orden con el servidor');
+    }
   };
 
   // Procesar cobros agrupados por BARRIO
@@ -1339,7 +1309,7 @@ const DiaDeCobro = () => {
             ) : (
               <TablaCobrosLista
                 items={cobrosPorCartera.K1}
-                onCambioOrden={handleActualizarOrdenCascada}
+                onCambioOrden={handleActualizarOrdenManual}
                 ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
                 onProrrogaDias={handleProrrogaDias}
                 onProrrogaFecha={handleProrrogaFecha}
@@ -1371,7 +1341,7 @@ const DiaDeCobro = () => {
             ) : (
               <TablaCobrosLista
                 items={cobrosPorCartera.K2}
-                onCambioOrden={handleActualizarOrdenCascada}
+                onCambioOrden={handleActualizarOrdenManual}
                 ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
                 onProrrogaDias={handleProrrogaDias}
                 onProrrogaFecha={handleProrrogaFecha}
@@ -1414,7 +1384,7 @@ const DiaDeCobro = () => {
             ) : (
               <TablaCobrosLista
                 items={cobrosPorCartera.K3}
-                onCambioOrden={handleActualizarOrdenCascada}
+                onCambioOrden={handleActualizarOrdenManual}
                 ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
                 onProrrogaDias={handleProrrogaDias}
                 onProrrogaFecha={handleProrrogaFecha}

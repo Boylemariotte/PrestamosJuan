@@ -10,7 +10,7 @@ import { es } from 'date-fns/locale';
 import { formatearMoneda, calcularTotalMultasCuota, aplicarAbonosAutomaticamente, determinarEstadoCredito, formatearFechaCorta } from '../utils/creditCalculations';
 import CreditoDetalle from '../components/Creditos/CreditoDetalle';
 import MotivoProrrogaModal from '../components/Creditos/MotivoProrrogaModal';
-import api, { prorrogaService } from '../services/api';
+import api, { prorrogaService, ordenCobroService } from '../services/api';
 
 const Rutas = () => {
   const navigate = useNavigate();
@@ -63,22 +63,24 @@ const Rutas = () => {
     return () => window.removeEventListener('storage', cargarVisitas);
   }, []);
 
-  // Cargar orden de cobro al iniciar
+  // Cargar orden de cobro desde el servidor al cambiar la fecha
   useEffect(() => {
-    const savedOrden = localStorage.getItem('ordenCobro');
-    if (savedOrden) {
+    const cargarOrden = async () => {
       try {
-        setOrdenCobro(JSON.parse(savedOrden));
-      } catch (e) {
-        console.error('Error al parsear ordenCobro desde localStorage', e);
+        const response = await ordenCobroService.obtenerPorFecha(fechaSeleccionadaStr);
+        if (response.success) {
+          setOrdenCobro(prev => ({
+            ...prev,
+            [fechaSeleccionadaStr]: response.data
+          }));
+        }
+      } catch (error) {
+        console.error('Error al cargar órdenes de cobro:', error);
       }
-    }
-  }, []);
+    };
 
-  // Guardar cambios de orden de cobro
-  useEffect(() => {
-    localStorage.setItem('ordenCobro', JSON.stringify(ordenCobro));
-  }, [ordenCobro]);
+    cargarOrden();
+  }, [fechaSeleccionadaStr]);
 
   // Cargar prórrogas desde el BACKEND al iniciar
   useEffect(() => {
@@ -139,7 +141,7 @@ const Rutas = () => {
   };
 
   // Manejar cambio de número de orden para un cliente en la fecha seleccionada
-  const handleCambioOrdenCliente = (clienteId, nuevoOrden) => {
+  const handleCambioOrdenCliente = async (clienteId, nuevoOrden) => {
     // Permitir estado vacío mientras el usuario borra y escribe
     if (nuevoOrden === '') {
       setOrdenCobro(prev => {
@@ -150,6 +152,11 @@ const Rutas = () => {
           ...ordenFechaActual,
           [clienteId]: '',
         };
+
+        // Eliminar de la base de datos
+        ordenCobroService.eliminar(fechaSeleccionadaStr, clienteId).catch(err => {
+          console.error('Error al eliminar orden de cobro:', err);
+        });
 
         return {
           ...prev,
@@ -170,6 +177,11 @@ const Rutas = () => {
         ...ordenFechaActual,
         [clienteId]: numero,
       };
+
+      // Persistir en la base de datos
+      ordenCobroService.guardar(fechaSeleccionadaStr, nuevoOrdenFecha).catch(err => {
+        console.error('Error al guardar orden en el servidor:', err);
+      });
 
       return {
         ...prev,
