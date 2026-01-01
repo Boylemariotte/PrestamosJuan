@@ -12,6 +12,38 @@ import CreditoDetalle from '../components/Creditos/CreditoDetalle';
 import MotivoProrrogaModal from '../components/Creditos/MotivoProrrogaModal';
 import api, { prorrogaService } from '../services/api';
 
+// Componente de input local para evitar re-renderizados mientras se escribe
+const OrdenInput = ({ valorInicial, onGuardar }) => {
+  const [valor, setValor] = useState(valorInicial);
+
+  useEffect(() => {
+    setValor(valorInicial);
+  }, [valorInicial]);
+
+  const handleBlur = () => {
+    if (valor !== valorInicial) {
+      onGuardar(valor);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.target.blur(); // Activa handleBlur
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      className="w-16 text-center border-2 border-gray-500 rounded-md text-base font-bold py-1 px-1 text-gray-900 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none"
+      value={valor}
+      onChange={(e) => setValor(e.target.value)}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+    />
+  );
+};
+
 const DiaDeCobro = () => {
   const navigate = useNavigate();
   const { clientes, obtenerCliente, obtenerCredito, actualizarCliente, agregarNota } = useApp();
@@ -142,42 +174,52 @@ const DiaDeCobro = () => {
     }
   };
 
-  // Manejar cambio de número de orden para un cliente en la fecha seleccionada
-  const handleCambioOrdenCliente = (clienteId, nuevoOrden) => {
-    // Permitir estado vacío mientras el usuario borra y escribe
-    if (nuevoOrden === '') {
+
+
+  // Manejar cambio de número de orden con efecto cascada
+  const handleActualizarOrdenCascada = (clienteId, nuevoOrden, listaActualItems) => {
+    const numeroInicio = Number(nuevoOrden);
+
+    // Si se borra o es inválido, solo actualizamos ese registro a vacío
+    if (nuevoOrden === '' || isNaN(numeroInicio)) {
       setOrdenCobro(prev => {
         const fechaKey = fechaSeleccionadaStr;
         const ordenFechaActual = prev[fechaKey] || {};
-
-        const nuevoOrdenFecha = {
-          ...ordenFechaActual,
-          [clienteId]: '',
-        };
-
         return {
           ...prev,
-          [fechaKey]: nuevoOrdenFecha,
+          [fechaKey]: {
+            ...ordenFechaActual,
+            [clienteId]: ''
+          }
         };
       });
       return;
     }
 
-    const numero = Number(nuevoOrden);
-    if (Number.isNaN(numero) || numero <= 0) return;
-
+    // Lógica de cascada
     setOrdenCobro(prev => {
       const fechaKey = fechaSeleccionadaStr;
-      const ordenFechaActual = prev[fechaKey] || {};
+      const ordenFechaActual = { ...(prev[fechaKey] || {}) }; // Copia para mutar
 
-      const nuevoOrdenFecha = {
-        ...ordenFechaActual,
-        [clienteId]: numero,
-      };
+      // Encontrar índice del item modificado en la lista ACTUAL mostrada
+      const indexInicio = listaActualItems.findIndex(item => item.clienteId === clienteId);
+
+      if (indexInicio === -1) {
+        // Fallback por si acaso: solo actualiza el item individual
+        ordenFechaActual[clienteId] = numeroInicio;
+      } else {
+        // Actualizar el item modificado y todos los siguientes en la lista visual
+        let contador = numeroInicio;
+        for (let i = indexInicio; i < listaActualItems.length; i++) {
+          const item = listaActualItems[i];
+          ordenFechaActual[item.clienteId] = contador;
+          contador++;
+        }
+      }
 
       return {
         ...prev,
-        [fechaKey]: nuevoOrdenFecha,
+        [fechaKey]: ordenFechaActual
       };
     });
   };
@@ -964,11 +1006,9 @@ const DiaDeCobro = () => {
                   {numeroLista}
                 </td>
                 <td className="px-4 py-4 text-center">
-                  <input
-                    type="text"
-                    className="w-16 text-center border-2 border-gray-500 rounded-md text-base font-bold py-1 px-1 text-gray-900 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none"
-                    value={valorOrden}
-                    onChange={(e) => onCambioOrden(item.clienteId, e.target.value)}
+                  <OrdenInput
+                    valorInicial={valorOrden}
+                    onGuardar={(nuevoValor) => onCambioOrden(item.clienteId, nuevoValor, items)}
                   />
                 </td>
                 <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
@@ -1039,8 +1079,8 @@ const DiaDeCobro = () => {
                         }
                       }}
                       className={`px-3 py-1.5 text-sm border rounded-md transition-all flex items-center gap-1 min-w-[70px] justify-between focus:outline-none focus:ring-2 focus:ring-offset-1 ${item.clienteRF === 'RF'
-                          ? 'bg-purple-700 border-purple-800 text-white hover:bg-purple-800 focus:ring-purple-500'
-                          : 'bg-white border-gray-300 text-gray-400 hover:bg-gray-50 focus:ring-blue-500'
+                        ? 'bg-purple-700 border-purple-800 text-white hover:bg-purple-800 focus:ring-purple-500'
+                        : 'bg-white border-gray-300 text-gray-400 hover:bg-gray-50 focus:ring-blue-500'
                         }`}
                     >
                       <span className="font-bold">
@@ -1258,7 +1298,7 @@ const DiaDeCobro = () => {
             ) : (
               <TablaCobrosLista
                 items={cobrosPorCartera.K1}
-                onCambioOrden={handleCambioOrdenCliente}
+                onCambioOrden={handleActualizarOrdenCascada}
                 ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
                 onProrrogaDias={handleProrrogaDias}
                 onProrrogaFecha={handleProrrogaFecha}
@@ -1290,7 +1330,7 @@ const DiaDeCobro = () => {
             ) : (
               <TablaCobrosLista
                 items={cobrosPorCartera.K2}
-                onCambioOrden={handleCambioOrdenCliente}
+                onCambioOrden={handleActualizarOrdenCascada}
                 ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
                 onProrrogaDias={handleProrrogaDias}
                 onProrrogaFecha={handleProrrogaFecha}
@@ -1333,7 +1373,7 @@ const DiaDeCobro = () => {
             ) : (
               <TablaCobrosLista
                 items={cobrosPorCartera.K3}
-                onCambioOrden={handleCambioOrdenCliente}
+                onCambioOrden={handleActualizarOrdenCascada}
                 ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
                 onProrrogaDias={handleProrrogaDias}
                 onProrrogaFecha={handleProrrogaFecha}
