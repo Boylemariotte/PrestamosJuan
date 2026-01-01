@@ -4,6 +4,7 @@ import Credito from '../models/Credito.js';
 import MovimientoCaja from '../models/MovimientoCaja.js';
 import Alerta from '../models/Alerta.js';
 import Persona from '../models/Persona.js';
+import OrdenCobro from '../models/OrdenCobro.js';
 
 /**
  * @desc    Exportar todos los datos (Backup)
@@ -18,6 +19,7 @@ export const exportData = async (req, res, next) => {
         const movimientosCajaRaw = await MovimientoCaja.find();
         const alertas = await Alerta.find();
         const personas = await Persona.find().select('+password');
+        const ordenesCobro = await OrdenCobro.find();
 
         // Transformar movimientos para incluir campo id
         const movimientosCaja = movimientosCajaRaw.map(mov => ({
@@ -57,13 +59,14 @@ export const exportData = async (req, res, next) => {
             metadata: {
                 generadoEn: new Date().toISOString(),
                 version: '1.0.0',
-                colecciones: ['clientes', 'creditos', 'movimientosCaja', 'alertas', 'personas']
+                colecciones: ['clientes', 'creditos', 'movimientosCaja', 'alertas', 'personas', 'ordenesCobro']
             },
             clientes: clientesExport,
             creditos,
             movimientosCaja,
             alertas,
-            personas
+            personas,
+            ordenesCobro
         };
 
         res.status(200).json(backup);
@@ -365,6 +368,20 @@ const performImport = async (data) => {
         try {
             await Persona.bulkWrite(ops, { ordered: false });
         } catch (e) { console.error('Error importando personas:', e.message); }
+    }
+
+    if (data.ordenesCobro?.length) {
+        console.log(`Importando ${data.ordenesCobro.length} órdenes de cobro...`);
+        const ops = data.ordenesCobro.map(o => ({
+            updateOne: {
+                filter: { fecha: new Date(o.fecha), clienteId: o.clienteId },
+                update: { $set: o },
+                upsert: true
+            }
+        }));
+        try {
+            await OrdenCobro.bulkWrite(ops, { ordered: false });
+        } catch (e) { console.error('Error importando órdenes de cobro:', e.message); }
     }
 };
 

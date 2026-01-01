@@ -61,7 +61,14 @@ app.listen(PORT, () => {
 
 // Manejo de errores no capturados
 process.on('unhandledRejection', (err) => {
-  console.error('Error no manejado:', err);
+  console.error('❌ Error no manejado (Rejection):', err);
+  if (err.stack) console.error(err.stack);
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('❌ Error no capturado (Exception):', err);
+  if (err.stack) console.error(err.stack);
   process.exit(1);
 });
 

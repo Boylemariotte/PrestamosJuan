@@ -4,12 +4,8 @@ import OrdenCobro from '../models/OrdenCobro.js';
 export const obtenerOrdenesPorFecha = async (req, res) => {
     try {
         const { fecha } = req.params;
-        const fechaInicio = new Date(fecha);
-        const fechaFin = new Date(fecha);
-        fechaFin.setHours(23, 59, 59, 999);
-
         const ordenes = await OrdenCobro.find({
-            fecha: { $gte: fechaInicio, $lte: fechaFin }
+            fecha: new Date(fecha)
         }).sort({ orden: 1 });
 
         // Convertir a formato plano para fácil acceso en frontend
