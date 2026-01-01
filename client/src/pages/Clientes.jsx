@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocation } from 'react-router-dom';
-import { Plus, Search, Users as UsersIcon, Briefcase, Filter, User, Phone, CreditCard, AlertCircle, MapPin, ChevronDown } from 'lucide-react';
+import { Plus, Search, Users as UsersIcon, Briefcase, Filter, User, Phone, CreditCard, AlertCircle, MapPin, ChevronDown, Check } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
@@ -31,9 +31,10 @@ const Clientes = () => {
   const [filtroTipoPago, setFiltroTipoPago] = useState('todos'); // 'todos', 'diario', 'semanal', 'quincenal', 'mensual'
 
   // Verificar el tipo de usuario para determinar qué carteras mostrar
-  const esDomiciliarioBuga = user && user.role === 'domiciliario' && user.ciudad === 'Guadalajara de Buga';
-  const esDomiciliarioTula = user && user.role === 'domiciliario' && user.ciudad === 'Tuluá';
+  const esBuga = user && (user.role === 'domiciliario' || user.role === 'supervisor') && user.ciudad === 'Guadalajara de Buga';
+  const esTula = user && (user.role === 'domiciliario' || user.role === 'supervisor') && user.ciudad === 'Tuluá';
   const esAdminOCeo = user && (user.role === 'administrador' || user.role === 'ceo');
+  const esCEOoSupervisor = user && (user.role === 'ceo' || user.role === 'supervisor');
 
   // Tipos de pago disponibles según la cartera seleccionada
   const tiposPagoDisponibles = useMemo(() => {
@@ -108,7 +109,7 @@ const Clientes = () => {
 
   // Capacidades por cartera/tipo de pago
   const CAPACIDADES = useMemo(() => {
-    if (esDomiciliarioBuga) {
+    if (esBuga) {
       // Solo mostrar K3 para domiciliarios de Guadalajara de Buga
       return {
         K3: { semanal: 150, quincenal: 150 } // K3 se comporta como K1
@@ -127,12 +128,12 @@ const Clientes = () => {
         K2: { general: 225 }
       };
     }
-  }, [esDomiciliarioBuga, esAdminOCeo]);
+  }, [esBuga, esAdminOCeo]);
 
   // Ocupación actual por cartera/tipo (considera clientes con créditos activos/en mora o tipoPagoEsperado)
   const ocupacion = useMemo(() => {
     let base;
-    if (esDomiciliarioBuga) {
+    if (esBuga) {
       base = { K3: { semanal: 0, quincenal: 0 } };
     } else if (esAdminOCeo) {
       base = {
@@ -147,7 +148,7 @@ const Clientes = () => {
       };
     }
     clientes.forEach((cliente) => {
-      const cartera = cliente.cartera || (esDomiciliarioBuga ? 'K3' : 'K1');
+      const cartera = cliente.cartera || (esBuga ? 'K3' : 'K1');
       const tiposActivos = getTiposPagoActivos(cliente);
       // Si tiene créditos activos, usar esos tipos; si no, usar tipoPagoEsperado
       const tipos = tiposActivos.length > 0
@@ -177,13 +178,13 @@ const Clientes = () => {
       });
     });
     return base;
-  }, [clientes, esDomiciliarioBuga, esAdminOCeo]);
+  }, [clientes, esBuga, esAdminOCeo]);
 
   // Generar todas las cards posibles según capacidades
   const todasLasCards = useMemo(() => {
     const cards = [];
 
-    if (esDomiciliarioBuga) {
+    if (esBuga) {
       // Solo generar cards para K3 (se comporta como K1)
       Object.entries(CAPACIDADES.K3).forEach(([tipo, capacidad]) => {
         for (let i = 1; i <= capacidad; i++) {
@@ -225,7 +226,7 @@ const Clientes = () => {
       }
 
       // Generar cards para K3 (solo para administradores y CEO, se comporta como K1)
-      if (CAPACIDADES.K3) {
+      if (CAPACIDADES.K3 && esAdminOCeo) {
         Object.entries(CAPACIDADES.K3).forEach(([tipo, capacidad]) => {
           for (let i = 1; i <= capacidad; i++) {
             cards.push({
@@ -241,7 +242,7 @@ const Clientes = () => {
 
     // Asignar clientes a las cards correspondientes
     clientes.forEach(cliente => {
-      const carteraCliente = cliente.cartera || (esDomiciliarioBuga ? 'K3' : 'K1');
+      const carteraCliente = cliente.cartera || (esBuga ? 'K3' : 'K1');
 
       // Lógica especial para K2 (tipo 'general')
       if (carteraCliente === 'K2') {
@@ -291,7 +292,7 @@ const Clientes = () => {
 
 
     return cards;
-  }, [clientes, esDomiciliarioBuga, esAdminOCeo, CAPACIDADES]);
+  }, [clientes, esBuga, esAdminOCeo, CAPACIDADES]);
 
   // Filtrar cards según búsqueda, cartera y tipo de pago
   const cardsFiltradas = todasLasCards.filter(card => {
@@ -341,9 +342,9 @@ const Clientes = () => {
   });
 
   // Contar clientes por cartera
-  const clientesK1 = (esDomiciliarioBuga ? 0 : clientes.filter(c => (c.cartera || 'K1') === 'K1').length);
-  const clientesK2 = (esDomiciliarioBuga ? 0 : clientes.filter(c => c.cartera === 'K2').length);
-  const clientesK3 = (esDomiciliarioBuga ? clientes.filter(c => (c.cartera || 'K3') === 'K3').length : (esAdminOCeo ? clientes.filter(c => c.cartera === 'K3').length : 0));
+  const clientesK1 = (esBuga ? 0 : clientes.filter(c => (c.cartera || 'K1') === 'K1').length);
+  const clientesK2 = (esBuga ? 0 : clientes.filter(c => c.cartera === 'K2').length);
+  const clientesK3 = (esBuga ? clientes.filter(c => (c.cartera || 'K3') === 'K3').length : (esAdminOCeo ? clientes.filter(c => c.cartera === 'K3').length : 0));
 
   // Total de clientes para admin/CEO (suma de K1, K2 y K3)
   const totalClientesAdmin = esAdminOCeo ? (clientesK1 + clientesK2 + clientesK3) : 0;
@@ -426,8 +427,8 @@ const Clientes = () => {
 
       {/* Estadísticas por cartera */}
       <div className={`grid grid-cols-1 gap-6 mb-8 ${esAdminOCeo ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
-        {esDomiciliarioBuga ? (
-          // Solo K3 para domiciliarios de Buga
+        {esBuga ? (
+          // Solo K3 para domiciliarios de Buga y supervisores de Buga
           <>
             <div className="card bg-gradient-to-br from-orange-500 to-orange-600 text-white">
               <div className="flex items-center justify-between">
@@ -582,7 +583,7 @@ const Clientes = () => {
           <h3 className="text-sm font-semibold text-gray-700">Filtrar por cartera:</h3>
         </div>
         <div className="flex flex-wrap gap-2">
-          {esDomiciliarioBuga ? (
+          {esBuga ? (
             <>
               <button
                 onClick={() => setFiltroCartera('todas')}
@@ -757,6 +758,11 @@ const Clientes = () => {
                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
                   RF
                 </th>
+                {esCEOoSupervisor && (
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-center">
+                    Supervisión
+                  </th>
+                )}
                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
                   Acciones
                 </th>
@@ -864,8 +870,8 @@ const Clientes = () => {
                               }
                             }}
                             className={`px-3 py-1.5 text-sm border rounded-md transition-all flex items-center gap-1 min-w-[80px] justify-between focus:outline-none focus:ring-2 focus:ring-offset-1 ${card.cliente.rf === 'RF'
-                                ? 'bg-purple-700 border-purple-800 text-white hover:bg-purple-800 focus:ring-purple-500'
-                                : 'bg-white border-gray-300 text-gray-400 hover:bg-gray-50 focus:ring-blue-500'
+                              ? 'bg-purple-700 border-purple-800 text-white hover:bg-purple-800 focus:ring-purple-500'
+                              : 'bg-white border-gray-300 text-gray-400 hover:bg-gray-50 focus:ring-blue-500'
                               }`}
                           >
                             <span className="font-bold">
@@ -876,6 +882,33 @@ const Clientes = () => {
                         </div>
                       )}
                     </td>
+                    {esCEOoSupervisor && (
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-center">
+                        {esVacia ? (
+                          <span className="text-gray-400">-</span>
+                        ) : (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const newValue = !card.cliente.enSupervision;
+                              try {
+                                await actualizarCliente(card.cliente.id, { enSupervision: newValue });
+                              } catch (error) {
+                                console.error('Error actualizando supervisión:', error);
+                                alert('Error al actualizar supervisión');
+                              }
+                            }}
+                            className={`p-2 rounded-full transition-colors ${card.cliente.enSupervision
+                              ? 'bg-green-100 text-green-600 hover:bg-green-200'
+                              : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                              }`}
+                            title={card.cliente.enSupervision ? 'Quitar de supervisión' : 'Enviar a supervisión'}
+                          >
+                            <Check className={`h-6 w-6 ${card.cliente.enSupervision ? 'opacity-100' : 'opacity-25'}`} />
+                          </button>
+                        )}
+                      </td>
+                    )}
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                       {esVacia ? (
                         hasPermission('crearClientes') && user?.role !== 'domiciliario' && (

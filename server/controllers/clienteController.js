@@ -9,7 +9,7 @@ import { registrarBorrado } from './historialBorradoController.js';
  */
 export const getClientes = async (req, res, next) => {
   try {
-    const { search, cartera, page = 1, limit = 50, archivados } = req.query;
+    const { search, cartera, page = 1, limit = 50, archivados, supervision } = req.query;
 
     const query = {};
     const condiciones = [];
@@ -28,14 +28,27 @@ export const getClientes = async (req, res, next) => {
       });
     }
 
-    // Solo aplicar filtro de cartera para domiciliarios
-    // Administradores y CEO ven todas las carteras
-    if (req.user && req.user.role === 'domiciliario') {
+    // Filtro de supervisión
+    if (supervision === 'true') {
+      condiciones.push({ enSupervision: true });
+    } else if (supervision === 'false') {
+      condiciones.push({
+        $or: [
+          { enSupervision: false },
+          { enSupervision: null },
+          { enSupervision: { $exists: false } }
+        ]
+      });
+    }
+
+    // Solo aplicar filtro de cartera para domiciliarios y supervisores con ciudad
+    // Administradores y CEO ven todas las carteras (y supervisores sin ciudad si existieran)
+    if (req.user && (req.user.role === 'domiciliario' || req.user.role === 'supervisor')) {
       if (req.user.ciudad === 'Guadalajara de Buga') {
-        // Domiciliarios de Buga solo ven K3
+        // Solo ven K3
         condiciones.push({ cartera: 'K3' });
-      } else {
-        // Domiciliarios de Tuluá (u otra ciudad) solo ven K1 y K2 (excluir K3)
+      } else if (req.user.ciudad === 'Tuluá') {
+        // Solo ven K1 y K2 (excluir K3)
         condiciones.push({
           $or: [
             { cartera: 'K1' },

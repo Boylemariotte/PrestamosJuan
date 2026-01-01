@@ -22,6 +22,7 @@ const Visitas = lazy(() => import('./pages/Visitas'));
 const GestionUsuarios = lazy(() => import('./pages/GestionUsuarios'));
 const Perfil = lazy(() => import('./pages/Perfil'));
 const HistorialBorrados = lazy(() => import('./pages/HistorialBorrados'));
+const Supervision = lazy(() => import('./pages/Supervision'));
 
 // Componente de carga
 const LoadingFallback = () => (
@@ -211,6 +212,17 @@ function App() {
                   <ProtectedRoute>
                     <Layout>
                       <Alertas />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/supervision"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Supervision />
                     </Layout>
                   </ProtectedRoute>
                 }

@@ -48,6 +48,7 @@ export const exportData = async (req, res, next) => {
             coordenadasTrabajoActualizada: cliente.coordenadasTrabajoActualizada,
             esArchivado: cliente.esArchivado,
             etiqueta: cliente.etiqueta,
+            enSupervision: cliente.enSupervision,
             rf: cliente.rf || ""
         }));
 
@@ -226,6 +227,7 @@ const performImport = async (data) => {
                     coordenadasTrabajoActualizada: clienteRaw.coordenadasTrabajoActualizada,
                     esArchivado: (clienteRaw.esArchivado === true || clienteRaw.esArchivado === 'true'),
                     etiqueta: clienteRaw.etiqueta,
+                    enSupervision: (clienteRaw.enSupervision === true || clienteRaw.enSupervision === 'true'),
                     rf: clienteRaw.rf
                 });
             }

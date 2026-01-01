@@ -49,7 +49,7 @@ export const AppProvider = ({ children }) => {
 
       // Cargar movimientos de caja (Solo si tiene permiso o no es domiciliario)
       // Nota: Domiciliarios no ven caja según PERMISSIONS en Persona.js
-      if (user && user.role !== 'domiciliario') {
+      if (user && user.role !== 'domiciliario' && user.role !== 'supervisor') {
         const movimientosRes = await api.get('/movimientos-caja');
         if (movimientosRes.success) {
           setMovimientosCaja(movimientosRes.data);
