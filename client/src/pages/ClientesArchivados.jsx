@@ -488,14 +488,14 @@ const ClientesArchivados = () => {
                   <p className="text-sm text-gray-600 mb-3">
                     Selecciona una posición disponible ({posicionesDisponibles.length} disponibles):
                   </p>
-                  <div className="grid grid-cols-10 gap-2 max-h-96 overflow-y-auto">
+                  <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 max-h-96 overflow-y-auto p-1">
                     {posicionesDisponibles.map((pos) => (
                       <button
                         key={pos}
                         onClick={() => setPosicionSeleccionada(pos)}
-                        className={`px-3 py-2 rounded-lg border-2 font-medium transition-all ${posicionSeleccionada === pos
-                            ? 'bg-blue-600 text-white border-blue-700 ring-2 ring-blue-400'
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                        className={`py-2 px-1 text-xs sm:text-sm rounded-lg border-2 font-bold transition-all flex items-center justify-center ${posicionSeleccionada === pos
+                          ? 'bg-blue-600 text-white border-blue-700 ring-2 ring-blue-400 scale-105'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                           }`}
                       >
                         {pos}

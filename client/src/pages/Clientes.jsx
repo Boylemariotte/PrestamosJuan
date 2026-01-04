@@ -887,25 +887,30 @@ const Clientes = () => {
                         {esVacia ? (
                           <span className="text-gray-400">-</span>
                         ) : (
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              const newValue = !card.cliente.enSupervision;
-                              try {
-                                await actualizarCliente(card.cliente.id, { enSupervision: newValue });
-                              } catch (error) {
-                                console.error('Error actualizando supervisión:', error);
-                                alert('Error al actualizar supervisión');
-                              }
-                            }}
-                            className={`p-2 rounded-full transition-colors ${card.cliente.enSupervision
-                              ? 'bg-green-100 text-green-600 hover:bg-green-200'
-                              : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-                              }`}
-                            title={card.cliente.enSupervision ? 'Quitar de supervisión' : 'Enviar a supervisión'}
-                          >
-                            <Check className={`h-6 w-6 ${card.cliente.enSupervision ? 'opacity-100' : 'opacity-25'}`} />
-                          </button>
+                          <div className="relative flex justify-center">
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const newValue = !card.cliente.enSupervision;
+                                try {
+                                  await actualizarCliente(card.cliente.id, { enSupervision: newValue });
+                                } catch (error) {
+                                  console.error('Error actualizando supervisión:', error);
+                                  alert('Error al actualizar supervisión');
+                                }
+                              }}
+                              className={`px-3 py-1.5 text-sm border rounded-md transition-all flex items-center gap-1 min-w-[80px] justify-between focus:outline-none focus:ring-2 focus:ring-offset-1 ${card.cliente.enSupervision
+                                ? 'bg-emerald-700 border-emerald-800 text-white hover:bg-emerald-800 focus:ring-emerald-500'
+                                : 'bg-white border-gray-300 text-gray-400 hover:bg-gray-50 focus:ring-blue-500'
+                                }`}
+                              title={card.cliente.enSupervision ? 'Quitar de supervisión' : 'Enviar a supervisión'}
+                            >
+                              <span className="font-bold">
+                                {card.cliente.enSupervision ? 'Sí' : '-'}
+                              </span>
+                              <ChevronDown className={`h-4 w-4 ${card.cliente.enSupervision ? 'text-white' : 'text-gray-400'}`} />
+                            </button>
+                          </div>
                         )}
                       </td>
                     )}

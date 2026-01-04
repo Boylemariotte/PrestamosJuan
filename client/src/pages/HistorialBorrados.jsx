@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { History, Trash2, Search, Filter, Calendar as CalendarIcon, ArrowRight, User } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { History, Trash2, Search, Filter, Calendar as CalendarIcon, ArrowRight, User, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { formatearFechaCompleta } from '../utils/dateUtils';
@@ -11,6 +11,8 @@ const HistorialBorrados = () => {
     const [loading, setLoading] = useState(true);
     const [filtroTipo, setFiltroTipo] = useState('');
     const [busqueda, setBusqueda] = useState('');
+    const [paginaActual, setPaginaActual] = useState(1);
+    const registrosPorPagina = 10;
 
     const fetchHistorial = async () => {
         try {
@@ -55,18 +57,34 @@ const HistorialBorrados = () => {
 
     useEffect(() => {
         fetchHistorial();
+        setPaginaActual(1);
     }, [filtroTipo]);
 
-    const historialFiltrado = historial.filter(reg => {
-        const query = busqueda.toLowerCase();
-        return (
-            reg.usuarioNombre?.toLowerCase().includes(query) ||
-            reg.tipo?.toLowerCase().includes(query) ||
-            reg.metadata?.nombreItem?.toLowerCase().includes(query) ||
-            reg.idOriginal?.toLowerCase().includes(query) ||
-            JSON.stringify(reg.detalles).toLowerCase().includes(query)
-        );
-    });
+    useEffect(() => {
+        setPaginaActual(1);
+    }, [busqueda]);
+
+    const historialFiltrado = useMemo(() => {
+        let filtrados = historial.filter(reg => {
+            const query = busqueda.toLowerCase();
+            return (
+                reg.usuarioNombre?.toLowerCase().includes(query) ||
+                reg.tipo?.toLowerCase().includes(query) ||
+                reg.metadata?.nombreItem?.toLowerCase().includes(query) ||
+                reg.idOriginal?.toLowerCase().includes(query) ||
+                JSON.stringify(reg.detalles).toLowerCase().includes(query)
+            );
+        });
+
+        // Ordenar por fecha de borrado (más reciente primero)
+        return filtrados.sort((a, b) => new Date(b.fechaBorrado) - new Date(a.fechaBorrado));
+    }, [historial, busqueda]);
+
+    // Lógica de paginación
+    const totalPaginas = Math.ceil(historialFiltrado.length / registrosPorPagina);
+    const indiceFinal = paginaActual * registrosPorPagina;
+    const indiceInicial = indiceFinal - registrosPorPagina;
+    const registrosPaginados = historialFiltrado.slice(indiceInicial, indiceFinal);
 
     return (
         <div className="space-y-6 pb-20">
@@ -157,7 +175,7 @@ const HistorialBorrados = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {historialFiltrado.map((reg) => (
+                                {registrosPaginados.map((reg) => (
                                     <tr key={reg._id} className="hover:bg-slate-50 transition-colors">
                                         <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
                                             {formatearFechaCompleta(reg.fechaBorrado)}
@@ -177,59 +195,59 @@ const HistorialBorrados = () => {
                                                     {reg.tipo === 'nota' ? (
                                                         <>
                                                             <div className="font-bold text-slate-700">
-                                                                {reg.metadata.nombreCliente ? `Cliente: ${reg.metadata.nombreCliente}` : (reg.metadata.nombreItem || reg.idOriginal)}
+                                                                {reg.metadata?.nombreCliente ? `Cliente: ${reg.metadata.nombreCliente}` : (reg.metadata?.nombreItem || reg.idOriginal)}
                                                             </div>
                                                             <div className="text-gray-600 text-xs italic mt-1">
-                                                                Nota: "{reg.metadata.textoNota || reg.detalles?.texto || 'Sin texto'}"
+                                                                Nota: "{reg.metadata?.textoNota || reg.detalles?.texto || 'Sin texto'}"
                                                             </div>
                                                         </>
                                                     ) : reg.tipo === 'credito' ? (
                                                         <>
                                                             <div className="font-bold text-slate-700">
-                                                                {reg.metadata.nombreCliente ? `Cliente: ${reg.metadata.nombreCliente}` : (reg.metadata.nombreItem || reg.idOriginal)}
+                                                                {reg.metadata?.nombreCliente ? `Cliente: ${reg.metadata.nombreCliente}` : (reg.metadata?.nombreItem || reg.idOriginal)}
                                                             </div>
                                                             <div className="text-indigo-600 text-xs font-bold mt-1">
-                                                                Crédito por: {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(reg.metadata.monto || reg.detalles?.monto || 0)}
+                                                                Crédito por: {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(reg.metadata?.monto || reg.detalles?.monto || 0)}
                                                             </div>
                                                         </>
                                                     ) : reg.tipo === 'abono' ? (
                                                         <>
                                                             <div className="font-bold text-slate-700">
-                                                                {reg.metadata.nombreCliente ? `Cliente: ${reg.metadata.nombreCliente}` : 'Abono'}
+                                                                {reg.metadata?.nombreCliente ? `Cliente: ${reg.metadata.nombreCliente}` : 'Abono'}
                                                             </div>
                                                             <div className="text-green-600 text-xs font-bold mt-1">
-                                                                Valor abono: {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(reg.metadata.valorAbono || reg.detalles?.valor || 0)}
+                                                                Valor abono: {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(reg.metadata?.valorAbono || reg.detalles?.valor || 0)}
                                                             </div>
                                                         </>
                                                     ) : reg.tipo === 'multa' ? (
                                                         <>
                                                             <div className="font-bold text-slate-700">
-                                                                {reg.metadata.nombreCliente ? `Cliente: ${reg.metadata.nombreCliente}` : 'Multa'}
+                                                                {reg.metadata?.nombreCliente ? `Cliente: ${reg.metadata.nombreCliente}` : 'Multa'}
                                                             </div>
                                                             <div className="text-orange-600 text-xs font-bold mt-1">
-                                                                Valor multa: {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(reg.metadata.valorMulta || reg.detalles?.valor || 0)}
+                                                                Valor multa: {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(reg.metadata?.valorMulta || reg.detalles?.valor || 0)}
                                                             </div>
                                                         </>
                                                     ) : reg.tipo === 'cliente' ? (
                                                         <>
                                                             <div className="font-bold text-slate-700">
-                                                                {reg.metadata.nombreItem || reg.detalles?.nombre || 'Desconocido'}
+                                                                {reg.metadata?.nombreItem || reg.detalles?.nombre || 'Desconocido'}
                                                             </div>
                                                             <div className="text-blue-600 text-[10px] mt-1">
-                                                                Documento: {reg.metadata.documento || reg.detalles?.documento || 'N/A'}
+                                                                Documento: {reg.metadata?.documento || reg.detalles?.documento || 'N/A'}
                                                             </div>
                                                         </>
                                                     ) : reg.tipo === 'movimiento-caja' ? (
                                                         <>
-                                                            <span>{reg.metadata.nombreItem || 'Sin descripción'}</span>
-                                                            {reg.metadata.motivo && (
+                                                            <span>{reg.metadata?.nombreItem || 'Sin descripción'}</span>
+                                                            {reg.metadata?.motivo && (
                                                                 <span className="text-red-600 font-bold ml-2 italic">
                                                                     - Motivo: {reg.metadata.motivo}
                                                                 </span>
                                                             )}
                                                         </>
                                                     ) : (
-                                                        reg.metadata.nombreItem || reg.idOriginal
+                                                        reg.metadata?.nombreItem || reg.idOriginal
                                                     )}
                                                 </span>
                                             </div>
@@ -262,7 +280,53 @@ const HistorialBorrados = () => {
                     </div>
                 )}
             </div>
-        </div >
+
+            {/* Paginación */}
+            {!loading && totalPaginas > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                    <div className="text-sm text-gray-500">
+                        Mostrando <span className="font-bold text-gray-900">{indiceInicial + 1}</span> a <span className="font-bold text-gray-900">{Math.min(indiceFinal, historialFiltrado.length)}</span> de <span className="font-bold text-gray-900">{historialFiltrado.length}</span> registros
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setPaginaActual(1)}
+                            disabled={paginaActual === 1}
+                            className="p-2 border border-gray-200 rounded-lg hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white transition-colors"
+                        >
+                            <ChevronsLeft className="h-4 w-4" />
+                        </button>
+                        <button
+                            onClick={() => setPaginaActual(prev => Math.max(1, prev - 1))}
+                            disabled={paginaActual === 1}
+                            className="p-2 border border-gray-200 rounded-lg hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white transition-colors"
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                        </button>
+
+                        <div className="flex items-center gap-1 px-4 text-sm font-medium">
+                            <span>Página</span>
+                            <span className="bg-blue-600 text-white px-2 py-1 rounded min-w-[28px] text-center">{paginaActual}</span>
+                            <span>de {totalPaginas}</span>
+                        </div>
+
+                        <button
+                            onClick={() => setPaginaActual(prev => Math.min(totalPaginas, prev + 1))}
+                            disabled={paginaActual === totalPaginas}
+                            className="p-2 border border-gray-200 rounded-lg hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white transition-colors"
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                        </button>
+                        <button
+                            onClick={() => setPaginaActual(totalPaginas)}
+                            disabled={paginaActual === totalPaginas}
+                            className="p-2 border border-gray-200 rounded-lg hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white transition-colors"
+                        >
+                            <ChevronsRight className="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 };
 

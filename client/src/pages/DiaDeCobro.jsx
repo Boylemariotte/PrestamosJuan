@@ -413,6 +413,8 @@ const DiaDeCobro = () => {
         }, 0);
 
 
+        const nroCuotasPendientes = cuotasPendientesHoy.map(c => c.nroCuota);
+
         const item = {
           tipo: tipoItem,
           clienteId: cliente.id,
@@ -431,9 +433,9 @@ const DiaDeCobro = () => {
           saldoTotalCredito: saldoTotalCredito,
           estadoCredito: estadoCredito,
           cuotasVencidasCount,
-          cuotasVencidasCount,
           primerCuotaVencidaFecha,
-          clienteRF: cliente.rf
+          clienteRF: cliente.rf,
+          nroCuotasPendientes: nroCuotasPendientes
         };
 
         agregarItem(cliente.barrio, item);
@@ -849,7 +851,7 @@ const DiaDeCobro = () => {
   const [creditoSeleccionado, setCreditoSeleccionado] = useState(null);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
 
-  const aplicarProrrogaCuotasDelDia = async (clienteId, creditoId, nuevaFechaStr) => {
+  const aplicarProrrogaCuotasDelDia = async (clienteId, creditoId, nuevaFechaStr, nroCuotasTarget = null) => {
     const cliente = clientes.find(c => c.id === clienteId);
     if (!cliente) return;
     const credito = (cliente.creditos || []).find(c => c.id === creditoId);
@@ -861,14 +863,21 @@ const DiaDeCobro = () => {
 
     credito.cuotas.forEach(cuota => {
       if (cuota.pagado) return;
+
+      const key = `${clienteId}-${creditoId}-${cuota.nroCuota}`;
       const fechaOriginalStr = typeof cuota.fechaProgramada === 'string'
         ? cuota.fechaProgramada.split('T')[0]
         : '';
 
-      // Mover a la nueva fecha todas las cuotas pendientes cuya fecha original
-      // sea hoy o anterior al día que estás viendo en Día de Cobro
-      if (fechaOriginalStr && fechaOriginalStr <= fechaSeleccionadaStr) {
-        const key = `${clienteId}-${creditoId}-${cuota.nroCuota}`;
+      // Lógica de fecha efectiva (Opción 1): considera si ya tiene una prórroga local
+      const fechaEfectiva = prorrogasCuotas[key] || fechaOriginalStr;
+
+      // Opción 3: Si la cuota fue explícitamente marcada para mover, se incluye sin importar la fecha
+      const esCuotaTarget = nroCuotasTarget && nroCuotasTarget.includes(cuota.nroCuota);
+
+      // Mover a la nueva fecha si es target específico o si su fecha efectiva (hoy o anterior)
+      // permite verla en el listado actual
+      if (esCuotaTarget || (fechaEfectiva && fechaEfectiva <= fechaSeleccionadaStr)) {
         nuevasProrrogas[key] = nuevaFechaStr;
 
         cuotasParaActualizar.push({
@@ -900,13 +909,13 @@ const DiaDeCobro = () => {
     }
   };
 
-  const handleProrrogaDias = (clienteId, creditoId, dias) => {
+  const handleProrrogaDias = (clienteId, creditoId, dias, nroCuotas) => {
     const nuevaFecha = format(addDays(parseISO(fechaSeleccionadaStr), dias), 'yyyy-MM-dd');
-    setDatosProrrogaPendiente({ clienteId, creditoId, nuevaFecha });
+    setDatosProrrogaPendiente({ clienteId, creditoId, nuevaFecha, nroCuotas });
     setModalProrrogaOpen(true);
   };
 
-  const handleProrrogaFecha = (clienteId, creditoId, nuevaFechaStr) => {
+  const handleProrrogaFecha = (clienteId, creditoId, nuevaFechaStr, nroCuotas) => {
     if (!nuevaFechaStr) return;
 
     const valor = nuevaFechaStr.trim();
@@ -916,17 +925,17 @@ const DiaDeCobro = () => {
       return;
     }
 
-    setDatosProrrogaPendiente({ clienteId, creditoId, nuevaFecha: valor });
+    setDatosProrrogaPendiente({ clienteId, creditoId, nuevaFecha: valor, nroCuotas });
     setModalProrrogaOpen(true);
   };
 
   const handleConfirmarProrroga = async (motivo) => {
     if (!datosProrrogaPendiente) return;
 
-    const { clienteId, creditoId, nuevaFecha } = datosProrrogaPendiente;
+    const { clienteId, creditoId, nuevaFecha, nroCuotas } = datosProrrogaPendiente;
 
-    // 1. Aplicar la prórroga (lógica original)
-    await aplicarProrrogaCuotasDelDia(clienteId, creditoId, nuevaFecha);
+    // 1. Aplicar la prórroga (lógica original mejorada)
+    await aplicarProrrogaCuotasDelDia(clienteId, creditoId, nuevaFecha, nroCuotas);
 
     // 2. Agregar la nota
     if (agregarNota) {
@@ -1134,7 +1143,7 @@ const DiaDeCobro = () => {
                             id={`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`}
                             type="date"
                             className="hidden"
-                            onChange={(e) => onProrrogaFecha(item.clienteId, item.creditoId, e.target.value)}
+                            onChange={(e) => onProrrogaFecha(item.clienteId, item.creditoId, e.target.value, item.nroCuotasPendientes)}
                           />
                         </>
                       )}

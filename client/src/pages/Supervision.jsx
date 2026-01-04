@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClipboardList, Search, Users as UsersIcon, Briefcase, Filter, User, Phone, MapPin, X, Award, Check, Calendar, AlertCircle, Ban, AlertOctagon } from 'lucide-react';
+import { ClipboardList, Search, Users as UsersIcon, Briefcase, Filter, User, Phone, MapPin, X, Award, Check, Calendar, AlertCircle, Ban, AlertOctagon, ChevronDown } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { formatearMoneda, determinarEstadoCredito, aplicarAbonosAutomaticamente, calcularValorPendienteCuota } from '../utils/creditCalculations';
@@ -313,13 +313,21 @@ const Supervision = () => {
                                             {formatearMoneda(calcularSaldoPendienteTotal(cliente))}
                                         </td>
                                         <td className="px-4 py-4 whitespace-nowrap text-sm text-center">
-                                            <button
-                                                onClick={() => toggleSupervision(cliente)}
-                                                className="p-2 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition-colors"
-                                                title="Quitar de supervisión"
-                                            >
-                                                <Check className="h-6 w-6" />
-                                            </button>
+                                            <div className="relative flex justify-center">
+                                                <button
+                                                    onClick={() => toggleSupervision(cliente)}
+                                                    className={`px-3 py-1.5 text-sm border rounded-md transition-all flex items-center gap-1 min-w-[80px] justify-between focus:outline-none focus:ring-2 focus:ring-offset-1 ${cliente.enSupervision
+                                                        ? 'bg-emerald-700 border-emerald-800 text-white hover:bg-emerald-800 focus:ring-emerald-500'
+                                                        : 'bg-white border-gray-300 text-gray-400 hover:bg-gray-50 focus:ring-blue-500'
+                                                        }`}
+                                                    title={cliente.enSupervision ? 'Quitar de supervisión' : 'Enviar a supervisión'}
+                                                >
+                                                    <span className="font-bold">
+                                                        {cliente.enSupervision ? 'Sí' : '-'}
+                                                    </span>
+                                                    <ChevronDown className={`h-4 w-4 ${cliente.enSupervision ? 'text-white' : 'text-gray-400'}`} />
+                                                </button>
+                                            </div>
                                         </td>
                                         <td className="px-4 py-4 whitespace-nowrap text-sm">
                                             {cliente.etiqueta && ETIQUETAS[cliente.etiqueta] ? (
