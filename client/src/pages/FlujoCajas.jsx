@@ -504,22 +504,18 @@ const CajaSection = ({
     };
   }, [filasMovimientos]);
 
-  // Calcular saldo final total (todos los movimientos de esta caja, de todos los días)
+  // Calcular saldo final total (solo movimientos del día actual pasados por prop)
   const saldoFinal = useMemo(() => {
-    // Filtrar todos los movimientos de esta caja, sin importar la fecha
-    const todosMovimientosCaja = movimientosCaja.filter(mov =>
-      mov.caja === numero && mov.tipoMovimiento === 'flujoCaja'
-    );
+    // Usar solo los movimientos del día (pasados por prop) para el cálculo manual
+    const todosMovimientosCaja = movimientos;
 
-    // Inicializar con saldo anterior si existe, ya que ahora se visualiza como un ingreso
-    // NOTA: Si saldoAnterior ya incluye el cálculo de días previos, sumarlo aquí es correcto
-    // para que coincida con la visualización de la tabla que inicia con ese saldo.
+    // `movimientos` prop ya contiene los movimientos filtrados para el día y la caja actual.
     let saldoAcumulado = saldoAnterior > 0 ? parseFloat(saldoAnterior) : 0;
 
-    todosMovimientosCaja.forEach(mov => {
+    movimientos.forEach(mov => {
       if (mov.tipo === 'inicioCaja') {
         saldoAcumulado += parseFloat(mov.valor || 0);
-      } else if (mov.tipo === 'gasto') {
+      } else if (mov.tipo === 'gasto' || mov.tipo === 'gastoMonedas') {
         saldoAcumulado -= parseFloat(mov.valor || 0);
       } else if (mov.tipo === 'prestamo') {
         // Usar montoEntregado guardado si existe, de lo contrario calcularlo considerando cuotas pendientes
@@ -544,7 +540,7 @@ const CajaSection = ({
     });
 
     return saldoAcumulado;
-  }, [movimientosCaja, numero, saldoAnterior]);
+  }, [movimientos, saldoAnterior]);
 
   // Calcular total de filas para el rowSpan
   // Ya no se usa rowSpan, pero se mantiene por si acaso
@@ -947,12 +943,13 @@ const FlujoCajas = () => {
       mov.tipo === 'retiroPapeleria'
     );
 
-    // Obtener movimientos de días anteriores (hasta la fecha actual)
+    /* SECCIÓN ELIMINADA: Búsqueda de movimientos anteriores desactivada
     const movimientosAnteriores = movimientosFlujo.filter(mov => {
       const movDate = mov.fecha ? new Date(mov.fecha) : null;
       const currentDate = new Date(fechaFormato);
       return movDate && movDate < currentDate;
     });
+    */
 
     const datos = {
       caja1: {
@@ -993,79 +990,14 @@ const FlujoCajas = () => {
       }
     });
 
+    /* SECCIÓN ELIMINADA: Cálculo automático de saldo anterior basado en historial
+       Se ha desactivado para permitir el control manual del saldo inicial diario.
+    
     // Calcular saldo acumulado de días anteriores para cada caja
     movimientosAnteriores.forEach(mov => {
-      if (mov.caja == 1) {
-        if (mov.tipo === 'inicioCaja') {
-          datos.caja1.saldoAnterior += parseFloat(mov.valor || 0);
-        } else if (mov.tipo === 'gasto') {
-          datos.caja1.saldoAnterior -= parseFloat(mov.valor || 0);
-        } else if (mov.tipo === 'prestamo') {
-          // Usar montoEntregado guardado si existe, de lo contrario calcularlo considerando cuotas pendientes
-          let montoEntregado = mov.montoEntregado;
-          if (montoEntregado === undefined || montoEntregado === null) {
-            const valorPrestamo = mov.valor || 0;
-            const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
-              ? mov.papeleria
-              : calcularPapeleria(valorPrestamo);
-            const valorCuotasPendientes = mov.valorCuotasPendientes || 0;
-            montoEntregado = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
-          }
-          datos.caja1.saldoAnterior -= parseFloat(montoEntregado || 0);
-          // Restar también la papelería del saldo anterior
-          const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
-            ? mov.papeleria
-            : calcularPapeleria(mov.valor || 0);
-          datos.caja1.saldoAnterior -= parseFloat(papeleria || 0);
-        }
-      } else if (mov.caja == 2) {
-        if (mov.tipo === 'inicioCaja') {
-          datos.caja2.saldoAnterior += parseFloat(mov.valor || 0);
-        } else if (mov.tipo === 'gasto') {
-          datos.caja2.saldoAnterior -= parseFloat(mov.valor || 0);
-        } else if (mov.tipo === 'prestamo') {
-          // Usar montoEntregado guardado si existe, de lo contrario calcularlo considerando cuotas pendientes
-          let montoEntregado = mov.montoEntregado;
-          if (montoEntregado === undefined || montoEntregado === null) {
-            const valorPrestamo = mov.valor || 0;
-            const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
-              ? mov.papeleria
-              : calcularPapeleria(valorPrestamo);
-            const valorCuotasPendientes = mov.valorCuotasPendientes || 0;
-            montoEntregado = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
-          }
-          datos.caja2.saldoAnterior -= parseFloat(montoEntregado || 0);
-          // Restar también la papelería del saldo anterior
-          const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
-            ? mov.papeleria
-            : calcularPapeleria(mov.valor || 0);
-          datos.caja2.saldoAnterior -= parseFloat(papeleria || 0);
-        }
-      } else if (mov.caja == 3) {
-        if (mov.tipo === 'inicioCaja') {
-          datos.caja3.saldoAnterior += parseFloat(mov.valor || 0);
-        } else if (mov.tipo === 'gasto') {
-          datos.caja3.saldoAnterior -= parseFloat(mov.valor || 0);
-        } else if (mov.tipo === 'prestamo') {
-          // Usar montoEntregado guardado si existe, de lo contrario calcularlo considerando cuotas pendientes
-          let montoEntregado = mov.montoEntregado;
-          if (montoEntregado === undefined || montoEntregado === null) {
-            const valorPrestamo = mov.valor || 0;
-            const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
-              ? mov.papeleria
-              : calcularPapeleria(valorPrestamo);
-            const valorCuotasPendientes = mov.valorCuotasPendientes || 0;
-            montoEntregado = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
-          }
-          datos.caja3.saldoAnterior -= parseFloat(montoEntregado || 0);
-          // Restar también la papelería del saldo anterior
-          const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
-            ? mov.papeleria
-            : calcularPapeleria(mov.valor || 0);
-          datos.caja3.saldoAnterior -= parseFloat(papeleria || 0);
-        }
-      }
+       ... lógica anterior ...
     });
+    */
 
     // Calcular ingresos acumulados por caja (solo inicios de caja)
     todosIniciosCaja.forEach(mov => {
