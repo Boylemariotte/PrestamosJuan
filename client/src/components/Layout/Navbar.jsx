@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Users, TrendingUp, CheckCircle, BarChart3, Settings, LogOut, User, Calendar, ChevronDown, Wallet, Route, ClipboardList, UserPlus, Archive, History } from 'lucide-react';
+import { Users, TrendingUp, CheckCircle, BarChart3, Settings, LogOut, User, Calendar, ChevronDown, Wallet, Route, ClipboardList, UserPlus, Archive, History, Clock } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
 
@@ -46,6 +46,7 @@ const Navbar = () => {
     { path: '/supervision', label: 'Supervisión', icon: ClipboardList },
     { path: '/papeleria', label: 'Papelería', icon: ClipboardList },
     { path: '/creditos-activos', label: 'Créditos Activos', icon: TrendingUp },
+    { path: '/rf', label: 'RF', icon: Clock },
     { path: '/usuarios', label: 'Gestión de usuarios', icon: UserPlus }, // New Item
     { path: '/estadisticas', label: 'Estadísticas', icon: BarChart3 },
     { path: '/historial-borrados', label: 'Historial de borrados', icon: History },
@@ -62,7 +63,7 @@ const Navbar = () => {
         // Ocultar: Caja, Papelería, Archivados, Usuarios, Supervisión
         if (item.path === '/caja' || item.path === '/papeleria' ||
           item.path === '/archivados' || item.path === '/usuarios' ||
-          item.path === '/historial-borrados' || item.path === '/supervision') {
+          item.path === '/historial-borrados' || item.path === '/supervision' || item.path === '/rf') {
           return false;
         }
       }
@@ -80,6 +81,7 @@ const Navbar = () => {
       if (item.path === '/configuracion') return hasPermission('verConfiguracion');
       if (item.path === '/usuarios') return user?.role === 'ceo'; // Only CEO
       if (item.path === '/historial-borrados') return user?.role === 'ceo' || user?.role === 'administrador';
+      if (item.path === '/rf') return user?.role === 'ceo' || user?.role === 'administrador'; // Solo CEO y Administradores
       if (item.path === '/supervision') return user?.role === 'ceo' || user?.role === 'supervisor';
       return true;
     });

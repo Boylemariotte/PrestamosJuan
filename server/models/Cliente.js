@@ -206,6 +206,7 @@ const clienteSchema = new mongoose.Schema({
     enum: ['RF', ''],
     default: ''
   },
+  fechaRF: Date,
   fechaCreacion: {
     type: Date,
     default: Date.now

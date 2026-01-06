@@ -9,7 +9,7 @@ import { registrarBorrado } from './historialBorradoController.js';
  */
 export const getClientes = async (req, res, next) => {
   try {
-    const { search, cartera, page = 1, limit = 50, archivados, supervision } = req.query;
+    const { search, cartera, page = 1, limit = 50, archivados, supervision, rf } = req.query;
 
     const query = {};
     const condiciones = [];
@@ -39,6 +39,11 @@ export const getClientes = async (req, res, next) => {
           { enSupervision: { $exists: false } }
         ]
       });
+    }
+
+    // Filtro de RF
+    if (rf === 'true' || rf === 'RF') {
+      condiciones.push({ rf: 'RF' });
     }
 
     // Solo aplicar filtro de cartera para domiciliarios y supervisores con ciudad
@@ -167,6 +172,11 @@ export const createCliente = async (req, res, next) => {
  */
 export const updateCliente = async (req, res, next) => {
   try {
+    // Si se está activando RF, actualizar la fecha solo si no se proporciona una específica
+    if (req.body.rf === 'RF' && !req.body.fechaRF) {
+      req.body.fechaRF = new Date();
+    }
+
     const cliente = await Cliente.findByIdAndUpdate(
       req.params.id,
       req.body,
