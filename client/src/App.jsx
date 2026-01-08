@@ -24,6 +24,7 @@ const Perfil = lazy(() => import('./pages/Perfil'));
 const HistorialBorrados = lazy(() => import('./pages/HistorialBorrados'));
 const Supervision = lazy(() => import('./pages/Supervision'));
 const RF = lazy(() => import('./pages/RF'));
+const TotalMultas = lazy(() => import('./pages/TotalMultas'));
 
 // Componente de carga
 const LoadingFallback = () => (
@@ -251,6 +252,16 @@ function App() {
                 }
               />
 
+              <Route
+                path="/total-multas"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <TotalMultas />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/visitas"
                 element={

@@ -149,3 +149,34 @@ export const ordenCobroService = {
   }
 };
 
+/**
+ * Servicio de multas totales
+ */
+export const totalMultasService = {
+  // Obtener todas las multas
+  obtenerTodas: async (params) => {
+    const query = new URLSearchParams(params).toString();
+    return await api.get(`/total-multas${query ? `?${query}` : ''}`);
+  },
+
+  // Obtener una multa por ID
+  obtenerPorId: async (id) => {
+    return await api.get(`/total-multas/${id}`);
+  },
+
+  // Crear una nueva multa
+  crear: async (multa) => {
+    return await api.post('/total-multas', multa);
+  },
+
+  // Actualizar una multa
+  actualizar: async (id, multa) => {
+    return await api.put(`/total-multas/${id}`, multa);
+  },
+
+  // Eliminar una multa
+  eliminar: async (id) => {
+    return await api.delete(`/total-multas/${id}`);
+  }
+};
+
