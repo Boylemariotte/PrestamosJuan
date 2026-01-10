@@ -10,7 +10,7 @@ const movimientoCajaSchema = new mongoose.Schema({
   },
   tipo: {
     type: String,
-    enum: ['inicioCaja', 'gasto', 'prestamo', 'retiroPapeleria', 'ingreso', 'egreso'],
+    enum: ['inicioCaja', 'gasto', 'prestamo', 'retiroPapeleria', 'ingreso', 'egreso', 'totalBilletes', 'totalMonedas'],
     required: true
   },
   tipoMovimiento: {

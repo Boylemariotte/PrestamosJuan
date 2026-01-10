@@ -395,7 +395,11 @@ const CajaSection = ({
   onRetirarPapeleria,
   onAgregarPapeleria,
   onEliminarMovimiento,
-  movimientosCaja
+  movimientosCaja,
+  totalBilletesItem,
+  totalMonedasItem,
+  onAgregarTotalBilletes,
+  onAgregarTotalMonedas
 }) => {
   // Calcular total de retiros de papelería para esta caja
   const totalRetiros = useMemo(() => {
@@ -839,6 +843,72 @@ const CajaSection = ({
                   </div>
                 </td>
               </tr>
+
+              {/* FILA 5: Totales Billetes y Monedas (Horizontal Split) */}
+              <tr className="bg-gray-50 border-t border-gray-300">
+                {/* Zona Billetes (Izquierda) */}
+                <td colSpan="3" className="border border-gray-300 p-0">
+                  <div className="flex flex-col h-full bg-white">
+                    <div className="bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700 uppercase border-b border-gray-300 text-center">
+                      Total dinero en billetes
+                    </div>
+                    <div className="p-4 flex flex-col items-center justify-center flex-grow group relative">
+                      <div className="text-xl font-bold text-gray-800">
+                        {formatearMoneda(totalBilletesItem?.valor || 0)}
+                      </div>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          onClick={onAgregarTotalBilletes}
+                          className="flex items-center gap-1 px-3 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-md transition-colors text-xs font-semibold"
+                        >
+                          <Plus className="h-3 w-3" />
+                          <span>Añadir total billetes</span>
+                        </button>
+                        {totalBilletesItem && (
+                          <button
+                            onClick={() => onEliminarMovimiento(totalBilletesItem.id)}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                            title="Eliminar total billetes"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                {/* Zona Monedas (Derecha) */}
+                <td colSpan="3" className="border border-gray-300 p-0">
+                  <div className="flex flex-col h-full bg-white">
+                    <div className="bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700 uppercase border-b border-gray-300 text-center">
+                      Total dinero en monedas
+                    </div>
+                    <div className="p-4 flex flex-col items-center justify-center flex-grow group relative">
+                      <div className="text-xl font-bold text-gray-800">
+                        {formatearMoneda(totalMonedasItem?.valor || 0)}
+                      </div>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          onClick={onAgregarTotalMonedas}
+                          className="flex items-center gap-1 px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-md transition-colors text-xs font-semibold"
+                        >
+                          <Plus className="h-3 w-3" />
+                          <span>Añadir total monedas</span>
+                        </button>
+                        {totalMonedasItem && (
+                          <button
+                            onClick={() => onEliminarMovimiento(totalMonedasItem.id)}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                            title="Eliminar total monedas"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -958,7 +1028,9 @@ const FlujoCajas = () => {
         ingresosAcumulados: 0,
         retirosPapeleria: 0,
         saldoAnterior: 0,
-        saldoAcumulado: 0
+        saldoAcumulado: 0,
+        totalBilletesItem: null,
+        totalMonedasItem: null
       },
       caja2: {
         movimientos: [],
@@ -966,7 +1038,9 @@ const FlujoCajas = () => {
         ingresosAcumulados: 0,
         retirosPapeleria: 0,
         saldoAnterior: 0,
-        saldoAcumulado: 0
+        saldoAcumulado: 0,
+        totalBilletesItem: null,
+        totalMonedasItem: null
       },
       caja3: {
         movimientos: [],
@@ -974,7 +1048,9 @@ const FlujoCajas = () => {
         ingresosAcumulados: 0,
         retirosPapeleria: 0,
         saldoAnterior: 0,
-        saldoAcumulado: 0
+        saldoAcumulado: 0,
+        totalBilletesItem: null,
+        totalMonedasItem: null
       }
     };
 
@@ -982,11 +1058,17 @@ const FlujoCajas = () => {
     movimientosFecha.forEach(mov => {
       // Usar comparación flexible (==) para caja por seguridad de tipos
       if (mov.caja == 1) {
-        datos.caja1.movimientos.push(mov);
+        if (mov.tipo === 'totalBilletes') datos.caja1.totalBilletesItem = mov;
+        else if (mov.tipo === 'totalMonedas') datos.caja1.totalMonedasItem = mov;
+        else datos.caja1.movimientos.push(mov);
       } else if (mov.caja == 2) {
-        datos.caja2.movimientos.push(mov);
+        if (mov.tipo === 'totalBilletes') datos.caja2.totalBilletesItem = mov;
+        else if (mov.tipo === 'totalMonedas') datos.caja2.totalMonedasItem = mov;
+        else datos.caja2.movimientos.push(mov);
       } else if (mov.caja == 3) {
-        datos.caja3.movimientos.push(mov);
+        if (mov.tipo === 'totalBilletes') datos.caja3.totalBilletesItem = mov;
+        else if (mov.tipo === 'totalMonedas') datos.caja3.totalMonedasItem = mov;
+        else datos.caja3.movimientos.push(mov);
       }
     });
 
@@ -1136,6 +1218,16 @@ const FlujoCajas = () => {
   const handleCerrarModal = useCallback(() => {
     setModalAbierto(null);
     setCajaSeleccionada(null);
+  }, []);
+
+  const handleAgregarTotalBilletes = useCallback((numero) => {
+    setCajaSeleccionada(numero);
+    setModalAbierto('totalBilletes');
+  }, []);
+
+  const handleAgregarTotalMonedas = useCallback((numero) => {
+    setCajaSeleccionada(numero);
+    setModalAbierto('totalMonedas');
   }, []);
 
   const handleAgregarPapeleria = useCallback(() => {
@@ -1372,6 +1464,10 @@ const FlujoCajas = () => {
           onAgregarPapeleria={handleAgregarPapeleria}
           onEliminarMovimiento={handleEliminarMovimiento}
           movimientosCaja={movimientosFlujo}
+          totalBilletesItem={datosCajas.caja1.totalBilletesItem}
+          totalMonedasItem={datosCajas.caja1.totalMonedasItem}
+          onAgregarTotalBilletes={() => handleAgregarTotalBilletes(1)}
+          onAgregarTotalMonedas={() => handleAgregarTotalMonedas(1)}
         />
 
         <CajaSection
@@ -1390,6 +1486,10 @@ const FlujoCajas = () => {
           onAgregarPapeleria={handleAgregarPapeleria}
           onEliminarMovimiento={handleEliminarMovimiento}
           movimientosCaja={movimientosFlujo}
+          totalBilletesItem={datosCajas.caja2.totalBilletesItem}
+          totalMonedasItem={datosCajas.caja2.totalMonedasItem}
+          onAgregarTotalBilletes={() => handleAgregarTotalBilletes(2)}
+          onAgregarTotalMonedas={() => handleAgregarTotalMonedas(2)}
         />
 
         <CajaSection
@@ -1408,6 +1508,10 @@ const FlujoCajas = () => {
           onAgregarPapeleria={handleAgregarPapeleria}
           onEliminarMovimiento={handleEliminarMovimiento}
           movimientosCaja={movimientosFlujo}
+          totalBilletesItem={datosCajas.caja3.totalBilletesItem}
+          totalMonedasItem={datosCajas.caja3.totalMonedasItem}
+          onAgregarTotalBilletes={() => handleAgregarTotalBilletes(3)}
+          onAgregarTotalMonedas={() => handleAgregarTotalMonedas(3)}
         />
       </div>
 
@@ -1480,6 +1584,18 @@ const FlujoCajas = () => {
           onClose={handleCerrarModal}
           onSave={handleGuardarIngresoPapeleria}
           fechaSeleccionada={fechaSeleccionada}
+        />
+      )}
+
+      {(modalAbierto === 'totalBilletes' || modalAbierto === 'totalMonedas') && (
+        <ModalForm
+          titulo={`Añadir Total ${modalAbierto === 'totalBilletes' ? 'Billetes' : 'Monedas'} - Caja ${cajaSeleccionada}`}
+          labelMonto="Monto Total"
+          placeholderMonto="Ingrese el monto total"
+          onClose={handleCerrarModal}
+          onSave={handleGuardar}
+          tipo={modalAbierto}
+          color={modalAbierto === 'totalBilletes' ? 'indigo' : 'amber'}
         />
       )}
 
