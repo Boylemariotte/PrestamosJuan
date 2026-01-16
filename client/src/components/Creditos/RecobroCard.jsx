@@ -4,7 +4,7 @@ import { formatearMoneda, formatearFechaCorta } from '../../utils/creditCalculat
 
 const RecobroCard = ({ todasLasMultas, onNuevaMulta, onPagarMulta, onEditarMulta, soloLectura = false }) => {
   return (
-    <div key="recobro" className="border-2 border-blue-600 rounded-lg p-3 flex flex-col min-h-36 w-full print-grid-item">
+    <div key="recobro" className="border-2 border-blue-600 rounded-lg p-3 flex flex-col min-h-36 w-full print-grid-item recobro-card">
       <div className="flex items-center justify-between mb-2">
         <span className="text-blue-600 font-bold text-xs uppercase tracking-wide">MULTAS</span>
         <div className="flex items-center gap-2">

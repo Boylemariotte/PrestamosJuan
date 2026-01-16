@@ -84,7 +84,7 @@ const GrillaCuotas = ({
 
   const content = (
     <>
-      <div className={`grid gap-4 mx-auto w-full ${formData.tipoPago === 'quincenal' ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5'} auto-rows-fr`}>
+      <div className={`grid gap-4 mx-auto w-full cuotas-grid ${formData.tipoPago === 'quincenal' ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5'} auto-rows-fr`}>
         {Array.from({ length: obtenerNumeroCuotas(formData.tipoPago) }, (_, index) => {
           const nroCuota = index + 1;
           const cuota = cuotasActualizadas[index];
@@ -110,7 +110,7 @@ const GrillaCuotas = ({
       </div>
 
       {/* Card de Recobro */}
-      <div className="mt-4 w-full">
+      <div className="mt-4 w-full recobro-container">
         <RecobroCard
           todasLasMultas={todasLasMultas}
           onNuevaMulta={onNuevaMulta}

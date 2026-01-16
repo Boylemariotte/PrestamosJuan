@@ -32,7 +32,7 @@ const CuotaCard = ({
   const hasPartialPayment = !isPaid && abonoCuota > 0;
 
   // Clases de contenedor según estado
-  let containerClasses = "border-2 rounded-lg p-3 flex flex-col h-64 w-full print-grid-item transition-colors duration-200 ";
+  let containerClasses = "border-2 rounded-lg p-3 flex flex-col h-64 w-full print-grid-item cuota-card transition-colors duration-200 ";
   let textClasses = "font-bold text-xs ";
   let amountClasses = "font-bold text-lg ";
 
@@ -89,7 +89,7 @@ const CuotaCard = ({
 
         {/* Abonos aplicados a la cuota - Desglose individual */}
         {abonosIndividuales.length > 0 && (
-          <div className="overflow-y-auto w-full space-y-0.5 pr-1">
+          <div className="overflow-y-auto w-full space-y-0.5 pr-1 abonos-list">
             {abonosIndividuales.map((abono, idx) => {
               const [año, mes, dia] = abono.fecha.split('T')[0].split('-');
               return (

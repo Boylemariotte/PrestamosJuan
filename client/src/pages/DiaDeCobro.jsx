@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { Calendar, Users, ChevronLeft, ChevronRight, CheckCircle, Clock, MapPin, ChevronDown, ChevronUp, Phone, Search } from 'lucide-react';
+import { Calendar, Users, ChevronLeft, ChevronRight, CheckCircle, Clock, MapPin, ChevronDown, ChevronUp, Phone, Search, AlertCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { format, parseISO, startOfDay, addDays, subDays, isBefore } from 'date-fns';
@@ -167,6 +167,14 @@ const DiaDeCobro = () => {
     cargarProrrogas();
   }, []);
 
+  // Filtrar clientes por búsqueda y excluir renovaciones activadas (RF)
+  const clientesFiltrados = useMemo(() => {
+    return clientes.filter(cliente =>
+      cliente.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) &&
+      !cliente.tieneBotonRenovacion
+    );
+  }, [clientes, searchTerm]);
+
   // Filtrar visitas para el día seleccionado
   const visitasDelDia = useMemo(() => {
     return visitas.filter(visita => {
@@ -255,7 +263,7 @@ const DiaDeCobro = () => {
       clientesUnicos.add(item.clienteId);
     };
 
-    clientes.forEach(cliente => {
+    clientesFiltrados.forEach(cliente => {
       if (!cliente.creditos || cliente.creditos.length === 0) return;
 
       cliente.creditos.forEach(credito => {
@@ -456,7 +464,7 @@ const DiaDeCobro = () => {
     }, {});
 
     return { porBarrio: barriosOrdenados, stats };
-  }, [clientes, fechaSeleccionadaStr, creditosInvalidos, prorrogasCuotas]);
+  }, [clientesFiltrados, fechaSeleccionadaStr, creditosInvalidos, prorrogasCuotas]);
 
   // Construir listas de cobros del día separadas por cartera
   const cobrosPorCartera = useMemo(() => {
@@ -838,6 +846,25 @@ const DiaDeCobro = () => {
     };
   }, [clientes, fechaSeleccionadaStr]);
 
+  // Listado plano de multas pagadas en el día (para sección resumen)
+  const multasPagadasDia = useMemo(() => {
+    const todas = [
+      ...(clientesPagados.K1?.items || []),
+      ...(clientesPagados.K2?.items || []),
+      ...(clientesPagados.K3?.items || [])
+    ];
+
+    return todas
+      .filter(item => (item.montoPagadoMulta || 0) > 0)
+      .map(item => ({
+        clienteNombre: item.clienteNombre,
+        creditoTipo: item.creditoTipo,
+        cartera: item.clienteCartera || 'K1',
+        clientePosicion: item.clientePosicion,
+        montoPagadoMulta: item.montoPagadoMulta || 0
+      }));
+  }, [clientesPagados]);
+
   // Funciones de navegación de fecha
   const irAyer = () => setFechaSeleccionada(subDays(fechaSeleccionada, 1));
   const irHoy = () => setFechaSeleccionada(startOfDay(new Date()));
@@ -1002,7 +1029,9 @@ const DiaDeCobro = () => {
           </tr>
         </thead>
         <tbody>
-          {items.map((item, index) => {
+          {items
+            .filter(item => item.clienteRF !== 'RF')
+            .map((item, index) => {
             const numeroLista = index + 1;
             const rawOrden = ordenFecha[item.clienteId];
             const valorOrden =
@@ -1092,7 +1121,10 @@ const DiaDeCobro = () => {
                         const newValue = currentValue === 'RF' ? '' : 'RF';
 
                         try {
-                          await actualizarCliente(item.clienteId, { rf: newValue });
+                          await actualizarCliente(item.clienteId, { 
+                            rf: newValue,
+                            tieneBotonRenovacion: newValue === 'RF'
+                          });
                         } catch (error) {
                           console.error('Error actualizando RF:', error);
                           alert('Error al actualizar RF');
@@ -1403,6 +1435,61 @@ const DiaDeCobro = () => {
           </div>
         )}
       </div>
+
+      {/* Sección Multas Pagadas - Resumen al final del día */}
+      {multasPagadasDia.length > 0 && (
+        <div className="space-y-4 mt-10 pt-6 border-t-2 border-dashed border-gray-300">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-red-600" />
+              <h2 className="text-xl font-bold text-gray-900">Multas pagadas</h2>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-gray-500">Total multas</p>
+              <p className="text-xl font-bold text-red-600">
+                {formatearMoneda(multasPagadasDia.reduce((sum, item) => sum + item.montoPagadoMulta, 0))}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left text-gray-500">
+                <thead className="text-xs text-white uppercase bg-slate-800">
+                  <tr>
+                    <th scope="col" className="px-4 py-3 w-12 text-center">#</th>
+                    <th scope="col" className="px-4 py-3 text-center">N° Cartera</th>
+                    <th scope="col" className="px-4 py-3">Cliente</th>
+                    <th scope="col" className="px-4 py-3 text-center">Tipo de pago</th>
+                    <th scope="col" className="px-4 py-3 text-center">Cartera</th>
+                    <th scope="col" className="px-4 py-3 text-right text-red-500">Valor multa</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {multasPagadasDia
+                    .filter(item => item.clienteRF !== 'RF')
+                    .map((item, index) => (
+                      <tr key={`${item.clienteNombre}-${index}`} className="bg-white hover:bg-gray-50">
+                        <td className="px-4 py-3 text-center font-bold text-gray-800">{index + 1}</td>
+                        <td className="px-4 py-3 text-center font-bold text-gray-800">
+                          {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
+                        </td>
+                        <td className="px-4 py-3 font-medium text-gray-900">{item.clienteNombre}</td>
+                        <td className="px-4 py-3 text-center capitalize">{item.creditoTipo}</td>
+                        <td className="px-4 py-3 text-center font-semibold">
+                          {item.cartera}
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-red-600">
+                          {formatearMoneda(item.montoPagadoMulta)}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sección Pagados - Siempre visible */}
       <div className="space-y-6 mt-8 pt-8 border-t-2 border-gray-300">

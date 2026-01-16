@@ -889,31 +889,97 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     pageStyle: `
       @page {
         size: A4;
-        margin: 15mm;
+        margin: 8mm;
       }
       @media print {
         body {
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
         }
-        
+
+        /* Contenedor principal del PDF: reducir escala para intentar que quepa en una sola hoja */
+        .print-container {
+          transform: scale(0.8);
+          transform-origin: top left;
+        }
+
+        /* Reducir tipografía y espaciados generales en impresión */
+        .print-container * {
+          font-size: 11px !important;
+          line-height: 1.2 !important;
+        }
+
+        /* Ajustar paddings/márgenes de las tarjetas principales */
+        .print-compact-card {
+          padding: 8px !important;
+          margin-bottom: 8px !important;
+        }
+
+        /* Formulario de solicitante más horizontal en impresión */
+        .print-container .solicitante-section {
+          margin-bottom: 4px !important;
+        }
+
+        .print-container .solicitante-section h3 {
+          margin-bottom: 4px !important;
+          font-size: 16px !important;
+        }
+
+        .print-container .solicitante-fields {
+          display: grid !important;
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          column-gap: 8px !important;
+          row-gap: 2px !important;
+        }
+
+        .print-container .solicitante-field {
+          margin-bottom: 0 !important;
+        }
+
+        /* Hacer la grilla de cuotas más compacta en impresión */
+        .print-container .cuotas-grid {
+          gap: 4px !important;
+          grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+        }
+
+        /* Hacer cada tarjeta de cuota compacta, pero permitiendo que crezca si hay muchos abonos */
+        .print-container .cuota-card {
+          min-height: 10.5rem !important;
+          height: auto !important;
+          padding: 4px !important;
+        }
+
+        /* En impresión, mostrar completamente los abonos dentro de cada cuota (sin scroll) */
+        .print-container .cuota-card .abonos-list {
+          overflow: visible !important;
+          max-height: none !important;
+          font-size: 9px !important;
+          line-height: 1.1 !important;
+        }
+
+        /* Comprimir un poco la tarjeta de recobro/multas en impresión */
+        .print-container .recobro-card {
+          padding: 4px !important;
+          max-height: 9rem !important;
+        }
+
         /* Evitar que los títulos queden solos al final de la página */
         h3, h2 {
           page-break-after: avoid;
           break-after: avoid;
         }
-        
+
         /* Mantener secciones juntas */
         .print-section {
           page-break-inside: avoid;
           break-inside: avoid;
         }
-        
-        /* Espaciado entre secciones */
+
+        /* Espaciado entre secciones más compacto en impresión */
         .print-section {
-          margin-bottom: 20px;
+          margin-bottom: 12px;
         }
-        
+
         /* Evitar que la grilla se corte mal */
         .print-grid-item {
           page-break-inside: avoid;
@@ -930,23 +996,23 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
 
         <div className="px-4 md:px-8 pt-6 md:pt-10 pb-8 space-y-6 overflow-y-auto flex-1">
           {/* Contenedor para imprimir - incluye header, formulario y grilla */}
-          <div ref={formularioRef}>
-            {/* Header para el PDF (solo visible al imprimir) */}
-            <div className="hidden print:flex bg-white px-6 py-4 items-center justify-center border-b-2 border-blue-500 mb-16">
-              <div className="flex items-center space-x-4">
+          <div ref={formularioRef} className="print-container">
+            {/* Header para el PDF (solo visible al imprimir, logo pequeño en esquina) */}
+            <div className="hidden print:flex bg-white px-6 py-3 items-center justify-between border-b-2 border-blue-500 mb-8">
+              <div className="flex items-center">
                 <img
                   src={CowImage}
                   alt="Vaca"
-                  className="w-20 h-20 object-contain"
+                  className="w-10 h-10 object-contain mr-2"
                 />
-                <h1 className="text-3xl font-bold text-blue-600 uppercase tracking-wide">
+                <h1 className="text-2xl font-bold text-blue-600 uppercase tracking-wide">
                   DISTRICARNES
                 </h1>
               </div>
             </div>
 
             {/* NUEVA CARD HORIZONTAL: DATOS GENERALES */}
-            <div className="bg-white border-2 border-blue-500 rounded-lg p-4 mb-6">
+            <div className="bg-white border-2 border-blue-500 rounded-lg p-4 mb-6 print-compact-card">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center divide-y-2 md:divide-y-0 md:divide-x-2 divide-blue-200">
                 <div className="flex flex-col items-center justify-center">
                   <span className="text-xs font-bold text-blue-600 uppercase mb-1">TIPO DE PAGO</span>
@@ -974,7 +1040,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
             </div>
 
             {/* CARD PRINCIPAL: SOLICITANTE/CODEUDOR (Izquierda) y CUOTAS (Derecha) */}
-            <div className="bg-white border-2 border-blue-500 rounded-lg p-4 md:p-6 flex flex-col lg:flex-row gap-6">
+            <div className="bg-white border-2 border-blue-500 rounded-lg p-4 md:p-6 flex flex-col lg:flex-row gap-6 print-compact-card">
 
               {/* COLUMNA IZQUIERDA: DATOS PERSONALES */}
               <div className="lg:w-1/3 flex flex-col gap-8 border-b-2 lg:border-b-0 lg:border-r-2 border-blue-100 pb-6 lg:pb-0 lg:pr-6">
@@ -983,7 +1049,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
                     solicitante={formData.solicitante}
                     onChange={(field, value) => handleSolicitanteChange(field, value)}
                   />
-                  <div className="border-t-2 border-blue-100 pt-6">
+                  <div className="border-t-2 border-blue-100 pt-6 print:hidden">
                     <FormularioCodeudor
                       codeudor={formData.codeudor}
                       onChange={(field, value) => handleCodeudorChange(field, value)}
@@ -1049,7 +1115,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
           </div>
 
           {/* Notas */}
-          <div className="mt-6">
+          <div className="mt-6 print:hidden">
             <ListaNotas
               notas={credito.notas}
               nuevaNota={nuevaNota}
@@ -1062,7 +1128,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
 
           {/* Zona de Peligro */}
           {!soloLectura && (
-            <div className="border-t pt-6 mt-6">
+            <div className="border-t pt-6 mt-6 print:hidden">
               <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-red-900 mb-2 flex items-center">
                   <AlertCircle className="h-5 w-5 mr-2" />
