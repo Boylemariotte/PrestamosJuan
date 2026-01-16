@@ -41,11 +41,11 @@ const Clientes = () => {
     if (filtroCartera === 'todas') {
       return ['todos', 'diario', 'semanal', 'quincenal', 'mensual'];
     } else if (filtroCartera === 'K1') {
-      return ['todos', 'semanal', 'quincenal'];
+      return ['todos', 'semanal', 'quincenal', 'mensual'];
     } else if (filtroCartera === 'K2') {
       return ['todos'];
     } else if (filtroCartera === 'K3') {
-      return ['todos', 'semanal', 'quincenal']; // K3 solo maneja semanal y quincenal
+      return ['todos', 'semanal', 'quincenal', 'mensual']; // K3 maneja semanal, quincenal y mensual
     }
     return ['todos', 'diario', 'semanal', 'quincenal', 'mensual'];
   }, [filtroCartera]);
@@ -117,14 +117,14 @@ const Clientes = () => {
     } else if (esAdminOCeo) {
       // Administradores y CEO ven todas las carteras
       return {
-        K1: { semanal: 150, quincenal: 150 },
+        K1: { semanal: 150, quincenal: 150, mensual: 150 },
         K2: { general: 225 },
-        K3: { semanal: 150, quincenal: 150 } // K3 se comporta como K1
+        K3: { semanal: 150, quincenal: 150, mensual: 150 } // K3 se comporta como K1
       };
     } else {
       // Domiciliarios de Tuluá (u otros) solo ven K1 y K2
       return {
-        K1: { semanal: 150, quincenal: 150 },
+        K1: { semanal: 150, quincenal: 150, mensual: 150 },
         K2: { general: 225 }
       };
     }
@@ -134,17 +134,18 @@ const Clientes = () => {
   const ocupacion = useMemo(() => {
     let base;
     if (esBuga) {
-      base = { K3: { semanal: 0, quincenal: 0 } };
+      base = { K3: { semanal: 150, quincenal: 150, mensual: 150 } }; // K3 se comporta como K1
     } else if (esAdminOCeo) {
       base = {
-        K1: { semanal: 0, quincenal: 0 },
+        K1: { semanal: 0, quincenal: 0, mensual: 0 },
         K2: { general: 0 },
-        K3: { semanal: 0, quincenal: 0 } // K3 se comporta como K1
+        K3: { semanal: 0, quincenal: 0, mensual: 0 } // K3 se comporta como K1
       };
     } else {
       base = {
-        K1: { semanal: 0, quincenal: 0 },
-        K2: { general: 0 }
+        K1: { semanal: 0, quincenal: 0, mensual: 0 },
+        K2: { general: 0 },
+        K3: { semanal: 0, quincenal: 0, mensual: 0 } // K3 se comporta como K1
       };
     }
     clientes.forEach((cliente) => {
@@ -439,6 +440,7 @@ const Clientes = () => {
                   <div className="mt-3 space-y-1 text-[11px]">
                     <p className="text-orange-100">Semanal: {ocupacion.K3?.semanal || 0}/{CAPACIDADES.K3.semanal}</p>
                     <p className="text-orange-100">Quincenal: {ocupacion.K3?.quincenal || 0}/{CAPACIDADES.K3.quincenal}</p>
+                    <p className="text-orange-100">Mensual: {ocupacion.K3?.mensual || 0}/{CAPACIDADES.K3.mensual}</p>
                   </div>
                 </div>
                 <Briefcase className="h-12 w-12 text-orange-200" />
@@ -468,6 +470,7 @@ const Clientes = () => {
                   <div className="mt-3 space-y-1 text-[11px]">
                     <p className="text-blue-100">Semanal: {ocupacion.K1?.semanal || 0}/{CAPACIDADES.K1.semanal}</p>
                     <p className="text-blue-100">Quincenal: {ocupacion.K1?.quincenal || 0}/{CAPACIDADES.K1.quincenal}</p>
+                    <p className="text-blue-100">Mensual: {ocupacion.K1?.mensual || 0}/{CAPACIDADES.K1.mensual}</p>
                   </div>
                 </div>
                 <Briefcase className="h-12 w-12 text-blue-200" />
@@ -497,6 +500,7 @@ const Clientes = () => {
                   <div className="mt-3 space-y-1 text-[11px]">
                     <p className="text-orange-100">Semanal: {ocupacion.K3?.semanal || 0}/{CAPACIDADES.K3.semanal}</p>
                     <p className="text-orange-100">Quincenal: {ocupacion.K3?.quincenal || 0}/{CAPACIDADES.K3.quincenal}</p>
+                    <p className="text-orange-100">Mensual: {ocupacion.K3?.mensual || 0}/{CAPACIDADES.K3.mensual}</p>
                   </div>
                 </div>
                 <Briefcase className="h-12 w-12 text-orange-200" />
@@ -528,6 +532,7 @@ const Clientes = () => {
                   <div className="mt-3 space-y-1 text-[11px]">
                     <p className="text-blue-100">Semanal: {ocupacion.K1?.semanal || 0}/{CAPACIDADES.K1.semanal}</p>
                     <p className="text-blue-100">Quincenal: {ocupacion.K1?.quincenal || 0}/{CAPACIDADES.K1.quincenal}</p>
+                    <p className="text-blue-100">Mensual: {ocupacion.K1?.mensual || 0}/{CAPACIDADES.K1.mensual}</p>
                   </div>
                 </div>
                 <Briefcase className="h-12 w-12 text-blue-200" />

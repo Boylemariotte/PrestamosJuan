@@ -4,7 +4,7 @@ import {
   Users, TrendingUp, BarChart3, Settings, LogOut, User,
   Calendar, ChevronDown, Wallet, Route, ClipboardList,
   UserPlus, Archive, History, Clock, Menu, X, ChevronRight,
-  FileText
+  FileText, StickyNote
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
@@ -87,6 +87,11 @@ const Navbar = () => {
         { path: '/creditos-activos', label: 'Créditos Activos', icon: TrendingUp },
         { path: '/total-multas', label: 'Total Multas', icon: FileText },
       ]
+    },
+    {
+      label: 'Notas',
+      icon: StickyNote,
+      path: '/notas',
     },
     {
       label: 'Ajustes',
