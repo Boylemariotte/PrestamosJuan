@@ -8,7 +8,8 @@ import {
   updateCoordenadas,
   archivarCliente,
   desarchivarCliente,
-  getPosicionesDisponibles
+  getPosicionesDisponibles,
+  getHistorialDocumento
 } from '../controllers/clienteController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -30,6 +31,10 @@ router.route('/:id/desarchivar')
 
 router.route('/posiciones-disponibles/:cartera')
   .get(authorize('verClientes'), getPosicionesDisponibles);
+
+// Ruta para buscar historial de un documento (cédula)
+router.route('/historial-documento/:documento')
+  .get(authorize('verClientes'), getHistorialDocumento);
 
 router.route('/:id/coordenadas')
   .put(updateCoordenadas);
