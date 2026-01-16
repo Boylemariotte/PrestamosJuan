@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Save, X, CheckCircle, Circle, Calendar, StickyNote } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, CheckCircle, Circle, Calendar, StickyNote, Loader2 } from 'lucide-react';
+import { notaService } from '../services/api';
 
 const Notas = () => {
   const [secciones, setSecciones] = useState([]);
@@ -8,114 +9,144 @@ const Notas = () => {
   const [nuevaTarea, setNuevaTarea] = useState({});
   const [editandoTarea, setEditandoTarea] = useState({});
   const [notaGeneral, setNotaGeneral] = useState('');
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Cargar datos desde localStorage al montar el componente
+  // Cargar datos desde el servidor al montar el componente
   useEffect(() => {
-    const datosGuardados = localStorage.getItem('notasTareas');
-    if (datosGuardados) {
-      setSecciones(JSON.parse(datosGuardados));
-    }
-    
-    const notaGeneralGuardada = localStorage.getItem('notaGeneral');
-    if (notaGeneralGuardada) {
-      setNotaGeneral(notaGeneralGuardada);
-    }
+    fetchNotas();
   }, []);
 
-  // Guardar datos en localStorage cada vez que cambien
-  useEffect(() => {
-    if (secciones.length > 0) {
-      localStorage.setItem('notasTareas', JSON.stringify(secciones));
+  const fetchNotas = async () => {
+    try {
+      setCargando(true);
+      const response = await notaService.obtenerTodas();
+      if (response.success) {
+        setSecciones(response.data.secciones || []);
+        setNotaGeneral(response.data.notaGeneral || '');
+      }
+      setError(null);
+    } catch (err) {
+      console.error('Error al cargar notas:', err);
+      setError('No se pudieron cargar las notas. Por favor, intenta de nuevo.');
+    } finally {
+      setCargando(false);
     }
-  }, [secciones]);
+  };
 
-  // Guardar nota general en localStorage cada vez que cambie
-  useEffect(() => {
-    localStorage.setItem('notaGeneral', notaGeneral);
-  }, [notaGeneral]);
-
-  const agregarSeccion = () => {
+  const agregarSeccion = async () => {
     if (nuevaSeccion.trim()) {
-      const nuevaSeccionObj = {
-        id: Date.now(),
-        nombre: nuevaSeccion.trim(),
-        tareas: [],
-        fechaCreacion: new Date().toISOString()
-      };
-      setSecciones([...secciones, nuevaSeccionObj]);
-      setNuevaSeccion('');
+      try {
+        const response = await notaService.agregarSeccion(nuevaSeccion.trim());
+        if (response.success) {
+          // El backend devuelve el nuevo documento de sección
+          setSecciones([...secciones, response.data]);
+          setNuevaSeccion('');
+        }
+      } catch (err) {
+        console.error('Error al agregar sección:', err);
+        alert('Error al agregar sección');
+      }
     }
   };
 
-  const eliminarSeccion = (id) => {
+  const eliminarSeccion = async (id) => {
     if (window.confirm('¿Estás seguro de que quieres eliminar esta sección y todas sus tareas?')) {
-      setSecciones(secciones.filter(seccion => seccion.id !== id));
+      try {
+        const response = await notaService.eliminarSeccion(id);
+        if (response.success) {
+          setSecciones(secciones.filter(s => s._id !== id));
+        }
+      } catch (err) {
+        console.error('Error al eliminar sección:', err);
+        alert('Error al eliminar sección');
+      }
     }
   };
 
-  const editarSeccion = (id, nuevoNombre) => {
-    setSecciones(secciones.map(seccion =>
-      seccion.id === id ? { ...seccion, nombre: nuevoNombre } : seccion
-    ));
-    setEditandoSeccion(null);
+  const editarSeccion = async (id, nuevoNombre) => {
+    if (!nuevoNombre.trim()) return setEditandoSeccion(null);
+    try {
+      const response = await notaService.actualizarSeccion(id, nuevoNombre.trim());
+      if (response.success) {
+        setSecciones(secciones.map(s => s._id === id ? response.data : s));
+        setEditandoSeccion(null);
+      }
+    } catch (err) {
+      console.error('Error al editar sección:', err);
+      alert('Error al editar sección');
+    }
   };
 
-  const agregarTarea = (seccionId) => {
+  const agregarTarea = async (seccionId) => {
     const textoTarea = nuevaTarea[seccionId]?.trim();
     if (textoTarea) {
-      const nuevaTareaObj = {
-        id: Date.now(),
-        texto: textoTarea,
-        completada: false,
-        fechaCreacion: new Date().toISOString()
-      };
-      
-      setSecciones(secciones.map(seccion =>
-        seccion.id === seccionId
-          ? { ...seccion, tareas: [...seccion.tareas, nuevaTareaObj] }
-          : seccion
-      ));
-      
-      setNuevaTarea({ ...nuevaTarea, [seccionId]: '' });
+      try {
+        const response = await notaService.agregarTarea(seccionId, textoTarea);
+        if (response.success) {
+          setSecciones(secciones.map(s => s._id === seccionId ? response.data : s));
+          setNuevaTarea({ ...nuevaTarea, [seccionId]: '' });
+        }
+      } catch (err) {
+        console.error('Error al agregar tarea:', err);
+        alert('Error al agregar tarea');
+      }
     }
   };
 
-  const toggleTarea = (seccionId, tareaId) => {
-    setSecciones(secciones.map(seccion =>
-      seccion.id === seccionId
-        ? {
-            ...seccion,
-            tareas: seccion.tareas.map(tarea =>
-              tarea.id === tareaId ? { ...tarea, completada: !tarea.completada } : tarea
-            )
-          }
-        : seccion
-    ));
+  const toggleTarea = async (seccionId, tareaId, completadaActual) => {
+    try {
+      const response = await notaService.actualizarTarea(seccionId, tareaId, {
+        completada: !completadaActual
+      });
+      if (response.success) {
+        setSecciones(secciones.map(s => s._id === seccionId ? response.data : s));
+      }
+    } catch (err) {
+      console.error('Error al toggle tarea:', err);
+      alert('Error al actualizar tarea');
+    }
   };
 
-  const editarTarea = (seccionId, tareaId, nuevoTexto) => {
-    setSecciones(secciones.map(seccion =>
-      seccion.id === seccionId
-        ? {
-            ...seccion,
-            tareas: seccion.tareas.map(tarea =>
-              tarea.id === tareaId ? { ...tarea, texto: nuevoTexto } : tarea
-            )
-          }
-        : seccion
-    ));
-    setEditandoTarea({ ...editandoTarea, [tareaId]: null });
+  const editarTarea = async (seccionId, tareaId, nuevoTexto) => {
+    if (!nuevoTexto.trim()) return setEditandoTarea({ ...editandoTarea, [tareaId]: null });
+    try {
+      const response = await notaService.actualizarTarea(seccionId, tareaId, {
+        texto: nuevoTexto.trim()
+      });
+      if (response.success) {
+        setSecciones(secciones.map(s => s._id === seccionId ? response.data : s));
+        setEditandoTarea({ ...editandoTarea, [tareaId]: null });
+      }
+    } catch (err) {
+      console.error('Error al editar tarea:', err);
+      alert('Error al editar tarea');
+    }
   };
 
-  const eliminarTarea = (seccionId, tareaId) => {
-    setSecciones(secciones.map(seccion =>
-      seccion.id === seccionId
-        ? {
-            ...seccion,
-            tareas: seccion.tareas.filter(tarea => tarea.id !== tareaId)
-          }
-        : seccion
-    ));
+  const eliminarTarea = async (seccionId, tareaId) => {
+    try {
+      const response = await notaService.eliminarTarea(seccionId, tareaId);
+      if (response.success) {
+        setSecciones(secciones.map(s => s._id === seccionId ? response.data : s));
+      }
+    } catch (err) {
+      console.error('Error al eliminar tarea:', err);
+      alert('Error al eliminar tarea');
+    }
+  };
+
+  const guardarNotaGeneral = async () => {
+    try {
+      await notaService.actualizarNotaGeneral(notaGeneral);
+    } catch (err) {
+      console.error('Error al guardar nota general:', err);
+    }
+  };
+
+  // Debounce para guardar nota general o usar el evento onBlur
+  const handleNotaGeneralBlur = () => {
+    guardarNotaGeneral();
   };
 
   const formatearFecha = (fechaString) => {
@@ -127,8 +158,24 @@ const Notas = () => {
     });
   };
 
+  if (cargando) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px]">
+        <Loader2 className="h-12 w-12 text-blue-600 animate-spin mb-4" />
+        <p className="text-gray-600 font-medium">Cargando tus notas...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto">
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 rounded-lg flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={fetchNotas} className="text-sm font-bold underline">Reintentar</button>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="bg-blue-100 p-3 rounded-lg">
@@ -163,21 +210,21 @@ const Notas = () => {
       {/* Lista de secciones */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {secciones.map((seccion) => (
-          <div key={seccion.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div key={seccion._id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             {/* Header de la sección */}
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 border-b border-gray-100">
               <div className="flex items-center justify-between">
-                {editandoSeccion === seccion.id ? (
+                {editandoSeccion === seccion._id ? (
                   <div className="flex items-center gap-2 flex-1">
                     <input
                       type="text"
                       defaultValue={seccion.nombre}
                       onKeyPress={(e) => {
                         if (e.key === 'Enter') {
-                          editarSeccion(seccion.id, e.target.value);
+                          editarSeccion(seccion._id, e.target.value);
                         }
                       }}
-                      onBlur={(e) => editarSeccion(seccion.id, e.target.value)}
+                      onBlur={(e) => editarSeccion(seccion._id, e.target.value)}
                       className="flex-1 px-2 py-1 text-sm font-semibold border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                       autoFocus
                     />
@@ -193,13 +240,13 @@ const Notas = () => {
                     <h3 className="font-semibold text-gray-900">{seccion.nombre}</h3>
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => setEditandoSeccion(seccion.id)}
+                        onClick={() => setEditandoSeccion(seccion._id)}
                         className="text-gray-400 hover:text-blue-600 transition-colors"
                       >
                         <Edit2 className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => eliminarSeccion(seccion.id)}
+                        onClick={() => eliminarSeccion(seccion._id)}
                         className="text-gray-400 hover:text-red-600 transition-colors"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -221,9 +268,9 @@ const Notas = () => {
               ) : (
                 <div className="space-y-2">
                   {seccion.tareas.map((tarea) => (
-                    <div key={tarea.id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors">
+                    <div key={tarea._id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors">
                       <button
-                        onClick={() => toggleTarea(seccion.id, tarea.id)}
+                        onClick={() => toggleTarea(seccion._id, tarea._id, tarea.completada)}
                         className="mt-0.5 text-gray-400 hover:text-blue-600 transition-colors"
                       >
                         {tarea.completada ? (
@@ -232,25 +279,24 @@ const Notas = () => {
                           <Circle className="h-4 w-4" />
                         )}
                       </button>
-                      
-                      {editandoTarea[tarea.id] ? (
+
+                      {editandoTarea[tarea._id] ? (
                         <div className="flex items-center gap-1 flex-1">
                           <input
                             type="text"
                             defaultValue={tarea.texto}
                             onKeyPress={(e) => {
                               if (e.key === 'Enter') {
-                                editarTarea(seccion.id, tarea.id, e.target.value);
+                                editarTarea(seccion._id, tarea._id, e.target.value);
                               }
                             }}
-                            onBlur={(e) => editarTarea(seccion.id, tarea.id, e.target.value)}
-                            className={`flex-1 px-2 py-1 text-sm border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                              tarea.completada ? 'line-through text-gray-400' : ''
-                            }`}
+                            onBlur={(e) => editarTarea(seccion._id, tarea._id, e.target.value)}
+                            className={`flex-1 px-2 py-1 text-sm border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 ${tarea.completada ? 'line-through text-gray-400' : ''
+                              }`}
                             autoFocus
                           />
                           <button
-                            onClick={() => setEditandoTarea({ ...editandoTarea, [tarea.id]: null })}
+                            onClick={() => setEditandoTarea({ ...editandoTarea, [tarea._id]: null })}
                             className="text-gray-400 hover:text-gray-600"
                           >
                             <X className="h-3 w-3" />
@@ -259,22 +305,21 @@ const Notas = () => {
                       ) : (
                         <div className="flex items-center justify-between w-full">
                           <span
-                            className={`text-sm flex-1 cursor-pointer ${
-                              tarea.completada ? 'line-through text-gray-400' : 'text-gray-700'
-                            }`}
-                            onClick={() => toggleTarea(seccion.id, tarea.id)}
+                            className={`text-sm flex-1 cursor-pointer ${tarea.completada ? 'line-through text-gray-400' : 'text-gray-700'
+                              }`}
+                            onClick={() => toggleTarea(seccion._id, tarea._id, tarea.completada)}
                           >
                             {tarea.texto}
                           </span>
                           <div className="flex items-center gap-1 ml-2">
                             <button
-                              onClick={() => setEditandoTarea({ ...editandoTarea, [tarea.id]: true })}
+                              onClick={() => setEditandoTarea({ ...editandoTarea, [tarea._id]: true })}
                               className="text-gray-400 hover:text-blue-600 transition-colors"
                             >
                               <Edit2 className="h-3 w-3" />
                             </button>
                             <button
-                              onClick={() => eliminarTarea(seccion.id, tarea.id)}
+                              onClick={() => eliminarTarea(seccion._id, tarea._id)}
                               className="text-gray-400 hover:text-red-600 transition-colors"
                             >
                               <Trash2 className="h-3 w-3" />
@@ -292,14 +337,14 @@ const Notas = () => {
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    value={nuevaTarea[seccion.id] || ''}
-                    onChange={(e) => setNuevaTarea({ ...nuevaTarea, [seccion.id]: e.target.value })}
-                    onKeyPress={(e) => e.key === 'Enter' && agregarTarea(seccion.id)}
+                    value={nuevaTarea[seccion._id] || ''}
+                    onChange={(e) => setNuevaTarea({ ...nuevaTarea, [seccion._id]: e.target.value })}
+                    onKeyPress={(e) => e.key === 'Enter' && agregarTarea(seccion._id)}
                     placeholder="Nueva tarea..."
                     className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
                   />
                   <button
-                    onClick={() => agregarTarea(seccion.id)}
+                    onClick={() => agregarTarea(seccion._id)}
                     className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
                   >
                     <Plus className="h-3 w-3" />
@@ -332,6 +377,7 @@ const Notas = () => {
         <textarea
           value={notaGeneral}
           onChange={(e) => setNotaGeneral(e.target.value)}
+          onBlur={handleNotaGeneralBlur}
           placeholder="Escribe aquí tus notas generales, ideas, recordatorios o cualquier información importante que quieras guardar..."
           className="w-full h-32 px-4 py-3 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
         />

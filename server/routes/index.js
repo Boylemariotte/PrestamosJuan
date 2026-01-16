@@ -12,6 +12,7 @@ import prorrogaRoutes from './prorrogaRoutes.js';
 import ordenCobroRoutes from './ordenCobroRoutes.js';
 import historialBorradoRoutes from './historialBorradoRoutes.js';
 import totalMultasRoutes from './totalMultasRoutes.js';
+import notaRoutes from './notaRoutes.js';
 
 const router = express.Router();
 
@@ -31,6 +32,7 @@ router.use('/prorrogas', prorrogaRoutes);
 router.use('/ordenes-cobro', ordenCobroRoutes);
 router.use('/historial-borrados', historialBorradoRoutes);
 router.use('/total-multas', totalMultasRoutes);
+router.use('/notas', notaRoutes);
 
 // Ruta de salud del servidor
 router.get('/health', (req, res) => {
