@@ -4,7 +4,7 @@ import {
   Users, TrendingUp, BarChart3, Settings, LogOut, User,
   Calendar, ChevronDown, Wallet, Route, ClipboardList,
   UserPlus, Archive, History, Clock, Menu, X, ChevronRight,
-  FileText, StickyNote
+  FileText, StickyNote, Search
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
@@ -62,6 +62,13 @@ const Navbar = () => {
         { path: '/', label: 'Ver clientes', icon: Users },
         { path: '/archivados', label: 'Archivados', icon: Archive },
         { path: '/rf', label: 'RF', icon: Clock },
+      ]
+    },
+    {
+      label: 'Buscar',
+      icon: Search,
+      items: [
+        { path: '/buscar-documento', label: 'Buscar por Cédula', icon: Search },
       ]
     },
     {

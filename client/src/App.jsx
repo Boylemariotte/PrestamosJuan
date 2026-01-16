@@ -26,6 +26,7 @@ const Supervision = lazy(() => import('./pages/Supervision'));
 const RF = lazy(() => import('./pages/RF'));
 const TotalMultas = lazy(() => import('./pages/TotalMultas'));
 const Notas = lazy(() => import('./pages/Notas'));
+const BuscarDocumento = lazy(() => import('./pages/BuscarDocumento'));
 
 // Componente de carga
 const LoadingFallback = () => (
@@ -280,6 +281,17 @@ function App() {
                   <ProtectedRoute>
                     <Layout>
                       <Notas />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/buscar-documento"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <BuscarDocumento />
                     </Layout>
                   </ProtectedRoute>
                 }

@@ -1,5 +1,6 @@
 import Cliente from '../models/Cliente.js';
 import Credito from '../models/Credito.js';
+import HistorialBorrado from '../models/HistorialBorrado.js';
 import { registrarBorrado } from './historialBorradoController.js';
 
 /**
@@ -582,3 +583,109 @@ export const getPosicionesDisponibles = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Obtener historial completo de un documento (cédula)
+ * @route   GET /api/clientes/historial-documento/:documento
+ * @access  Private
+ */
+export const getHistorialDocumento = async (req, res, next) => {
+  try {
+    const { documento } = req.params;
+
+    if (!documento || documento.length < 3) {
+      return res.status(400).json({
+        success: false,
+        error: 'El documento debe tener al menos 3 caracteres'
+      });
+    }
+
+    // 1. Buscar clientes activos y archivados con ese documento
+    const clientes = await Cliente.find({
+      documento: { $regex: documento, $options: 'i' }
+    }).lean();
+
+    // 2. Buscar en historial de borrados (clientes eliminados)
+    const historialBorrados = await HistorialBorrado.find({
+      tipo: 'cliente',
+      $or: [
+        { 'detalles.documento': { $regex: documento, $options: 'i' } },
+        { 'metadata.documento': { $regex: documento, $options: 'i' } }
+      ]
+    }).sort({ fechaBorrado: -1 }).lean();
+
+    // 3. Procesar información de clientes
+    const clientesInfo = clientes.map(cliente => {
+      // Recopilar notas de todos los créditos
+      const notasCreditos = [];
+      if (cliente.creditos && cliente.creditos.length > 0) {
+        cliente.creditos.forEach((credito, idx) => {
+          if (credito.notas && credito.notas.length > 0) {
+            credito.notas.forEach(nota => {
+              notasCreditos.push({
+                texto: nota.texto,
+                fecha: nota.fecha,
+                creditoIndex: idx + 1,
+                creditoMonto: credito.monto,
+                creditoTipo: credito.tipo
+              });
+            });
+          }
+        });
+      }
+
+      // Ordenar notas por fecha (más reciente primero)
+      notasCreditos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+      return {
+        _id: cliente._id,
+        nombre: cliente.nombre,
+        documento: cliente.documento,
+        telefono: cliente.telefono,
+        direccion: cliente.direccion,
+        barrio: cliente.barrio,
+        cartera: cliente.cartera,
+        etiqueta: cliente.etiqueta,
+        esArchivado: cliente.esArchivado,
+        fechaCreacion: cliente.fechaCreacion,
+        totalCreditos: cliente.creditos?.length || 0,
+        notasCreditos,
+        esVetado: cliente.etiqueta === 'vetado',
+        esPerdido: cliente.etiqueta === 'perdido'
+      };
+    });
+
+    // 4. Procesar historial de borrados
+    const borradosInfo = historialBorrados.map(registro => ({
+      nombreOriginal: registro.detalles?.nombre || registro.metadata?.nombreItem || 'N/A',
+      documentoOriginal: registro.detalles?.documento || registro.metadata?.documento || 'N/A',
+      fechaBorrado: registro.fechaBorrado,
+      usuarioBorrado: registro.usuarioNombre,
+      etiquetaOriginal: registro.detalles?.etiqueta || null
+    }));
+
+    // 5. Construir respuesta
+    const tieneHistorial = clientes.length > 0 || historialBorrados.length > 0;
+    const hayVetados = clientesInfo.some(c => c.esVetado);
+    const hayPerdidos = clientesInfo.some(c => c.esPerdido);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        tieneHistorial,
+        hayVetados,
+        hayPerdidos,
+        clientes: clientesInfo,
+        borrados: borradosInfo,
+        resumen: {
+          totalClientes: clientes.length,
+          clientesActivos: clientes.filter(c => !c.esArchivado).length,
+          clientesArchivados: clientes.filter(c => c.esArchivado).length,
+          vecesBorrado: historialBorrados.length,
+          totalNotas: clientesInfo.reduce((acc, c) => acc + c.notasCreditos.length, 0)
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
