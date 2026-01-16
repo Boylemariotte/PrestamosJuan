@@ -14,11 +14,9 @@ import { obtenerFechaLocal } from '../../utils/dateUtils';
 const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefinido = null, tipoPagoPreferido = null }) => {
   // Para K1 y K3: tipo de pago automático según posición (no se puede seleccionar)
   // Para K2: tipo de pago seleccionable (quincenal o mensual)
-  const tipoPagoInicial = carteraCliente === 'K2'
-    ? (tipoPagoPreferido && ['quincenal', 'mensual'].includes(tipoPagoPreferido) ? tipoPagoPreferido : 'quincenal')
-    : (tipoPagoPredefinido ||
-       (tipoPagoPreferido && ['semanal', 'quincenal'].includes(tipoPagoPreferido) ? tipoPagoPreferido : null) ||
-       'semanal');
+  const tipoPagoInicial = (carteraCliente === 'K1' || carteraCliente === 'K3')
+    ? (tipoPagoPredefinido || (tipoPagoPreferido && ['semanal', 'quincenal', 'mensual'].includes(tipoPagoPreferido) ? tipoPagoPreferido : 'quincenal'))
+    : (tipoPagoPreferido && ['quincenal', 'mensual'].includes(tipoPagoPreferido) ? tipoPagoPreferido : 'quincenal');
 
   const [formData, setFormData] = useState({
     monto: MONTOS_DISPONIBLES[0],
@@ -37,24 +35,18 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
   // Para K2: solo actualizar si cambia el preferido inicialmente
   useEffect(() => {
     if (carteraCliente === 'K1' || carteraCliente === 'K3') {
-      // K1 y K3: tipo fijo según posición
+      // Si hay un tipo predefinido (determinado por la card) o preferido, usarlo
       const tipoFijo = tipoPagoPredefinido ||
-        (tipoPagoPreferido && ['semanal', 'quincenal'].includes(tipoPagoPreferido) ? tipoPagoPreferido : null) ||
-        'semanal';
-      setFormData(prev => ({
-        ...prev,
-        tipo: tipoFijo
-      }));
+        (tipoPagoPreferido && ['semanal', 'quincenal', 'mensual'].includes(tipoPagoPreferido) ? tipoPagoPreferido : null);
+
+      if (tipoFijo) {
+        setFormData(prev => ({ ...prev, tipo: tipoFijo }));
+      }
     } else if (carteraCliente === 'K2') {
-      // K2: permitir selección, pero inicializar con preferido si existe
       if (tipoPagoPreferido && ['quincenal', 'mensual'].includes(tipoPagoPreferido)) {
-        setFormData(prev => ({
-          ...prev,
-          tipo: tipoPagoPreferido
-        }));
+        setFormData(prev => ({ ...prev, tipo: tipoPagoPreferido }));
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carteraCliente, tipoPagoPredefinido, tipoPagoPreferido]);
 
   // Cálculos dinámicos
@@ -218,40 +210,40 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
                   (Cartera {carteraCliente})
                 </span>
               </label>
-              {(carteraCliente === 'K1' || carteraCliente === 'K3') ? (
-                // K1 y K3: Solo lectura, determinado automáticamente según posición
-                <div className={`p-4 border-2 rounded-lg ${
-                  carteraCliente === 'K3' 
-                    ? 'bg-orange-50 border-orange-300' 
-                    : 'bg-gray-50 border-gray-300'
-                }`}>
+              {(tipoPagoPredefinido || (tipoPagoPreferido && ['semanal', 'quincenal', 'mensual'].includes(tipoPagoPreferido))) ? (
+                // Si está predefinido por la card o tiene preferencia fija, mostrar solo lectura
+                <div className={`p-4 border-2 rounded-lg ${carteraCliente === 'K3'
+                    ? 'bg-orange-50 border-orange-300'
+                    : 'bg-blue-50 border-blue-300'
+                  }`}>
                   <div className="flex items-center">
-                    <div className="flex items-center">
-                      <div className={`h-4 w-4 rounded-full flex items-center justify-center ${
-                        carteraCliente === 'K3' 
-                          ? 'bg-orange-600' 
-                          : 'bg-sky-600'
+                    <div className={`h-4 w-4 rounded-full flex items-center justify-center ${carteraCliente === 'K3' ? 'bg-orange-600' : 'bg-sky-600'
                       }`}>
-                        <div className="h-2 w-2 rounded-full bg-white"></div>
-                      </div>
-                      <div className="ml-3">
-                        <span className="font-medium text-gray-900 capitalize">
-                          {formData.tipo}
-                        </span>
-                        <p className="text-sm text-gray-500">
-                          {formData.tipo === 'semanal' && '10 cuotas - Cada sábado'}
-                          {formData.tipo === 'quincenal' && '5 cuotas'}
-                        </p>
-                      </div>
+                      <div className="h-2 w-2 rounded-full bg-white"></div>
+                    </div>
+                    <div className="ml-3">
+                      <span className="font-medium text-gray-900 capitalize">
+                        {formData.tipo}
+                      </span>
+                      <p className="text-sm text-gray-500">
+                        {formData.tipo === 'semanal' && '10 cuotas - Cada sábado'}
+                        {formData.tipo === 'quincenal' && '5 cuotas'}
+                        {formData.tipo === 'mensual' && '3 cuotas - Cada mes'}
+                      </p>
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
-                    El tipo de pago se determina automáticamente según la posición del cliente
+                    El tipo de pago está fijo según la configuración del cliente o su posición.
                   </p>
                 </div>
               ) : (
-                // K2: Seleccionable entre quincenal y mensual
+                // Si no tiene preferencia (pool mixto o K2), permitir selección
                 <div className="space-y-3">
+                  {(carteraCliente === 'K1' || carteraCliente === 'K3') && (
+                    <p className="text-xs font-medium text-blue-600 mb-2">
+                      Este cliente está en un cupo compartido. Seleccione la modalidad:
+                    </p>
+                  )}
                   <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
                     <input
                       type="radio"

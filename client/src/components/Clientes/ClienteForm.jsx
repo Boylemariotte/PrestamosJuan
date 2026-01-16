@@ -462,17 +462,16 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                 {carteraPredefinida ? (
                   <div className="p-4 border-2 rounded-lg bg-gray-50 border-gray-300">
                     <div className="flex items-center">
-                      <div className={`flex items-center p-4 border-2 rounded-lg ${
-                        formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' : 
-                        formData.cartera === 'K3' ? 'border-orange-500 bg-orange-50' : 
-                        'border-green-500 bg-green-50'
+                      <div className={`flex items-center p-4 border-2 rounded-lg ${formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' :
+                          formData.cartera === 'K3' ? 'border-orange-500 bg-orange-50' :
+                            'border-green-500 bg-green-50'
                         }`}>
                         <div className="ml-3">
                           <span className="font-semibold text-gray-900">Cartera {formData.cartera}</span>
                           <p className="text-sm text-gray-500">
-                            {formData.cartera === 'K1' ? 'Cartera principal' : 
-                             formData.cartera === 'K3' ? 'Cartera Buga' : 
-                             'Cartera secundaria'}
+                            {formData.cartera === 'K1' ? 'Cartera principal' :
+                              formData.cartera === 'K3' ? 'Cartera Buga' :
+                                'Cartera secundaria'}
                           </p>
                         </div>
                       </div>
@@ -557,17 +556,8 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                       className="input-field appearance-none pr-10 cursor-pointer"
                     >
                       <option value="">Sin preferencia (Elegir al crear crédito)</option>
-                      {formData.cartera === 'K1' ? (
-                        <>
-                          <option value="semanal">Semanal</option>
-                          <option value="quincenal">Quincenal</option>
-                        </>
-                      ) : (
-                        <>
-                          <option value="quincenal">Quincenal</option>
-                          <option value="mensual">Mensual</option>
-                        </>
-                      )}
+                      <option value="quincenal">Quincenal</option>
+                      <option value="mensual">Mensual</option>
                     </select>
                     <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                       <ChevronDown className="h-5 w-5 text-gray-400" />

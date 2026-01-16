@@ -68,29 +68,33 @@ const Clientes = () => {
     }
   }, [location]);
 
-  const handleAgregarCliente = (clienteData) => {
-    // Si hay posición predefinida, agregarla
-    if (formPosicion) {
-      clienteData.posicion = formPosicion;
+  const handleAgregarCliente = async (clienteData) => {
+    try {
+      // Si hay posición predefinida, agregarla
+      if (formPosicion) {
+        clienteData.posicion = formPosicion;
+      }
+      // Si hay tipo de pago predefinido, guardarlo como tipo de pago esperado (respaldo)
+      if (formTipoPago) {
+        clienteData.tipoPagoEsperado = formTipoPago;
+      }
+
+      await agregarCliente(clienteData);
+      setShowForm(false);
+      setFormCartera(null);
+      setFormTipoPago(null);
+      setFormPosicion(null);
+      setInitialData(null);
+    } catch (error) {
+      console.error('Error al agregar cliente:', error);
+      alert(error.response?.data?.error || error.message || 'Error al crear el cliente');
     }
-    // Si hay tipo de pago predefinido, guardarlo como tipo de pago esperado (respaldo)
-    if (formTipoPago) {
-      clienteData.tipoPagoEsperado = formTipoPago;
-    }
-    agregarCliente(clienteData);
-    setShowForm(false);
-    setFormCartera(null);
-    setFormTipoPago(null);
-    setFormCartera(null);
-    setFormTipoPago(null);
-    setFormPosicion(null);
-    setInitialData(null);
   };
 
   const handleAgregarDesdeCard = (cartera, tipoPago, posicion) => {
     setFormCartera(cartera);
-    // Si el tipo de pago es 'general' (K2), no predefinir tipo de pago
-    setFormTipoPago(tipoPago === 'general' ? null : tipoPago);
+    // Si el tipo de pago es 'general' (K2) o el pool 'quincenalMensual', no predefinir tipo de pago
+    setFormTipoPago((tipoPago === 'general' || tipoPago === 'quincenalMensual') ? null : tipoPago);
     setFormPosicion(posicion);
     setShowForm(true);
   };
@@ -112,19 +116,19 @@ const Clientes = () => {
     if (esBuga) {
       // Solo mostrar K3 para domiciliarios de Guadalajara de Buga
       return {
-        K3: { semanal: 150, quincenal: 150 } // K3 se comporta como K1
+        K3: { semanal: 150, quincenalMensual: 150 } // K3 se comporta como K1
       };
     } else if (esAdminOCeo) {
       // Administradores y CEO ven todas las carteras
       return {
-        K1: { semanal: 150, quincenal: 150, mensual: 150 },
+        K1: { semanal: 150, quincenalMensual: 150 },
         K2: { general: 225 },
-        K3: { semanal: 150, quincenal: 150, mensual: 150 } // K3 se comporta como K1
+        K3: { semanal: 150, quincenalMensual: 150 } // K3 se comporta como K1
       };
     } else {
       // Domiciliarios de Tuluá (u otros) solo ven K1 y K2
       return {
-        K1: { semanal: 150, quincenal: 150, mensual: 150 },
+        K1: { semanal: 150, quincenalMensual: 150 },
         K2: { general: 225 }
       };
     }
@@ -134,30 +138,34 @@ const Clientes = () => {
   const ocupacion = useMemo(() => {
     let base;
     if (esBuga) {
-      base = { K3: { semanal: 150, quincenal: 150, mensual: 150 } }; // K3 se comporta como K1
+      base = { K3: { semanal: 0, quincenalMensual: 0 } }; // K3 se comporta como K1
     } else if (esAdminOCeo) {
       base = {
-        K1: { semanal: 0, quincenal: 0, mensual: 0 },
+        K1: { semanal: 0, quincenalMensual: 0 },
         K2: { general: 0 },
-        K3: { semanal: 0, quincenal: 0, mensual: 0 } // K3 se comporta como K1
+        K3: { semanal: 0, quincenalMensual: 0 } // K3 se comporta como K1
       };
     } else {
       base = {
-        K1: { semanal: 0, quincenal: 0, mensual: 0 },
+        K1: { semanal: 0, quincenalMensual: 0 },
         K2: { general: 0 },
-        K3: { semanal: 0, quincenal: 0, mensual: 0 } // K3 se comporta como K1
+        K3: { semanal: 0, quincenalMensual: 0 } // K3 se comporta como K1
       };
     }
     clientes.forEach((cliente) => {
       const cartera = cliente.cartera || (esBuga ? 'K3' : 'K1');
       const tiposActivos = getTiposPagoActivos(cliente);
       // Si tiene créditos activos, usar esos tipos; si no, usar tipoPagoEsperado
+      // Si no tiene nada (sin preferencia) y es K1 o K3, asumimos quincenalMensual para el conteo
       const tipos = tiposActivos.length > 0
         ? tiposActivos
-        : (cliente.tipoPagoEsperado ? [cliente.tipoPagoEsperado] : []);
+        : (cliente.tipoPagoEsperado
+          ? [cliente.tipoPagoEsperado]
+          : (cartera === 'K2' ? [] : ['quincenalMensual'])
+        );
 
       if (tipos.length === 0) {
-        // Si no tiene tipo definido pero está en una cartera, contar como ocupación general solo para K2
+        // En K2 o carteras desconocidas sin tipo definido
         if (cartera === 'K2') {
           if (base[cartera] && base[cartera].general !== undefined) {
             base[cartera].general += 1;
@@ -172,9 +180,15 @@ const Clientes = () => {
           if (base[cartera] && base[cartera].general !== undefined) {
             base[cartera].general += 1;
           }
-        } else if (base[cartera] && typeof base[cartera][t] === 'number') {
-          // Para K1 y K3, contar por tipo de pago específico
-          base[cartera][t] += 1;
+        } else if (base[cartera]) {
+          // Para K1 y K3, quincenal y mensual se suman a quincenalMensual
+          if (t === 'quincenal' || t === 'mensual') {
+            if (typeof base[cartera].quincenalMensual === 'number') {
+              base[cartera].quincenalMensual += 1;
+            }
+          } else if (typeof base[cartera][t] === 'number') {
+            base[cartera][t] += 1;
+          }
         }
       });
     });
@@ -191,7 +205,7 @@ const Clientes = () => {
         for (let i = 1; i <= capacidad; i++) {
           cards.push({
             cartera: 'K3',
-            tipoPago: tipo, // 'semanal' o 'quincenal'
+            tipoPago: tipo, // 'semanal' o 'quincenalMensual'
             posicion: i,
             cliente: null
           });
@@ -232,7 +246,7 @@ const Clientes = () => {
           for (let i = 1; i <= capacidad; i++) {
             cards.push({
               cartera: 'K3',
-              tipoPago: tipo, // 'semanal' o 'quincenal'
+              tipoPago: tipo, // 'semanal' o 'quincenalMensual'
               posicion: i,
               cliente: null
             });
@@ -266,20 +280,19 @@ const Clientes = () => {
 
         // Si el cliente tiene créditos activos, usar esos tipos
         // Si no tiene créditos pero tiene tipoPagoEsperado, usar ese
+        // Si no tiene nada (sin preferencia), usar 'quincenalMensual' como default para el pool
         const tiposAAsignar = tiposActivos.length > 0
           ? tiposActivos
-          : (cliente.tipoPagoEsperado ? [cliente.tipoPagoEsperado] : []);
-
-        // Si no hay tipos para asignar, no hacer nada
-        if (tiposAAsignar.length === 0) return;
+          : (cliente.tipoPagoEsperado ? [cliente.tipoPagoEsperado] : ['quincenalMensual']);
 
         tiposAAsignar.forEach(tipo => {
           // Buscar la card correspondiente
           // Convertir posiciones a número para comparación correcta
           const posicionCliente = Number(cliente.posicion);
           const cardIndex = cards.findIndex(c => {
+            const mappedTipo = (tipo === 'quincenal' || tipo === 'mensual') ? 'quincenalMensual' : tipo;
             return c.cartera === carteraCliente &&
-              c.tipoPago === tipo &&
+              c.tipoPago === mappedTipo &&
               Number(c.posicion) === posicionCliente &&
               c.cliente === null;
           });
@@ -303,7 +316,7 @@ const Clientes = () => {
     let coincideTipo = filtroTipoPago === 'todos' || card.tipoPago === filtroTipoPago;
 
     // Lógica especial para filtrar tipos en K2 (donde card.tipoPago es 'general')
-    // K3 se comporta como K1, con tipos específicos (semanal/quincenal)
+    // K3 se comporta como K1, con tipos específicos (semanal/quincenalMensual)
     if (card.cartera === 'K2') {
       if (filtroTipoPago === 'todos') {
         coincideTipo = true;
@@ -316,6 +329,24 @@ const Clientes = () => {
         } else {
           // Si la card está vacía, mostrarla para quincenal y mensual (ya que es 'general')
           coincideTipo = filtroTipoPago === 'quincenal' || filtroTipoPago === 'mensual';
+        }
+      }
+    } else if (card.cartera === 'K1' || card.cartera === 'K3') {
+      if (card.tipoPago === 'quincenalMensual') {
+        if (filtroTipoPago === 'todos') {
+          coincideTipo = true;
+        } else if (filtroTipoPago === 'quincenal' || filtroTipoPago === 'mensual') {
+          // Si la card tiene cliente, verificar si coincide con el tipo filtrado
+          if (card.cliente) {
+            const tipos = getTiposPagoActivos(card.cliente);
+            const tipoCliente = tipos.length > 0 ? tipos[0] : card.cliente.tipoPagoEsperado;
+            coincideTipo = tipoCliente === filtroTipoPago;
+          } else {
+            // Si la card está vacía, mostrarla para quincenal y mensual (ya que es el pool compartido)
+            coincideTipo = true;
+          }
+        } else {
+          coincideTipo = false;
         }
       }
     }
@@ -355,9 +386,13 @@ const Clientes = () => {
     // Find credit matching the payment type of the card
     const credito = cliente.creditos.find(c => {
       const estado = determinarEstadoCredito(c.cuotas, c);
-      // Si el tipo de pago de la card es 'general', buscar cualquier crédito activo
+      // Si el tipo de pago de la card es 'general' (K2) o el pool 'quincenalMensual' (K1/K3), 
+      // buscar cualquier crédito activo que corresponda
       if (tipoPago === 'general') {
         return estado === 'activo' || estado === 'mora';
+      }
+      if (tipoPago === 'quincenalMensual') {
+        return (c.tipo === 'quincenal' || c.tipo === 'mensual') && (estado === 'activo' || estado === 'mora');
       }
       return c.tipo === tipoPago && (estado === 'activo' || estado === 'mora');
     });
@@ -439,8 +474,7 @@ const Clientes = () => {
                   <p className="text-orange-100 text-xs mt-1">clientes</p>
                   <div className="mt-3 space-y-1 text-[11px]">
                     <p className="text-orange-100">Semanal: {ocupacion.K3?.semanal || 0}/{CAPACIDADES.K3.semanal}</p>
-                    <p className="text-orange-100">Quincenal: {ocupacion.K3?.quincenal || 0}/{CAPACIDADES.K3.quincenal}</p>
-                    <p className="text-orange-100">Mensual: {ocupacion.K3?.mensual || 0}/{CAPACIDADES.K3.mensual}</p>
+                    <p className="text-orange-100">Quincenal/Mensual: {ocupacion.K3?.quincenalMensual || 0}/{CAPACIDADES.K3.quincenalMensual}</p>
                   </div>
                 </div>
                 <Briefcase className="h-12 w-12 text-orange-200" />
@@ -469,8 +503,7 @@ const Clientes = () => {
                   <p className="text-blue-100 text-xs mt-1">clientes</p>
                   <div className="mt-3 space-y-1 text-[11px]">
                     <p className="text-blue-100">Semanal: {ocupacion.K1?.semanal || 0}/{CAPACIDADES.K1.semanal}</p>
-                    <p className="text-blue-100">Quincenal: {ocupacion.K1?.quincenal || 0}/{CAPACIDADES.K1.quincenal}</p>
-                    <p className="text-blue-100">Mensual: {ocupacion.K1?.mensual || 0}/{CAPACIDADES.K1.mensual}</p>
+                    <p className="text-blue-100">Quincenal/Mensual: {ocupacion.K1?.quincenalMensual || 0}/{CAPACIDADES.K1.quincenalMensual}</p>
                   </div>
                 </div>
                 <Briefcase className="h-12 w-12 text-blue-200" />
@@ -499,8 +532,7 @@ const Clientes = () => {
                   <p className="text-orange-100 text-xs mt-1">clientes</p>
                   <div className="mt-3 space-y-1 text-[11px]">
                     <p className="text-orange-100">Semanal: {ocupacion.K3?.semanal || 0}/{CAPACIDADES.K3.semanal}</p>
-                    <p className="text-orange-100">Quincenal: {ocupacion.K3?.quincenal || 0}/{CAPACIDADES.K3.quincenal}</p>
-                    <p className="text-orange-100">Mensual: {ocupacion.K3?.mensual || 0}/{CAPACIDADES.K3.mensual}</p>
+                    <p className="text-orange-100">Quincenal/Mensual: {ocupacion.K3?.quincenalMensual || 0}/{CAPACIDADES.K3.quincenalMensual}</p>
                   </div>
                 </div>
                 <Briefcase className="h-12 w-12 text-orange-200" />
@@ -531,8 +563,7 @@ const Clientes = () => {
                   <p className="text-blue-100 text-xs mt-1">clientes</p>
                   <div className="mt-3 space-y-1 text-[11px]">
                     <p className="text-blue-100">Semanal: {ocupacion.K1?.semanal || 0}/{CAPACIDADES.K1.semanal}</p>
-                    <p className="text-blue-100">Quincenal: {ocupacion.K1?.quincenal || 0}/{CAPACIDADES.K1.quincenal}</p>
-                    <p className="text-blue-100">Mensual: {ocupacion.K1?.mensual || 0}/{CAPACIDADES.K1.mensual}</p>
+                    <p className="text-blue-100">Quincenal/Mensual: {ocupacion.K1?.quincenalMensual || 0}/{CAPACIDADES.K1.quincenalMensual}</p>
                   </div>
                 </div>
                 <Briefcase className="h-12 w-12 text-blue-200" />
@@ -854,7 +885,13 @@ const Clientes = () => {
                       )}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
-                      {creditoInfo?.tipo ? (creditoInfo.tipo.charAt(0).toUpperCase() + creditoInfo.tipo.slice(1)) : card.tipoPago}
+                      {creditoInfo?.tipo
+                        ? (creditoInfo.tipo.charAt(0).toUpperCase() + creditoInfo.tipo.slice(1))
+                        : (card.cliente?.tipoPagoEsperado
+                          ? (card.cliente.tipoPagoEsperado.charAt(0).toUpperCase() + card.cliente.tipoPagoEsperado.slice(1))
+                          : (card.tipoPago === 'quincenalMensual' ? 'Quincenal/Mensual' : card.tipoPago)
+                        )
+                      }
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
                       {esVacia ? (
