@@ -399,7 +399,8 @@ const CajaSection = ({
   totalBilletesItem,
   totalMonedasItem,
   onAgregarTotalBilletes,
-  onAgregarTotalMonedas
+  onAgregarTotalMonedas,
+  multasDia = 0
 }) => {
   // Calcular total de retiros de papelería para esta caja
   const totalRetiros = useMemo(() => {
@@ -504,9 +505,10 @@ const CajaSection = ({
       gastos: totalGastos,
       por: totalPor,
       pp: totalPP,
+      multas: multasDia || 0,
       e: totalE
     };
-  }, [filasMovimientos]);
+  }, [filasMovimientos, multasDia]);
 
   // Calcular saldo final total (solo movimientos del día actual pasados por prop)
   const saldoFinal = useMemo(() => {
@@ -595,6 +597,12 @@ const CajaSection = ({
                 </th>
                 <th className="border border-gray-500 px-4 py-3 text-left">
                   <div className="flex flex-col">
+                    <span className="text-white text-base font-bold uppercase tracking-wide">MULTAS</span>
+                    <span className="text-gray-300 text-xs font-normal mt-1">Multas diarias</span>
+                  </div>
+                </th>
+                <th className="border border-gray-500 px-4 py-3 text-left">
+                  <div className="flex flex-col">
                     <span className="text-white text-base font-bold uppercase tracking-wide">E</span>
                     <span className="text-gray-300 text-xs font-normal mt-1">Efectivo final</span>
                   </div>
@@ -634,12 +642,13 @@ const CajaSection = ({
                 <td className="border border-gray-400 px-4 py-3"></td>
                 <td className="border border-gray-400 px-4 py-3"></td>
                 <td className="border border-gray-400 px-4 py-3"></td>
+                <td className="border border-gray-400 px-4 py-3"></td>
               </tr>
 
               {/* Filas de movimientos - Inicio de caja, gastos y préstamos en la misma fila */}
               {filasMovimientos.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="border border-gray-400 px-4 py-8 text-center text-gray-500">
+                  <td colSpan="7" className="border border-gray-400 px-4 py-8 text-center text-gray-500">
                     No hay movimientos registrados.
                   </td>
                 </tr>
@@ -665,6 +674,8 @@ const CajaSection = ({
                     montoEntregado = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
                   }
                 }
+
+                const mostrarMultasEnFila = fila.index === 0;
 
                 return (
                   <tr
@@ -754,6 +765,14 @@ const CajaSection = ({
                         </div>
                       ) : null}
                     </td>
+                    {/* 6. Multas del día */}
+                    <td className="border border-gray-400 px-4 py-3">
+                      {mostrarMultasEnFila ? (
+                        <div className="text-sm font-bold text-purple-600">
+                          {formatearMoneda(multasDia || 0)}
+                        </div>
+                      ) : null}
+                    </td>
                     {/* 6. E (monto entregado) */}
                     <td className="border border-gray-400 px-4 py-3">
                       {prestamo ? (
@@ -787,6 +806,9 @@ const CajaSection = ({
                   Total Papelería
                 </td>
                 <td className="border border-gray-400 px-4 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide">
+                  Total Multas
+                </td>
+                <td className="border border-gray-400 px-4 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide">
                   Total Entregado
                 </td>
               </tr>
@@ -817,6 +839,11 @@ const CajaSection = ({
                   </div>
                 </td>
                 <td className="border border-gray-400 px-4 py-3">
+                  <div className="text-lg font-bold text-purple-600">
+                    {formatearMoneda(totales.multas || 0)}
+                  </div>
+                </td>
+                <td className="border border-gray-400 px-4 py-3">
                   <div className="text-lg font-bold text-green-600">
                     -{formatearMoneda(totales.e)}
                   </div>
@@ -825,19 +852,19 @@ const CajaSection = ({
 
               {/* Separador visual */}
               <tr className="h-4 bg-gray-200">
-                <td colSpan="6" className="border border-gray-400"></td>
+                <td colSpan="7" className="border border-gray-400"></td>
               </tr>
 
               {/* FILA 3: Encabezado Saldo Final (Full Width) */}
               <tr className="bg-blue-100 border-t-2 border-gray-600">
-                <td colSpan="6" className="border border-gray-400 px-4 py-2 text-center text-sm font-bold text-gray-800 uppercase tracking-wider">
+                <td colSpan="7" className="border border-gray-400 px-4 py-2 text-center text-sm font-bold text-gray-800 uppercase tracking-wider">
                   Saldo Final Total
                 </td>
               </tr>
 
               {/* FILA 4: Valor Saldo Final (Full Width) */}
               <tr className="bg-white border-b-2 border-gray-400">
-                <td colSpan="6" className="border border-gray-400 px-4 py-4 text-center">
+                <td colSpan="7" className="border border-gray-400 px-4 py-4 text-center">
                   <div className="text-3xl font-extrabold text-blue-700">
                     {formatearMoneda(saldoAcumulado)}
                   </div>
@@ -878,7 +905,7 @@ const CajaSection = ({
                   </div>
                 </td>
                 {/* Zona Monedas (Derecha) */}
-                <td colSpan="3" className="border border-gray-300 p-0">
+                <td colSpan="4" className="border border-gray-300 p-0">
                   <div className="flex flex-col h-full bg-white">
                     <div className="bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700 uppercase border-b border-gray-300 text-center">
                       Total dinero en monedas
@@ -949,7 +976,7 @@ const CajaSection = ({
 };
 
 const FlujoCajas = () => {
-  const { movimientosCaja, agregarMovimientoCaja, eliminarMovimientoCaja, fetchData } = useApp();
+  const { movimientosCaja, agregarMovimientoCaja, eliminarMovimientoCaja, fetchData, clientes } = useApp();
   const hoy = useMemo(() => startOfDay(new Date()), []);
   const [fechaSeleccionada, setFechaSeleccionada] = useState(hoy);
   const [modalAbierto, setModalAbierto] = useState(null);
@@ -990,6 +1017,44 @@ const FlujoCajas = () => {
     format(fechaSeleccionada, 'yyyy-MM-dd'),
     [fechaSeleccionada]
   );
+
+  // Total de multas pagadas por día separadas por caja (K1/K2/K3)
+  const multasDiaPorCaja = useMemo(() => {
+    if (!clientes || clientes.length === 0) return { 1: 0, 2: 0, 3: 0 };
+
+    const mapa = { 1: 0, 2: 0, 3: 0 };
+
+    const obtenerCaja = (carteraRaw) => {
+      const cartera = (carteraRaw || '').toUpperCase();
+      if (cartera === 'K2') return 2;
+      if (cartera === 'K3') return 3;
+      return 1;
+    };
+
+    clientes.forEach(cliente => {
+      const cajaDestino = obtenerCaja(cliente.cartera);
+      (cliente.creditos || []).forEach(credito => {
+        (credito.abonosMulta || []).forEach(abono => {
+          let fechaAbono = null;
+          if (typeof abono.fecha === 'string') {
+            fechaAbono = abono.fecha.includes('T') ? abono.fecha.split('T')[0] : abono.fecha;
+          } else if (abono.fecha instanceof Date) {
+            fechaAbono = format(abono.fecha, 'yyyy-MM-dd');
+          } else if (abono.fecha) {
+            const f = new Date(abono.fecha);
+            if (!isNaN(f.getTime())) {
+              fechaAbono = format(f, 'yyyy-MM-dd');
+            }
+          }
+          if (fechaAbono === fechaFormato) {
+            mapa[cajaDestino] += parseFloat(abono.valor || 0);
+          }
+        });
+      });
+    });
+
+    return mapa;
+  }, [clientes, fechaFormato]);
 
   // Obtener movimientos por caja para la fecha seleccionada, calcular papelería acumulada e ingresos totales
   const datosCajas = useMemo(() => {
@@ -1468,6 +1533,7 @@ const FlujoCajas = () => {
           totalMonedasItem={datosCajas.caja1.totalMonedasItem}
           onAgregarTotalBilletes={() => handleAgregarTotalBilletes(1)}
           onAgregarTotalMonedas={() => handleAgregarTotalMonedas(1)}
+        multasDia={multasDiaPorCaja[1]}
         />
 
         <CajaSection
@@ -1490,6 +1556,7 @@ const FlujoCajas = () => {
           totalMonedasItem={datosCajas.caja2.totalMonedasItem}
           onAgregarTotalBilletes={() => handleAgregarTotalBilletes(2)}
           onAgregarTotalMonedas={() => handleAgregarTotalMonedas(2)}
+        multasDia={multasDiaPorCaja[2]}
         />
 
         <CajaSection
@@ -1512,6 +1579,7 @@ const FlujoCajas = () => {
           totalMonedasItem={datosCajas.caja3.totalMonedasItem}
           onAgregarTotalBilletes={() => handleAgregarTotalBilletes(3)}
           onAgregarTotalMonedas={() => handleAgregarTotalMonedas(3)}
+        multasDia={multasDiaPorCaja[3]}
         />
       </div>
 
