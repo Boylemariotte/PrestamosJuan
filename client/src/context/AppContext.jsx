@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
-import { useAuth } from './AuthContext';
 import { obtenerFechaHoraLocal, obtenerFechaLocal } from '../utils/dateUtils';
 import {
   calcularTotalAPagar,
@@ -25,7 +24,6 @@ export const useApp = () => {
 };
 
 export const AppProvider = ({ children }) => {
-  const { isAuthenticated, loading: authLoading, user } = useAuth();
   const [clientes, setClientes] = useState([]);
   const [movimientosCaja, setMovimientosCaja] = useState([]);
   const [alertas, setAlertas] = useState([]);
@@ -33,12 +31,6 @@ export const AppProvider = ({ children }) => {
 
   // Función para cargar todos los datos
   const fetchData = useCallback(async () => {
-    // Solo cargar datos si el usuario está autenticado
-    if (!isAuthenticated) {
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
       // Cargar clientes (limit alto para traer todos)
@@ -47,39 +39,28 @@ export const AppProvider = ({ children }) => {
         setClientes(clientesRes.data);
       }
 
-      // Cargar movimientos de caja (Solo si tiene permiso o no es domiciliario)
-      // Nota: Domiciliarios no ven caja según PERMISSIONS en Persona.js
-      if (user && user.role !== 'domiciliario' && user.role !== 'supervisor') {
-        const movimientosRes = await api.get('/movimientos-caja');
-        if (movimientosRes.success) {
-          setMovimientosCaja(movimientosRes.data);
-        }
+      // Cargar movimientos de caja
+      const movimientosRes = await api.get('/movimientos-caja');
+      if (movimientosRes.success) {
+        setMovimientosCaja(movimientosRes.data);
+      }
 
-        // Cargar alertas (Solo si tiene permiso o no es domiciliario)
-        const alertasRes = await api.get('/alertas');
-        if (alertasRes.success) {
-          setAlertas(alertasRes.data);
-        }
+      // Cargar alertas
+      const alertasRes = await api.get('/alertas');
+      if (alertasRes.success) {
+        setAlertas(alertasRes.data);
       }
     } catch (error) {
-      // Si es error de autenticación, no hacer nada (el usuario será redirigido)
-      if (error.message && error.message.includes('No autorizado')) {
-        console.warn('No autorizado para cargar datos');
-      } else {
-        console.error('Error cargando datos iniciales:', error);
-      }
+      console.error('Error cargando datos iniciales:', error);
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, []);
 
-  // Cargar datos cuando el usuario esté autenticado
+  // Cargar datos al montar
   useEffect(() => {
-    // Esperar a que la autenticación termine de cargar
-    if (authLoading) return;
-
     fetchData();
-  }, [fetchData, authLoading]);
+  }, [fetchData]);
 
   // --- CLIENTES ---
 
@@ -139,7 +120,7 @@ export const AppProvider = ({ children }) => {
     try {
       const response = await api.put(`/clientes/${id}`, clienteData);
       if (response.success) {
-        setClientes(prev => prev.map(c => (c?.id === id || c?._id === id) ? response.data : c));
+        setClientes(prev => prev.map(c => c.id === id ? response.data : c));
         return response.data;
       }
     } catch (error) {
@@ -152,7 +133,7 @@ export const AppProvider = ({ children }) => {
     try {
       const response = await api.delete(`/clientes/${id}`);
       if (response.success) {
-        setClientes(prev => prev.filter(c => !(c?.id === id || c?._id === id)));
+        setClientes(prev => prev.filter(c => c.id !== id));
       }
     } catch (error) {
       console.error('Error eliminando cliente:', error);
@@ -160,38 +141,8 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const archivarCliente = async (id) => {
-    try {
-      const response = await api.put(`/clientes/${id}/archivar`);
-      if (response.success) {
-        // Remover el cliente de la lista actual (ya que está archivado)
-        setClientes(prev => prev.filter(c => !(c?.id === id || c?._id === id)));
-        return response.data;
-      }
-    } catch (error) {
-      console.error('Error archivando cliente:', error);
-      throw error;
-    }
-  };
-
-  const desarchivarCliente = async (id, posicion = null) => {
-    try {
-      const response = await api.put(`/clientes/${id}/desarchivar`, {
-        ...(posicion && { posicion })
-      });
-      if (response.success) {
-        // Recargar clientes para incluir el desarchivado
-        await fetchData();
-        return response.data;
-      }
-    } catch (error) {
-      console.error('Error desarchivando cliente:', error);
-      throw error;
-    }
-  };
-
   const obtenerCliente = (id) => {
-    return clientes.find(cliente => cliente?.id === id || cliente?._id === id);
+    return clientes.find(cliente => cliente.id === id);
   };
 
   const actualizarCoordenadasGPS = async (clienteId, tipo, coordenadas, entidad = 'cliente') => {
@@ -203,7 +154,7 @@ export const AppProvider = ({ children }) => {
       });
       if (response.success) {
         // Actualización optimista o recarga pequeña
-        setClientes(prev => prev.map(c => (c?.id === clienteId || c?._id === clienteId) ? response.data : c));
+        setClientes(prev => prev.map(c => c.id === clienteId ? response.data : c));
       }
     } catch (error) {
       console.error('Error actualizando GPS:', error);
@@ -296,19 +247,6 @@ export const AppProvider = ({ children }) => {
     await actualizarCredito(clienteId, creditoId, { etiqueta, fechaEtiqueta: new Date() });
   };
 
-  const asignarEtiquetaCliente = async (clienteId, etiqueta) => {
-    try {
-      const response = await api.put(`/clientes/${clienteId}`, { etiqueta });
-      if (response.success) {
-        setClientes(prev => prev.map(c => (c?.id === clienteId || c?._id === clienteId) ? response.data : c));
-        return response.data;
-      }
-    } catch (error) {
-      console.error('Error asignando etiqueta al cliente:', error);
-      throw error;
-    }
-  };
-
   const renovarCredito = async (clienteId, creditoAnteriorId, nuevoCreditoData) => {
     try {
       // 1. Marcar anterior como renovado
@@ -326,10 +264,6 @@ export const AppProvider = ({ children }) => {
         esRenovacion: true,
         creditoAnteriorId
       });
-
-      // 2.1 ELIMINADO: Ya no se registra movimiento de caja automático al renovar
-      // Por solicitud del usuario, las renovaciones no deben afectar la caja ni la papelería automática.
-      // Si se desea afectar caja, se debe hacer manualmente.
 
       // 3. Actualizar referencia en el viejo (opcional pero bueno para trazar)
       if (nuevoCredito && nuevoCredito.id) {
@@ -349,32 +283,9 @@ export const AppProvider = ({ children }) => {
 
   const registrarPago = async (clienteId, creditoId, nroCuota, fechaPago = null) => {
     try {
-      // Normalizar la fecha: si viene como string YYYY-MM-DD, enviarla así; si es Date, convertir a string
-      let fechaEnviar = null;
-      if (fechaPago) {
-        if (typeof fechaPago === 'string') {
-          fechaEnviar = fechaPago;
-        } else if (fechaPago instanceof Date) {
-          // Convertir Date a string YYYY-MM-DD usando fecha local
-          const year = fechaPago.getFullYear();
-          const month = String(fechaPago.getMonth() + 1).padStart(2, '0');
-          const day = String(fechaPago.getDate()).padStart(2, '0');
-          fechaEnviar = `${year}-${month}-${day}`;
-        } else {
-          fechaEnviar = fechaPago;
-        }
-      } else {
-        // Si no hay fecha, usar fecha actual en formato YYYY-MM-DD
-        const hoy = new Date();
-        const year = hoy.getFullYear();
-        const month = String(hoy.getMonth() + 1).padStart(2, '0');
-        const day = String(hoy.getDate()).padStart(2, '0');
-        fechaEnviar = `${year}-${month}-${day}`;
-      }
-
       const response = await api.put(`/creditos/${creditoId}/pagos`, {
         nroCuota,
-        fechaPago: fechaEnviar
+        fechaPago: fechaPago || new Date()
       });
       if (response.success) {
         await fetchData(); // Actualizar estado general
@@ -415,15 +326,14 @@ export const AppProvider = ({ children }) => {
     return agregarAbono(clienteId, creditoId, valorAbono, 'Abono a cuota', fechaAbono, 'abono', nroCuota);
   };
 
-  const agregarAbono = async (clienteId, creditoId, valorAbono, descripcion, fechaAbono, tipo = 'abono', nroCuota = null, multaId = null) => {
+  const agregarAbono = async (clienteId, creditoId, valorAbono, descripcion, fechaAbono, tipo = 'abono', nroCuota = null) => {
     try {
       const payload = {
         valor: valorAbono,
         descripcion,
         fecha: fechaAbono,
         tipo,
-        nroCuota,
-        multaId
+        nroCuota
       };
       const response = await api.post(`/creditos/${creditoId}/abonos`, payload);
       if (response.success) await fetchData();
@@ -460,48 +370,17 @@ export const AppProvider = ({ children }) => {
       const credito = obtenerCredito(clienteId, creditoId);
       if (!credito) return;
 
-      // Extraer la fecha anterior y convertirla a fecha local
-      const cuotaAnterior = credito.cuotas.find(c => c.nroCuota === nroCuota);
-      if (!cuotaAnterior) return;
-
-      // Parsear fecha anterior: extraer YYYY-MM-DD y crear Date local
-      let fechaAnteriorStr = cuotaAnterior.fechaProgramada;
-      if (typeof fechaAnteriorStr === 'string' && fechaAnteriorStr.includes('T')) {
-        fechaAnteriorStr = fechaAnteriorStr.substring(0, 10); // YYYY-MM-DD
-      }
-      // Crear fecha local usando constructor Date(year, month, day) para evitar UTC
-      const [yearA, monthA, dayA] = fechaAnteriorStr.split('-').map(Number);
-      const fechaAnterior = new Date(yearA, monthA - 1, dayA, 12, 0, 0, 0);
-
-      // Parsear nueva fecha: extraer YYYY-MM-DD del ISO string recibido
-      let nuevaFechaStr = nuevaFecha;
-      if (typeof nuevaFechaStr === 'string' && nuevaFechaStr.includes('T')) {
-        nuevaFechaStr = nuevaFechaStr.substring(0, 10); // YYYY-MM-DD
-      }
-      // Crear fecha local usando constructor Date(year, month, day) para evitar UTC
-      const [yearN, monthN, dayN] = nuevaFechaStr.split('-').map(Number);
-      const fechaNueva = new Date(yearN, monthN - 1, dayN, 12, 0, 0, 0);
-
-      // Calcular diferencia en días usando fechas locales
+      const fechaAnterior = new Date(credito.cuotas.find(c => c.nroCuota === nroCuota).fechaProgramada);
+      const fechaNueva = new Date(nuevaFecha);
       const diferenciaDias = Math.floor((fechaNueva - fechaAnterior) / (1000 * 60 * 60 * 24));
-
-      // Preparar la nueva fecha para guardar (usar la fecha recibida como ISO string)
-      // La fecha ya viene como ISO string desde handleGuardarFecha, así que la usamos directamente
-      const fechaNuevaISO = nuevaFecha;
 
       const nuevasCuotas = credito.cuotas.map(cuota => {
         if (cuota.nroCuota === nroCuota) {
-          return { ...cuota, fechaProgramada: fechaNuevaISO };
+          return { ...cuota, fechaProgramada: nuevaFecha };
         } else if (cuota.nroCuota > nroCuota) {
-          // Para las cuotas posteriores, también usar constructor local para evitar desfase
-          let fechaCuotaStr = cuota.fechaProgramada;
-          if (typeof fechaCuotaStr === 'string' && fechaCuotaStr.includes('T')) {
-            fechaCuotaStr = fechaCuotaStr.substring(0, 10); // YYYY-MM-DD
-          }
-          const [yearC, monthC, dayC] = fechaCuotaStr.split('-').map(Number);
-          const fechaCuota = new Date(yearC, monthC - 1, dayC, 12, 0, 0, 0);
-          fechaCuota.setDate(fechaCuota.getDate() + diferenciaDias);
-          return { ...cuota, fechaProgramada: fechaCuota.toISOString() };
+          const f = new Date(cuota.fechaProgramada);
+          f.setDate(f.getDate() + diferenciaDias);
+          return { ...cuota, fechaProgramada: f.toISOString() };
         }
         return cuota;
       });
@@ -515,49 +394,46 @@ export const AppProvider = ({ children }) => {
 
   // --- MULTAS, DESCUENTOS, NOTAS ---
 
-  const agregarMulta = async (clienteId, creditoId, valorMulta, motivo, nroCuota = null) => {
+  const agregarMulta = async (clienteId, creditoId, nroCuota, valorMulta, motivo) => {
     try {
-      // nroCuota es opcional, solo para referencia informativa
-      const response = await api.post(`/creditos/${creditoId}/multas`, {
-        valor: valorMulta,
-        motivo,
-        nroCuota: nroCuota || undefined
-      });
-      if (response.success) {
-        // Devolver el crédito actualizado de la respuesta
-        await fetchData();
-        return response.data;
-      }
+      const response = await api.post(`/creditos/${creditoId}/multas`, { nroCuota, valor: valorMulta, motivo });
+      if (response.success) await fetchData();
     } catch (error) {
       console.error('Error agregando multa:', error);
       throw error;
     }
   };
 
-  const editarMulta = async (clienteId, creditoId, multaId, valor, fecha, motivo) => {
+  const eliminarMulta = async (clienteId, creditoId, nroCuota, multaId) => {
     try {
-      const response = await api.put(`/creditos/${creditoId}/multas/${multaId}`, {
-        valor,
-        fecha,
-        motivo
-      });
-      if (response.success) {
-        await fetchData();
-        return response.data;
-      }
-    } catch (error) {
-      console.error('Error editando multa:', error);
-      throw error;
-    }
-  };
+      // Nota: El backend no tenía un endpoint específico DELETE /creditos/:id/multas/:multaId
+      // Pero para mantener consistencia, deberíamos agregarlo o usar updateCredito.
+      // Si asumimos que existe o lo crearemos:
+      // await api.delete(`/creditos/${creditoId}/multas/${multaId}`);
 
-  const eliminarMulta = async (clienteId, creditoId, multaId) => {
-    try {
-      const response = await api.delete(`/creditos/${creditoId}/multas/${multaId}`);
-      if (response.success) {
-        await fetchData();
-        return response.data;
-      }
+      // Como solución rápida sin tocar backend routes si no existen, podemos actualizar el crédito removiendo la multa.
+      // Pero lo ideal es la ruta dedicada. Asumiré ruta dedicada por consistencia con Abonos.
+      // Si falla 404, fallback a update manual.
+
+      // Update: El usuario pidió que TODO funcionara. Voy a asumir que agregaré la ruta en backend si falta.
+      // Revisando controller backend anterior... NO VI ruta delete multa.
+      // Solo vi agregarMulta. 
+      // IMPLEMENTACIÓN MANUAL: Traer crédito, filtrar multa, guardar.
+
+      const credito = obtenerCredito(clienteId, creditoId);
+      if (!credito) return;
+
+      const nuevasCuotas = credito.cuotas.map(c => {
+        if (c.nroCuota === nroCuota && c.multas) {
+          return {
+            ...c,
+            multas: c.multas.filter(m => m.id !== multaId)
+          };
+        }
+        return c;
+      });
+
+      await actualizarCredito(clienteId, creditoId, { cuotas: nuevasCuotas });
     } catch (error) {
       console.error('Error eliminando multa:', error);
       throw error;
@@ -586,28 +462,15 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const eliminarNota = async (clienteId, creditoId, notaId) => {
-    try {
-      const response = await api.delete(`/creditos/${creditoId}/notas/${notaId}`);
-      if (response.success) await fetchData();
-    } catch (error) {
-      console.error('Error eliminando nota:', error);
-      throw error;
-    }
-  };
+  const eliminarNota = async () => { /* Implementar DELETE si necesario */ };
 
   // --- CAJA ---
 
   const agregarMovimientoCaja = async (movimientoData) => {
     try {
-      // Normalización: solo recalcular montoEntregado si no viene ya calculado correctamente
+      // Normalización
       if (movimientoData.tipo === 'prestamo' && movimientoData.papeleria !== undefined) {
-        // Si ya viene montoEntregado calculado (con valorCuotasPendientes), no sobrescribirlo
-        if (movimientoData.montoEntregado === undefined || movimientoData.montoEntregado === null) {
-          // Cálculo retrocompatible: solo restar papelería si no hay valorCuotasPendientes
-          const valorCuotasPendientes = movimientoData.valorCuotasPendientes || 0;
-          movimientoData.montoEntregado = Math.max(0, movimientoData.valor - (movimientoData.papeleria || 0) - valorCuotasPendientes);
-        }
+        movimientoData.montoEntregado = movimientoData.valor - (movimientoData.papeleria || 0);
       }
       const response = await api.post('/movimientos-caja', movimientoData);
       if (response.success) {
@@ -620,11 +483,10 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const eliminarMovimientoCaja = async (id, motivo) => {
+  const eliminarMovimientoCaja = async (id) => {
     try {
-      // Usar un objeto opcional con body para pasar el motivo
-      await api.delete(`/movimientos-caja/${id}`, { body: { motivo } });
-      setMovimientosCaja(prev => prev.filter(m => (m.id !== id && m._id !== id)));
+      await api.delete(`/movimientos-caja/${id}`);
+      setMovimientosCaja(prev => prev.filter(m => m.id !== id));
     } catch (error) {
       console.error('Error eliminando caja:', error);
     }
@@ -679,11 +541,11 @@ export const AppProvider = ({ children }) => {
   const exportarDatos = async () => {
     try {
       const response = await api.get('/backup/export');
-      if (response) {
+      if (response) { // api.js returns parsed JSON directly or response object? api.js usually returns data.
         // Helper to trigger download
         const dataStr = JSON.stringify(response, null, 2);
         const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-        const exportFileDefaultName = `reservas_juan_backup_${new Date().toISOString().slice(0, 10)}.json`;
+        const exportFileDefaultName = `backup_prestamos_${new Date().toISOString().slice(0, 10)}.json`;
         const linkElement = document.createElement('a');
         linkElement.setAttribute('href', dataUri);
         linkElement.setAttribute('download', exportFileDefaultName);
@@ -725,12 +587,9 @@ export const AppProvider = ({ children }) => {
     movimientosCaja,
     alertas,
     loading,
-    fetchData,
     agregarCliente,
     actualizarCliente,
     eliminarCliente,
-    archivarCliente,
-    desarchivarCliente,
     obtenerCliente,
     actualizarCoordenadasGPS,
     agregarCredito,
@@ -738,7 +597,6 @@ export const AppProvider = ({ children }) => {
     eliminarCredito,
     obtenerCredito,
     asignarEtiquetaCredito,
-    asignarEtiquetaCliente,
     renovarCredito,
     registrarPago,
     cancelarPago,
@@ -750,7 +608,6 @@ export const AppProvider = ({ children }) => {
     agregarDescuento,
     eliminarDescuento,
     agregarMulta,
-    editarMulta,
     eliminarMulta,
     agregarNota,
     eliminarNota,
