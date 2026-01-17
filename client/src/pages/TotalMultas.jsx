@@ -14,6 +14,8 @@ const TotalMultas = () => {
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [totalSum, setTotalSum] = useState(0);
+    const [totalIngresos, setTotalIngresos] = useState(0);
+    const [totalRetiros, setTotalRetiros] = useState(0);
 
     const [pagina, setPagina] = useState(1);
     const registrosPorPagina = 10;
@@ -22,6 +24,7 @@ const TotalMultas = () => {
         nombrePersona: '',
         valor: '',
         fecha: format(new Date(), 'yyyy-MM-dd'),
+        tipo: 'ingresoMulta'
     });
 
     const fetchMultas = useCallback(async () => {
@@ -31,6 +34,8 @@ const TotalMultas = () => {
             if (response.success) {
                 setMultas(response.data.map(m => ({ ...m, fecha: new Date(m.fecha) })));
                 setTotalSum(response.totalSum);
+                setTotalIngresos(response.totalIngresos || 0);
+                setTotalRetiros(response.totalRetiros || 0);
             }
         } catch (error) {
             console.error('Error al cargar multas:', error);
@@ -78,6 +83,7 @@ const TotalMultas = () => {
                 nombrePersona: '',
                 valor: '',
                 fecha: format(new Date(), 'yyyy-MM-dd'),
+                tipo: 'ingresoMulta'
             });
             setShowForm(false);
         } catch (error) {
@@ -91,6 +97,7 @@ const TotalMultas = () => {
             nombrePersona: multa.nombrePersona,
             valor: multa.valor,
             fecha: format(multa.fecha, 'yyyy-MM-dd'),
+            tipo: multa.tipo || 'ingresoMulta'
         });
         setEditingId(multa.id || multa._id);
         setShowForm(true);
@@ -127,9 +134,9 @@ const TotalMultas = () => {
         <div className="p-3 sm:p-6 max-w-7xl mx-auto">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Total de Multas</h1>
+                    <h1 className="text-2xl font-bold text-gray-900">Historial de Multas</h1>
                     <p className="text-sm text-gray-500 mt-1">
-                        Registro y seguimiento histórico de multas aplicadas
+                        Registro de ingresos y retiros de multas
                     </p>
                 </div>
 
@@ -142,46 +149,93 @@ const TotalMultas = () => {
                                 nombrePersona: '',
                                 valor: '',
                                 fecha: format(new Date(), 'yyyy-MM-dd'),
+                                tipo: 'ingresoMulta'
                             });
                         }}
                         className="flex items-center px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors"
                     >
                         <Plus className="h-4 w-4 mr-2" />
-                        Nueva Multa
+                        Nueva Transacción
                     </button>
                 </div>
             </div>
 
-            {/* Stats Card */}
-            <div className="bg-gradient-to-br from-red-50 to-red-100 p-6 rounded-xl shadow-sm border-2 border-red-200 mb-6">
-                <div className="flex items-center gap-3 mb-2">
-                    <ArrowDownCircle className="h-6 w-6 text-red-600" />
-                    <h2 className="text-lg font-semibold text-gray-800">Suma Total de Multas</h2>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-6 rounded-xl shadow-sm border-2 border-slate-200">
+                    <div className="flex items-center gap-3 mb-2">
+                        <ArrowDownCircle className="h-6 w-6 text-slate-600" />
+                        <h2 className="text-lg font-semibold text-gray-800">Saldo Actual</h2>
+                    </div>
+                    <div className="text-3xl font-bold text-slate-700">
+                        {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(totalSum)}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Total acumulado disponible</p>
                 </div>
-                <div className="text-4xl font-bold text-red-700">
-                    {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(totalSum)}
+
+                <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-xl shadow-sm border-2 border-green-200">
+                    <div className="flex items-center gap-3 mb-2">
+                        <Plus className="h-6 w-6 text-green-600" />
+                        <h2 className="text-lg font-semibold text-gray-800">Total Ingresos</h2>
+                    </div>
+                    <div className="text-3xl font-bold text-green-700">
+                        {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(totalIngresos)}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Suma de todas las multas agregadas</p>
                 </div>
-                <p className="text-sm text-gray-600 mt-1">Acumulado total histórico registrado</p>
+
+                <div className="bg-gradient-to-br from-red-50 to-red-100 p-6 rounded-xl shadow-sm border-2 border-red-200">
+                    <div className="flex items-center gap-3 mb-2">
+                        <Trash2 className="h-6 w-6 text-red-600" />
+                        <h2 className="text-lg font-semibold text-gray-800">Total Retirado</h2>
+                    </div>
+                    <div className="text-3xl font-bold text-red-700">
+                        {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(totalRetiros)}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Suma de todos los retiros efectuados</p>
+                </div>
             </div>
 
             {/* Form */}
             {showForm && (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
                     <h2 className="text-lg font-semibold mb-4">
-                        {editingId ? 'Editar Multa' : 'Nueva Multa'}
+                        {editingId ? 'Editar Transacción' : 'Nueva Transacción'}
                     </h2>
                     <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="flex gap-4 mb-4">
+                            <button
+                                type="button"
+                                onClick={() => setFormData(prev => ({ ...prev, tipo: 'ingresoMulta' }))}
+                                className={`flex-1 py-3 px-4 rounded-lg font-bold transition-all ${formData.tipo === 'ingresoMulta'
+                                    ? 'bg-green-600 text-white shadow-lg scale-105'
+                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                    }`}
+                            >
+                                Ingreso por Multa
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setFormData(prev => ({ ...prev, tipo: 'retiroMulta' }))}
+                                className={`flex-1 py-3 px-4 rounded-lg font-bold transition-all ${formData.tipo === 'retiroMulta'
+                                    ? 'bg-red-600 text-white shadow-lg scale-105'
+                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                    }`}
+                            >
+                                Retiro de Dinero
+                            </button>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Persona
+                                    {formData.tipo === 'ingresoMulta' ? 'Persona' : 'Motivo'}
                                 </label>
                                 <input
                                     type="text"
                                     name="nombrePersona"
                                     value={formData.nombrePersona}
                                     onChange={handleInputChange}
-                                    placeholder="Nombre de quien fue la multa"
+                                    placeholder={formData.tipo === 'ingresoMulta' ? "Nombre de quien fue la multa" : "Ej. Retiro para papelería o gastos"}
                                     className="w-full p-2 border border-gray-300 rounded-md focus:ring-slate-500 focus:border-slate-500"
                                     required
                                 />
@@ -280,7 +334,8 @@ const TotalMultas = () => {
                                 <thead className="bg-gray-50">
                                     <tr>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Persona</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Persona / Motivo</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registrado por</th>
                                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
@@ -292,11 +347,18 @@ const TotalMultas = () => {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                                 {format(multa.fecha, "PPP", { locale: es })}
                                             </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                {multa.tipo === 'ingresoMulta' ? (
+                                                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">INGRESO</span>
+                                                ) : (
+                                                    <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold">RETIRO</span>
+                                                )}
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                                                 {multa.nombrePersona}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-bold">
-                                                {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(multa.valor)}
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${multa.tipo === 'ingresoMulta' ? 'text-green-600' : 'text-red-600'}`}>
+                                                {multa.tipo === 'retiroMulta' ? '-' : '+'} {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(multa.valor)}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                 {multa.registradoPor?.nombre || 'S/N'}

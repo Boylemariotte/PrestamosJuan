@@ -36,19 +36,32 @@ export const getMultas = async (req, res, next) => {
 
         const total = await TotalMultas.countDocuments(query);
 
-        // Calcular el total de todas las multas (según el filtro)
-        const agregacionTotal = await TotalMultas.aggregate([
+        // Calcular estadísticas de multas
+        const agregacionStats = await TotalMultas.aggregate([
             { $match: query },
-            { $group: { _id: null, totalSum: { $sum: '$valor' } } }
+            {
+                $group: {
+                    _id: null,
+                    totalIngresos: {
+                        $sum: { $cond: [{ $eq: ['$tipo', 'ingresoMulta'] }, '$valor', 0] }
+                    },
+                    totalRetiros: {
+                        $sum: { $cond: [{ $eq: ['$tipo', 'retiroMulta'] }, '$valor', 0] }
+                    }
+                }
+            }
         ]);
 
-        const totalSum = agregacionTotal.length > 0 ? agregacionTotal[0].totalSum : 0;
+        const stats = agregacionStats.length > 0 ? agregacionStats[0] : { totalIngresos: 0, totalRetiros: 0 };
+        const totalSum = stats.totalIngresos - stats.totalRetiros;
 
         res.status(200).json({
             success: true,
             count: multas.length,
             total,
-            totalSum,
+            totalSum, // Esto ahora es el saldo final (Ingresos - Retiros)
+            totalIngresos: stats.totalIngresos,
+            totalRetiros: stats.totalRetiros,
             data: multas
         });
     } catch (error) {
@@ -88,7 +101,7 @@ export const getMulta = async (req, res, next) => {
  */
 export const createMulta = async (req, res, next) => {
     try {
-        const { nombrePersona, fecha, valor } = req.body;
+        const { nombrePersona, fecha, valor, tipo } = req.body;
 
         if (!nombrePersona || !valor) {
             return res.status(400).json({
@@ -101,6 +114,7 @@ export const createMulta = async (req, res, next) => {
             nombrePersona,
             fecha: fecha || Date.now(),
             valor,
+            tipo: tipo || 'ingresoMulta',
             registradoPor: req.user._id
         });
 
@@ -120,7 +134,7 @@ export const createMulta = async (req, res, next) => {
  */
 export const updateMulta = async (req, res, next) => {
     try {
-        const { nombrePersona, fecha, valor } = req.body;
+        const { nombrePersona, fecha, valor, tipo } = req.body;
 
         let multa = await TotalMultas.findById(req.params.id);
 
@@ -133,7 +147,7 @@ export const updateMulta = async (req, res, next) => {
 
         multa = await TotalMultas.findByIdAndUpdate(
             req.params.id,
-            { nombrePersona, fecha, valor },
+            { nombrePersona, fecha, valor, tipo },
             { new: true, runValidators: true }
         );
 

@@ -16,6 +16,11 @@ const totalMultasSchema = new mongoose.Schema({
         required: [true, 'El valor es requerido'],
         min: [0, 'El valor no puede ser negativo']
     },
+    tipo: {
+        type: String,
+        enum: ['ingresoMulta', 'retiroMulta'],
+        default: 'ingresoMulta'
+    },
     registradoPor: {
         type: mongoose.Schema.ObjectId,
         ref: 'Persona',

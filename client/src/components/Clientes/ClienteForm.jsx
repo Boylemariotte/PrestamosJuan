@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, ChevronDown, Search } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { X, ChevronDown, Search, AlertTriangle, ExternalLink } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import api from '../../services/api';
 import { BARRIOS_TULUA, BARRIOS_BUGA } from '../../constants/barrios';
 import { useAuth } from '../../context/AuthContext';
 
 const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoPredefinido, initialData }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const esAdminOCeo = user && (user.role === 'administrador' || user.role === 'ceo');
   const [formData, setFormData] = useState({
     nombre: '',
@@ -38,6 +41,14 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
   const [usarOtroBarrioFiador, setUsarOtroBarrioFiador] = useState(false);
   const [otroBarrioFiador, setOtroBarrioFiador] = useState('');
   const barriosFiadorRef = useRef(null);
+
+  // Estado para validación de documento en tiempo real
+  const [validationDoc, setValidationDoc] = useState({
+    loading: false,
+    exists: false,
+    isArchived: false,
+    detalle: null
+  });
 
   // Cerrar dropdown al hacer clic fuera
   useEffect(() => {
@@ -210,6 +221,51 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
     }
   };
 
+  // Validación de documento en tiempo real (solo para nuevos clientes)
+  useEffect(() => {
+    if (cliente) return; // No validar si estamos editando
+
+    const val = formData.documento;
+    if (!val || val.length < 5) {
+      setValidationDoc({ loading: false, exists: false, isArchived: false, detalle: null });
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setValidationDoc(prev => ({ ...prev, loading: true }));
+      try {
+        const response = await api.get(`/clientes/historial-documento/${val}`);
+        if (response.success && response.data.clientes.length > 0) {
+          // Si hay múltiples, priorizar el primero que sea activo o el primero en la lista
+          const exacto = response.data.clientes.find(c => c.documento === val) || response.data.clientes[0];
+
+          if (exacto) {
+            setValidationDoc({
+              loading: false,
+              exists: true,
+              isArchived: exacto.esArchivado,
+              detalle: exacto
+            });
+          } else {
+            setValidationDoc({ loading: false, exists: false, isArchived: false, detalle: null });
+          }
+        } else {
+          setValidationDoc({ loading: false, exists: false, isArchived: false, detalle: null });
+        }
+      } catch (err) {
+        console.error('Error validando documento:', err);
+        setValidationDoc({ loading: false, exists: false, isArchived: false, detalle: null });
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timer);
+  }, [formData.documento, cliente]);
+
+  const handleVerDetalle = () => {
+    navigate('/buscar-documento', { state: { documento: formData.documento } });
+    onClose();
+  };
+
   // Actualizar barrios cuando cambia la cartera
   useEffect(() => {
     // Si cambia la cartera, limpiar la búsqueda de barrios para que use la lista correcta
@@ -329,9 +385,38 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                   name="documento"
                   value={formData.documento}
                   onChange={handleChange}
-                  className="input-field"
+                  className={`input-field ${validationDoc.exists ? 'border-red-500 bg-red-50' : ''}`}
                   required
                 />
+
+                {/* Alertas de Validación de Documento */}
+                {validationDoc.loading && (
+                  <p className="text-xs text-blue-500 mt-1 animate-pulse">Verificando documento...</p>
+                )}
+
+                {validationDoc.exists && !validationDoc.isArchived && (
+                  <div className="mt-2 flex items-center gap-2 text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span className="text-sm font-bold">Este cliente ya existe (Activo en Cartera {validationDoc.detalle?.cartera})</span>
+                  </div>
+                )}
+
+                {validationDoc.exists && validationDoc.isArchived && (
+                  <div className="mt-2 flex flex-col gap-2 bg-amber-50 p-3 rounded border border-amber-200">
+                    <div className="flex items-center gap-2 text-amber-700">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span className="text-sm font-bold">Este cliente ya existe y se encuentra archivado</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleVerDetalle}
+                      className="flex items-center justify-center gap-2 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold transition-colors w-fit"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Ver detalle
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -463,8 +548,8 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                   <div className="p-4 border-2 rounded-lg bg-gray-50 border-gray-300">
                     <div className="flex items-center">
                       <div className={`flex items-center p-4 border-2 rounded-lg ${formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' :
-                          formData.cartera === 'K3' ? 'border-orange-500 bg-orange-50' :
-                            'border-green-500 bg-green-50'
+                        formData.cartera === 'K3' ? 'border-orange-500 bg-orange-50' :
+                          'border-green-500 bg-green-50'
                         }`}>
                         <div className="ml-3">
                           <span className="font-semibold text-gray-900">Cartera {formData.cartera}</span>
@@ -723,7 +808,8 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
             </button>
             <button
               type="submit"
-              className="btn-primary"
+              className={`btn-primary ${(!cliente && validationDoc.exists) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={!cliente && validationDoc.exists}
             >
               {cliente ? 'Actualizar' : 'Crear'} Cliente
             </button>

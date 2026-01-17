@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Search, AlertTriangle, User, FileText, Trash2, Calendar, MapPin, Phone, Archive, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
@@ -10,6 +11,8 @@ const BuscarDocumento = () => {
     const [historial, setHistorial] = useState(null);
     const [error, setError] = useState('');
     const [buscado, setBuscado] = useState(false);
+
+    const location = useLocation();
 
     const buscarHistorial = useCallback(async () => {
         if (!documento || documento.length < 3) {
@@ -35,6 +38,19 @@ const BuscarDocumento = () => {
             setLoading(false);
         }
     }, [documento]);
+
+    // Efecto para buscar automáticamente si viene un documento en el state
+    useEffect(() => {
+        if (location.state?.documento) {
+            setDocumento(location.state.documento);
+            // Pequeño delay para asegurar que el estado de documento se actualizó
+            const timer = setTimeout(() => {
+                const btn = document.getElementById('btn-buscar-doc');
+                if (btn) btn.click();
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [location.state]);
 
     const handleKeyPress = (e) => {
         if (e.key === 'Enter') {
@@ -96,6 +112,7 @@ const BuscarDocumento = () => {
                         />
                     </div>
                     <button
+                        id="btn-buscar-doc"
                         onClick={buscarHistorial}
                         disabled={loading || documento.length < 3}
                         className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
