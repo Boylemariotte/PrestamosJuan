@@ -1,28 +1,11 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, Wallet, Plus, DollarSign, FileText, X, Trash2, CheckCircle, ArrowDownCircle, ArrowUpCircle, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Wallet, Plus, DollarSign, FileText, X, Trash2, CheckCircle, ArrowDownCircle, ArrowUpCircle, AlertCircle } from 'lucide-react';
 import { format, startOfDay, addDays, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useApp } from '../context/AppContext';
 import { formatearMoneda, calcularPapeleria, calcularMontoEntregado } from '../utils/creditCalculations';
 import { savePapeleriaTransaction, getPapeleriaTransactions, deletePapeleriaTransaction } from '../utils/papeleriaStorage';
-
-// Función auxiliar para normalizar fecha a string yyyy-MM-dd
-const normalizarFecha = (fecha) => {
-  if (!fecha) return null;
-  try {
-    if (typeof fecha === 'string') {
-      if (fecha.includes('T')) return fecha.split('T')[0];
-      if (fecha.match(/^\d{4}-\d{2}-\d{2}$/)) return fecha;
-      const d = new Date(fecha);
-      if (!isNaN(d.getTime())) {
-        return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
-      }
-    } else if (fecha instanceof Date && !isNaN(fecha.getTime())) {
-      return `${fecha.getUTCFullYear()}-${String(fecha.getUTCMonth() + 1).padStart(2, '0')}-${String(fecha.getUTCDate()).padStart(2, '0')}`;
-    }
-  } catch (e) { }
-  return null;
-};
+import MotivoEliminacionModal from '../components/Cajas/MotivoEliminacionModal';
 
 // Componente Modal reutilizable
 const Modal = ({ titulo, onClose, children, color = 'blue' }) => (
@@ -48,9 +31,6 @@ const Modal = ({ titulo, onClose, children, color = 'blue' }) => (
   </div>
 );
 
-// Montos disponibles para préstamos
-const MONTOS_PRESTAMO = [200000, 300000, 400000, 500000, 1000000];
-
 // Componente de formulario modal unificado
 const ModalForm = ({
   titulo,
@@ -71,6 +51,7 @@ const ModalForm = ({
 }) => {
   const [monto, setMonto] = useState('');
   const [descripcion, setDescripcion] = useState('');
+  const [valorCuotasPendientes, setValorCuotasPendientes] = useState('');
   const [papeleriaManual, setPapeleriaManual] = useState(0);
   const [usarPapeleriaManual, setUsarPapeleriaManual] = useState(false);
 
@@ -80,10 +61,11 @@ const ModalForm = ({
 
     if (!monto || parseFloat(monto) <= 0) return;
 
-    // Si es un préstamo, guardar también la papelería manual si se está usando
+    // Si es un préstamo, guardar también la papelería manual si se está usando y el valor de cuotas pendientes
     if (tipo === 'prestamo') {
       const datosAdicionales = {
-        papeleria: usarPapeleriaManual ? parseFloat(papeleriaManual) : null
+        papeleria: usarPapeleriaManual ? parseFloat(papeleriaManual) : null,
+        valorCuotasPendientes: parseFloat(valorCuotasPendientes) || 0
       };
       onSave(tipo, parseFloat(monto), descripcion, datosAdicionales);
     } else {
@@ -92,6 +74,7 @@ const ModalForm = ({
 
     setMonto('');
     setDescripcion('');
+    setValorCuotasPendientes('');
     setUsarPapeleriaManual(false);
     setPapeleriaManual(0);
     onClose(); // Cerrar el modal después de guardar
@@ -112,12 +95,23 @@ const ModalForm = ({
     }
   };
 
-  const handleMontoPreseleccionado = (montoPreseleccionado, e) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
+  const handleValorCuotasChange = (e) => {
+    const value = e.target.value.replace(/[^0-9.]/g, '');
+    const decimalCount = (value.match(/\./g) || []).length;
+    if (decimalCount <= 1) {
+      setValorCuotasPendientes(value);
     }
-    setMonto(montoPreseleccionado.toString());
+  };
+
+  const handleValorCuotasBlur = () => {
+    const num = parseFloat(valorCuotasPendientes);
+    if (!isNaN(num) && num >= 0) {
+      setValorCuotasPendientes(num.toFixed(2));
+    } else if (valorCuotasPendientes === '') {
+      setValorCuotasPendientes('');
+    } else {
+      setValorCuotasPendientes('0.00');
+    }
   };
 
   const colorClasses = {
@@ -128,35 +122,15 @@ const ModalForm = ({
 
   // Calcular papelería y monto entregado si es préstamo
   const montoNum = parseFloat(monto) || 0;
+  const valorCuotasNum = parseFloat(valorCuotasPendientes) || 0;
   const papeleriaCalculada = montoNum > 0 ? calcularPapeleria(montoNum) : 0;
   const papeleria = usarPapeleriaManual ? (parseFloat(papeleriaManual) || 0) : papeleriaCalculada;
-  const montoEntregado = montoNum > 0 ? (montoNum - (usarPapeleriaManual ? (parseFloat(papeleriaManual) || 0) : calcularPapeleria(montoNum))) : 0;
+  // Monto a entregar = Monto préstamo - Papelería - Valor cuotas pendientes
+  const montoEntregado = montoNum > 0 ? (montoNum - papeleria - valorCuotasNum) : 0;
 
   return (
     <Modal titulo={titulo} onClose={onClose} color={color}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {mostrarMontosPrestamo && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Seleccionar Monto:
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              {MONTOS_PRESTAMO.map((montoPreseleccionado) => (
-                <button
-                  key={montoPreseleccionado}
-                  type="button"
-                  onClick={() => handleMontoPreseleccionado(montoPreseleccionado)}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${parseFloat(monto) === montoPreseleccionado
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                >
-                  {formatearMoneda(montoPreseleccionado)}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             {labelMonto} *
@@ -169,11 +143,56 @@ const ModalForm = ({
             onBlur={handleMontoBlur}
             className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder={placeholderMonto}
-            autoFocus={!mostrarMontosPrestamo}
+            autoFocus
             required
           />
         </div>
-        {mostrarMontosPrestamo && montoNum > 0 && (
+        {tipo === 'prestamo' ? (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Valor total de cuotas pendientes
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={valorCuotasPendientes}
+                onChange={handleValorCuotasChange}
+                onBlur={handleValorCuotasBlur}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Descripción
+              </label>
+              <input
+                type="text"
+                value={descripcion}
+                onChange={(e) => setDescripcion(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Ej: Javier - Préstamo nuevo"
+              />
+            </div>
+          </>
+        ) : (
+          (labelDescripcion || placeholderDescripcion) && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {labelDescripcion || 'Descripción'}
+              </label>
+              <input
+                type="text"
+                value={descripcion}
+                onChange={(e) => setDescripcion(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder={placeholderDescripcion || 'Descripción'}
+              />
+            </div>
+          )
+        )}
+        {tipo === 'prestamo' && montoNum > 0 && (
           <div className="bg-gray-50 p-3 rounded-md space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Monto Préstamo:</span>
@@ -225,24 +244,16 @@ const ModalForm = ({
                 </div>
               )}
             </div>
+            {valorCuotasNum > 0 && (
+              <div className="flex justify-between text-sm border-t border-gray-300 pt-2">
+                <span className="text-gray-600">Valor cuotas pendientes:</span>
+                <span className="font-semibold text-red-600">- {formatearMoneda(valorCuotasNum)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-sm border-t border-gray-300 pt-2">
               <span className="text-gray-700 font-medium">Monto a Entregar:</span>
-              <span className="font-bold text-green-600">{formatearMoneda(montoEntregado)}</span>
+              <span className="font-bold text-green-600">{formatearMoneda(Math.max(0, montoEntregado))}</span>
             </div>
-          </div>
-        )}
-        {(labelDescripcion || placeholderDescripcion) && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {labelDescripcion || 'Descripción'}
-            </label>
-            <input
-              type="text"
-              value={descripcion}
-              onChange={(e) => setDescripcion(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder={placeholderDescripcion || 'Descripción'}
-            />
           </div>
         )}
         <div className={`mt-6 flex ${mostrarBotonCancelar ? 'justify-between' : 'justify-end'} space-x-3`}>
@@ -269,8 +280,107 @@ const ModalForm = ({
   );
 };
 
+// Componente para seleccionar ciudad y añadir a papelería
+const ModalIngresoPapeleria = ({ onClose, onSave, fechaSeleccionada }) => {
+  const [monto, setMonto] = useState('');
+  const [descripcion, setDescripcion] = useState('');
+  const [ciudad, setCiudad] = useState('Tuluá');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!monto || parseFloat(monto) <= 0) return;
+    onSave(parseFloat(monto), descripcion, ciudad);
+    onClose();
+  };
+
+  return (
+    <Modal titulo="Añadir Plata a Papelería" onClose={onClose} color="orange">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Ciudad *
+          </label>
+          <select
+            value={ciudad}
+            onChange={(e) => setCiudad(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            required
+          >
+            <option value="Tuluá">Tuluá</option>
+            <option value="Guadalajara de Buga">Guadalajara de Buga</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Monto *
+          </label>
+          <input
+            type="number"
+            value={monto}
+            onChange={(e) => setMonto(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            placeholder="0.00"
+            autoFocus
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Descripción
+          </label>
+          <input
+            type="text"
+            value={descripcion}
+            onChange={(e) => setDescripcion(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            placeholder="Ej: Aporte de capital"
+          />
+        </div>
+        <div className="flex justify-end space-x-3 mt-6">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 text-sm font-medium text-white bg-orange-600 border border-transparent rounded-md hover:bg-orange-700 flex items-center gap-2"
+          >
+            <CheckCircle className="h-4 w-4" />
+            Confirmar Ingreso
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+};
+
+// Componente Toast para alertas personalizadas
+const Toast = ({ mensaje, tipo = 'success', onClose }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose();
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const bgColor = tipo === 'success' ? 'bg-green-600' : 'bg-red-600';
+
+  return (
+    <div className={`fixed bottom-8 right-8 ${bgColor} text-white px-6 py-3 rounded-lg shadow-2xl z-[100] flex items-center gap-3 animate-pulse`}>
+      {tipo === 'success' ? <CheckCircle className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
+      <span className="font-medium">{mensaje}</span>
+      <button onClick={onClose} className="ml-2 hover:opacity-80">
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
+};
+
 // Componente CajaSection optimizado
-const CajaSection = React.memo(({
+const CajaSection = ({
   titulo,
   color,
   numero,
@@ -279,15 +389,17 @@ const CajaSection = React.memo(({
   papeleriaAcumulada = 0,
   saldoAnterior = 0,
   saldoAcumulado = 0,
-  totalMultasDia = 0,
   onIniciarCaja,
   onAgregarGasto,
   onAgregarPrestamo,
   onRetirarPapeleria,
+  onAgregarPapeleria,
   onEliminarMovimiento,
   movimientosCaja,
-  multasDia = [],
-  totalMultas = 0
+  totalBilletesItem,
+  totalMonedasItem,
+  onAgregarTotalBilletes,
+  onAgregarTotalMonedas
 }) => {
   // Calcular total de retiros de papelería para esta caja
   const totalRetiros = useMemo(() => {
@@ -298,12 +410,26 @@ const CajaSection = React.memo(({
 
   // Agrupar todos los movimientos en filas: emparejar inicios de caja, gastos y préstamos
   const filasMovimientos = useMemo(() => {
-    const iniciosCaja = [...movimientos].filter(mov => mov.tipo === 'inicioCaja')
+    let iniciosCaja = [...movimientos].filter(mov => mov.tipo === 'inicioCaja')
       .sort((a, b) => {
         const fechaA = new Date(a.fechaCreacion || a.id);
         const fechaB = new Date(b.fechaCreacion || b.id);
         return fechaA - fechaB;
       });
+
+    // Inyectar Saldo Anterior como un movimiento virtual de "Ingreso"
+    if (saldoAnterior > 0) {
+      const fechaAnterior = subDays(new Date(fechaSeleccionada), 1);
+      const movimientoSaldoAnterior = {
+        id: 'saldo-anterior-virtual',
+        tipo: 'inicioCaja',
+        valor: saldoAnterior,
+        descripcion: `Ingreso caja dia ${format(fechaAnterior, 'yyyy-MM-dd')}`,
+        isVirtual: true // Flag para identificar que no es de BD y no permitir borrar
+      };
+      // Agregar al principio
+      iniciosCaja = [movimientoSaldoAnterior, ...iniciosCaja];
+    }
 
     const gastos = [...movimientos].filter(mov => mov.tipo === 'gasto')
       .sort((a, b) => {
@@ -333,7 +459,7 @@ const CajaSection = React.memo(({
     }
 
     return filas;
-  }, [movimientos]);
+  }, [movimientos, saldoAnterior, fechaSeleccionada]);
 
   // Calcular totales
   const totales = useMemo(() => {
@@ -357,12 +483,17 @@ const CajaSection = React.memo(({
     }, 0);
     const totalE = filasMovimientos.reduce((sum, fila) => {
       if (fila.prestamo) {
-        // Calcular monto entregado igual que en la tabla: valor del préstamo menos la papelería efectiva
+        // Usar el montoEntregado guardado si existe, de lo contrario calcularlo
+        if (fila.prestamo.montoEntregado !== undefined && fila.prestamo.montoEntregado !== null) {
+          return sum + fila.prestamo.montoEntregado;
+        }
+        // Cálculo retrocompatible: valor del préstamo menos la papelería efectiva menos cuotas pendientes
         const valorPrestamo = fila.prestamo.valor || 0;
         const papeleria = fila.prestamo.papeleria !== undefined && fila.prestamo.papeleria !== null
           ? fila.prestamo.papeleria
           : calcularPapeleria(valorPrestamo);
-        const montoEntregado = valorPrestamo - papeleria;
+        const valorCuotasPendientes = fila.prestamo.valorCuotasPendientes || 0;
+        const montoEntregado = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
         return sum + montoEntregado;
       }
       return sum;
@@ -377,30 +508,43 @@ const CajaSection = React.memo(({
     };
   }, [filasMovimientos]);
 
-  // Calcular saldo final total (todos los movimientos de esta caja, de todos los días)
+  // Calcular saldo final total (solo movimientos del día actual pasados por prop)
   const saldoFinal = useMemo(() => {
-    // Filtrar todos los movimientos de esta caja, sin importar la fecha
-    const todosMovimientosCaja = movimientosCaja.filter(mov =>
-      mov.caja === numero && mov.tipoMovimiento === 'flujoCaja'
-    );
+    // Usar solo los movimientos del día (pasados por prop) para el cálculo manual
+    const todosMovimientosCaja = movimientos;
 
-    let saldoAcumulado = 0;
+    // `movimientos` prop ya contiene los movimientos filtrados para el día y la caja actual.
+    let saldoAcumulado = saldoAnterior > 0 ? parseFloat(saldoAnterior) : 0;
 
-    todosMovimientosCaja.forEach(mov => {
+    movimientos.forEach(mov => {
       if (mov.tipo === 'inicioCaja') {
         saldoAcumulado += parseFloat(mov.valor || 0);
-      } else if (mov.tipo === 'gasto') {
+      } else if (mov.tipo === 'gasto' || mov.tipo === 'gastoMonedas') {
         saldoAcumulado -= parseFloat(mov.valor || 0);
       } else if (mov.tipo === 'prestamo') {
-        const montoEntregado = parseFloat(mov.montoEntregado || calcularMontoEntregado(mov.valor || 0));
-        saldoAcumulado -= montoEntregado;
+        // Usar montoEntregado guardado si existe, de lo contrario calcularlo considerando cuotas pendientes
+        let montoEntregado = mov.montoEntregado;
+        if (montoEntregado === undefined || montoEntregado === null) {
+          const valorPrestamo = mov.valor || 0;
+          const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+            ? mov.papeleria
+            : calcularPapeleria(valorPrestamo);
+          const valorCuotasPendientes = mov.valorCuotasPendientes || 0;
+          montoEntregado = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
+        }
+        saldoAcumulado -= parseFloat(montoEntregado || 0);
+        // Restar también la papelería del saldo final total
+        const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+          ? mov.papeleria
+          : calcularPapeleria(mov.valor || 0);
+        saldoAcumulado -= parseFloat(papeleria || 0);
       } else if (mov.tipo === 'retiroPapeleria') {
         saldoAcumulado -= parseFloat(mov.valor || 0);
       }
     });
 
     return saldoAcumulado;
-  }, [movimientosCaja, numero]);
+  }, [movimientos, saldoAnterior]);
 
   // Calcular total de filas para el rowSpan
   // Ya no se usa rowSpan, pero se mantiene por si acaso
@@ -455,18 +599,6 @@ const CajaSection = React.memo(({
                     <span className="text-gray-300 text-xs font-normal mt-1">Efectivo final</span>
                   </div>
                 </th>
-                <th className="border border-gray-500 px-4 py-3 text-left">
-                  <div className="flex flex-col">
-                    <span className="text-white text-base font-bold uppercase tracking-wide">MULTAS</span>
-                    <span className="text-gray-300 text-xs font-normal mt-1">Cobradas hoy</span>
-                  </div>
-                </th>
-                <th className="border border-gray-500 px-4 py-3 text-left">
-                  <div className="flex flex-col">
-                    <span className="text-white text-base font-bold uppercase tracking-wide">MULTAS</span>
-                    <span className="text-gray-300 text-xs font-normal mt-1">Cobradas hoy</span>
-                  </div>
-                </th>
               </tr>
             </thead>
             <tbody>
@@ -502,15 +634,12 @@ const CajaSection = React.memo(({
                 <td className="border border-gray-400 px-4 py-3"></td>
                 <td className="border border-gray-400 px-4 py-3"></td>
                 <td className="border border-gray-400 px-4 py-3"></td>
-                <td className="border border-gray-400 px-4 py-3"></td>
-                <td className="border border-gray-400 px-4 py-3"></td>
               </tr>
 
               {/* Filas de movimientos - Inicio de caja, gastos y préstamos en la misma fila */}
               {filasMovimientos.length === 0 && (
                 <tr>
-                  <td colSpan="7" className="border border-gray-400 px-4 py-8 text-center text-gray-500">
-                  <td colSpan="7" className="border border-gray-400 px-4 py-8 text-center text-gray-500">
+                  <td colSpan="6" className="border border-gray-400 px-4 py-8 text-center text-gray-500">
                     No hay movimientos registrados.
                   </td>
                 </tr>
@@ -524,10 +653,18 @@ const CajaSection = React.memo(({
                     : calcularPapeleria(prestamo.valor || 0))
                   : 0;
 
-                // Calcular el monto entregado basado en la papelería usada
-                const montoEntregado = prestamo
-                  ? (prestamo.valor || 0) - papeleria
-                  : 0;
+                // Calcular el monto entregado: usar el guardado si existe, de lo contrario calcularlo
+                let montoEntregado = 0;
+                if (prestamo) {
+                  if (prestamo.montoEntregado !== undefined && prestamo.montoEntregado !== null) {
+                    montoEntregado = prestamo.montoEntregado;
+                  } else {
+                    // Cálculo retrocompatible
+                    const valorPrestamo = prestamo.valor || 0;
+                    const valorCuotasPendientes = prestamo.valorCuotasPendientes || 0;
+                    montoEntregado = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
+                  }
+                }
 
                 return (
                   <tr
@@ -537,16 +674,23 @@ const CajaSection = React.memo(({
                     <td className="border border-gray-400 px-4 py-3">
                       {inicioCaja ? (
                         <div className="flex items-center justify-between">
-                          <div className="text-sm font-bold text-gray-800">
-                            {formatearMoneda(inicioCaja.valor || 0)}
+                          <div>
+                            <div className="text-lg font-bold text-gray-800">
+                              {formatearMoneda(inicioCaja.valor || 0)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {inicioCaja.descripcion || 'Sin descripción'}
+                            </div>
                           </div>
-                          <button
-                            onClick={() => onEliminarMovimiento(inicioCaja.id)}
-                            className="text-red-500 hover:text-red-700 ml-2"
-                            title="Eliminar inicio de caja"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          {!inicioCaja.isVirtual && (
+                            <button
+                              onClick={() => onEliminarMovimiento(inicioCaja.id)}
+                              className="text-red-500 hover:text-red-700 ml-2"
+                              title="Eliminar inicio de caja"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                       ) : null}
                     </td>
@@ -555,11 +699,11 @@ const CajaSection = React.memo(({
                       {gasto ? (
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-sm font-medium text-gray-700">
-                              {gasto.descripcion || 'Sin descripción'}
-                            </div>
-                            <div className="text-xs font-semibold text-red-600">
+                            <div className="text-lg font-bold text-red-600">
                               {formatearMoneda(gasto.valor)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {gasto.descripcion || 'Sin descripción'}
                             </div>
                           </div>
                           <button
@@ -577,11 +721,11 @@ const CajaSection = React.memo(({
                       {prestamo ? (
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-sm font-medium text-gray-700">
-                              {prestamo.descripcion || 'Sin descripción'}
+                            <div className="text-lg font-bold text-blue-600">
+                              {formatearMoneda(prestamo.valor)}
                             </div>
                             <div className="text-xs text-gray-500">
-                              Préstamo/RF
+                              {prestamo.descripcion || 'Sin descripción'}
                             </div>
                           </div>
                           <button
@@ -594,8 +738,8 @@ const CajaSection = React.memo(({
                         </div>
                       ) : null}
                     </td>
-                    {/* 4. Por (monto del préstamo) */}
-                    <td className="border border-gray-400 px-4 py-3">
+                    {/* 4. Por (monto del préstamo) - Ocultar en pantallas pequeñas o mantener como referencia */}
+                    <td className="border border-gray-400 px-4 py-3 hidden sm:table-cell">
                       {prestamo ? (
                         <div className="text-sm font-bold text-blue-600">
                           {formatearMoneda(prestamo.valor)}
@@ -618,8 +762,6 @@ const CajaSection = React.memo(({
                         </div>
                       ) : null}
                     </td>
-                    {/* 7. Multas - Celda vacía en filas de movimientos */}
-                    <td className="border border-gray-400 px-4 py-3"></td>
                   </tr>
                 );
               })}
@@ -646,9 +788,6 @@ const CajaSection = React.memo(({
                 </td>
                 <td className="border border-gray-400 px-4 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide">
                   Total Entregado
-                </td>
-                <td className="border border-gray-400 px-4 py-2 text-xs font-bold text-gray-700 uppercase tracking-wide">
-                  Total Multas
                 </td>
               </tr>
 
@@ -682,29 +821,23 @@ const CajaSection = React.memo(({
                     -{formatearMoneda(totales.e)}
                   </div>
                 </td>
-                <td className="border border-gray-400 px-4 py-3">
-                  <div className="text-lg font-bold text-amber-600 flex items-center gap-1">
-                    <AlertTriangle className="h-4 w-4" />
-                    {formatearMoneda(totalMultasDia)}
-                  </div>
-                </td>
               </tr>
 
               {/* Separador visual */}
               <tr className="h-4 bg-gray-200">
-                <td colSpan="7" className="border border-gray-400"></td>
+                <td colSpan="6" className="border border-gray-400"></td>
               </tr>
 
               {/* FILA 3: Encabezado Saldo Final (Full Width) */}
               <tr className="bg-blue-100 border-t-2 border-gray-600">
-                <td colSpan="7" className="border border-gray-400 px-4 py-2 text-center text-sm font-bold text-gray-800 uppercase tracking-wider">
+                <td colSpan="6" className="border border-gray-400 px-4 py-2 text-center text-sm font-bold text-gray-800 uppercase tracking-wider">
                   Saldo Final Total
                 </td>
               </tr>
 
               {/* FILA 4: Valor Saldo Final (Full Width) */}
               <tr className="bg-white border-b-2 border-gray-400">
-                <td colSpan="7" className="border border-gray-400 px-4 py-4 text-center">
+                <td colSpan="6" className="border border-gray-400 px-4 py-4 text-center">
                   <div className="text-3xl font-extrabold text-blue-700">
                     {formatearMoneda(saldoAcumulado)}
                   </div>
@@ -714,7 +847,7 @@ const CajaSection = React.memo(({
               {/* FILA 5: Totales Billetes y Monedas (Horizontal Split) */}
               <tr className="bg-gray-50 border-t border-gray-300">
                 {/* Zona Billetes (Izquierda) */}
-                <td colSpan="4" className="border border-gray-300 p-0">
+                <td colSpan="3" className="border border-gray-300 p-0">
                   <div className="flex flex-col h-full bg-white">
                     <div className="bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700 uppercase border-b border-gray-300 text-center">
                       Total dinero en billetes
@@ -793,25 +926,64 @@ const CajaSection = React.memo(({
               </div>
             </div>
           </div>
-          <button
-            onClick={() => onRetirarPapeleria(numero)}
-            className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-1"
-          >
-            <Plus className="h-4 w-4" />
-            Retirar
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onRetirarPapeleria(numero)}
+              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              Retirar
+            </button>
+            <button
+              onClick={onAgregarPapeleria}
+              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              Añadir
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </div >
   );
-});
+};
 
 const FlujoCajas = () => {
-  const { movimientosCaja, agregarMovimientoCaja, eliminarMovimientoCaja, fetchData, clientes } = useApp();
+  const { movimientosCaja, agregarMovimientoCaja, eliminarMovimientoCaja, fetchData } = useApp();
   const hoy = useMemo(() => startOfDay(new Date()), []);
   const [fechaSeleccionada, setFechaSeleccionada] = useState(hoy);
   const [modalAbierto, setModalAbierto] = useState(null);
   const [cajaSeleccionada, setCajaSeleccionada] = useState(null);
+  const [movimientoAEliminar, setMovimientoAEliminar] = useState(null);
+  const [modalEliminarAbierto, setModalEliminarAbierto] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  // Normalizar movimientos provenientes del backend (fecha a yyyy-MM-dd y tipoMovimiento por defecto)
+  const movimientosFlujo = useMemo(() => {
+    return movimientosCaja
+      .map((mov) => {
+        let fechaNormalizada = mov.fecha;
+
+        if (mov.fecha) {
+          // Estrategia: Usar siempre la fecha UTC del servidor (YYYY-MM-DD)
+          // Esto evita que la conversión a hora local cambie el día visualizado
+          // independientemente de la hora a la que se guardó.
+          if (typeof mov.fecha === 'string' && mov.fecha.length >= 10) {
+            fechaNormalizada = mov.fecha.substring(0, 10);
+          } else if (mov.fecha instanceof Date) {
+            // Si ya es objeto Date, formatearlo a ISO y cortar
+            fechaNormalizada = mov.fecha.toISOString().substring(0, 10);
+          }
+        }
+
+        return {
+          ...mov,
+          fecha: fechaNormalizada,
+          tipoMovimiento: mov.tipoMovimiento || 'flujoCaja'
+        };
+      })
+      .filter((mov) => mov.tipoMovimiento === 'flujoCaja');
+  }, [movimientosCaja]);
 
   // Formatear fecha para consultas
   const fechaFormato = useMemo(() =>
@@ -819,74 +991,35 @@ const FlujoCajas = () => {
     [fechaSeleccionada]
   );
 
-  // Calcular multas pagadas del día (desde los créditos de los clientes)
-  const multasPagadasDia = useMemo(() => {
-    const multas = [];
-    if (!clientes || !Array.isArray(clientes)) return multas;
-
-    clientes.forEach(cliente => {
-      if (!cliente.creditos || !Array.isArray(cliente.creditos)) return;
-
-      cliente.creditos.forEach(credito => {
-        // Revisar abonosMulta del crédito
-        if (credito.abonosMulta && Array.isArray(credito.abonosMulta)) {
-          credito.abonosMulta.forEach(abonoMulta => {
-            const fechaAbono = normalizarFecha(abonoMulta.fecha);
-            if (fechaAbono === fechaFormato) {
-              multas.push({
-                clienteId: cliente.id,
-                clienteNombre: cliente.nombre,
-                creditoId: credito.id,
-                creditoTipo: credito.tipo,
-                valor: abonoMulta.valor || 0,
-                motivo: abonoMulta.descripcion || 'Multa'
-              });
-            }
-          });
-        }
-      });
-    });
-
-    return multas;
-  }, [clientes, fechaFormato]);
-
-  // Total de multas del día
-  const totalMultasDia = useMemo(() => {
-    return multasPagadasDia.reduce((sum, m) => sum + (m.valor || 0), 0);
-  }, [multasPagadasDia]);
-
   // Obtener movimientos por caja para la fecha seleccionada, calcular papelería acumulada e ingresos totales
   const datosCajas = useMemo(() => {
     // Movimientos del día seleccionado
-    const movimientosFecha = movimientosCaja.filter(mov =>
-      mov.fecha === fechaFormato && mov.tipoMovimiento === 'flujoCaja'
+    const movimientosFecha = movimientosFlujo.filter(mov =>
+      mov.fecha === fechaFormato
     );
 
     // Todos los movimientos de préstamos para calcular papelería acumulada
-    const todosPrestamos = movimientosCaja.filter(mov =>
-      mov.tipo === 'prestamo' && mov.tipoMovimiento === 'flujoCaja'
+    const todosPrestamos = movimientosFlujo.filter(mov =>
+      mov.tipo === 'prestamo'
     );
 
     // Movimientos de inicio de caja de todos los días
-    const todosIniciosCaja = movimientosCaja.filter(mov =>
-      mov.tipo === 'inicioCaja' && mov.tipoMovimiento === 'flujoCaja'
+    const todosIniciosCaja = movimientosFlujo.filter(mov =>
+      mov.tipo === 'inicioCaja'
     );
 
     // Movimientos de retiro de papelería
-    const retirosPapeleria = movimientosCaja.filter(mov =>
-      mov.tipo === 'retiroPapeleria' && mov.tipoMovimiento === 'flujoCaja'
+    const retirosPapeleria = movimientosFlujo.filter(mov =>
+      mov.tipo === 'retiroPapeleria'
     );
 
-    // Obtener la fecha de ayer
-    const fechaAyer = format(subDays(fechaSeleccionada, 1), 'yyyy-MM-dd');
-
-    // Obtener movimientos de días anteriores (hasta la fecha actual)
-    const movimientosAnteriores = movimientosCaja.filter(mov => {
-      if (mov.tipoMovimiento !== 'flujoCaja') return false;
-      const movDate = new Date(mov.fecha);
+    /* SECCIÓN ELIMINADA: Búsqueda de movimientos anteriores desactivada
+    const movimientosAnteriores = movimientosFlujo.filter(mov => {
+      const movDate = mov.fecha ? new Date(mov.fecha) : null;
       const currentDate = new Date(fechaFormato);
-      return movDate < currentDate;
+      return movDate && movDate < currentDate;
     });
+    */
 
     const datos = {
       caja1: {
@@ -895,7 +1028,9 @@ const FlujoCajas = () => {
         ingresosAcumulados: 0,
         retirosPapeleria: 0,
         saldoAnterior: 0,
-        saldoAcumulado: 0
+        saldoAcumulado: 0,
+        totalBilletesItem: null,
+        totalMonedasItem: null
       },
       caja2: {
         movimientos: [],
@@ -903,184 +1038,154 @@ const FlujoCajas = () => {
         ingresosAcumulados: 0,
         retirosPapeleria: 0,
         saldoAnterior: 0,
-        saldoAcumulado: 0
+        saldoAcumulado: 0,
+        totalBilletesItem: null,
+        totalMonedasItem: null
+      },
+      caja3: {
+        movimientos: [],
+        papeleriaAcumulada: 0,
+        ingresosAcumulados: 0,
+        retirosPapeleria: 0,
+        saldoAnterior: 0,
+        saldoAcumulado: 0,
+        totalBilletesItem: null,
+        totalMonedasItem: null
       }
     };
 
     // Procesar movimientos de la fecha seleccionada
     movimientosFecha.forEach(mov => {
-      if (mov.caja === 1) {
-        datos.caja1.movimientos.push(mov);
-      } else if (mov.caja === 2) {
-        datos.caja2.movimientos.push(mov);
+      // Usar comparación flexible (==) para caja por seguridad de tipos
+      if (mov.caja == 1) {
+        if (mov.tipo === 'totalBilletes') datos.caja1.totalBilletesItem = mov;
+        else if (mov.tipo === 'totalMonedas') datos.caja1.totalMonedasItem = mov;
+        else datos.caja1.movimientos.push(mov);
+      } else if (mov.caja == 2) {
+        if (mov.tipo === 'totalBilletes') datos.caja2.totalBilletesItem = mov;
+        else if (mov.tipo === 'totalMonedas') datos.caja2.totalMonedasItem = mov;
+        else datos.caja2.movimientos.push(mov);
+      } else if (mov.caja == 3) {
+        if (mov.tipo === 'totalBilletes') datos.caja3.totalBilletesItem = mov;
+        else if (mov.tipo === 'totalMonedas') datos.caja3.totalMonedasItem = mov;
+        else datos.caja3.movimientos.push(mov);
       }
     });
 
+    /* SECCIÓN ELIMINADA: Cálculo automático de saldo anterior basado en historial
+       Se ha desactivado para permitir el control manual del saldo inicial diario.
+    
     // Calcular saldo acumulado de días anteriores para cada caja
     movimientosAnteriores.forEach(mov => {
-      if (mov.caja === 1) {
-        if (mov.tipo === 'inicioCaja') {
-          datos.caja1.saldoAnterior += parseFloat(mov.valor || 0);
-        } else if (mov.tipo === 'gasto') {
-          datos.caja1.saldoAnterior -= parseFloat(mov.valor || 0);
-        } else if (mov.tipo === 'prestamo') {
-          // Para préstamos, restamos el monto total (ya que es dinero que sale de la caja)
-          datos.caja1.saldoAnterior -= parseFloat(mov.valor || 0);
-        }
-      } else if (mov.caja === 2) {
-        if (mov.tipo === 'inicioCaja') {
-          datos.caja2.saldoAnterior += parseFloat(mov.valor || 0);
-        } else if (mov.tipo === 'gasto') {
-          datos.caja2.saldoAnterior -= parseFloat(mov.valor || 0);
-        } else if (mov.tipo === 'prestamo') {
-          datos.caja2.saldoAnterior -= parseFloat(mov.valor || 0);
-        }
-      }
+       ... lógica anterior ...
     });
+    */
 
     // Calcular ingresos acumulados por caja (solo inicios de caja)
     todosIniciosCaja.forEach(mov => {
-      if (mov.caja === 1) {
+      if (mov.caja == 1) {
         datos.caja1.ingresosAcumulados += parseFloat(mov.valor || 0);
-      } else if (mov.caja === 2) {
+      } else if (mov.caja == 2) {
         datos.caja2.ingresosAcumulados += parseFloat(mov.valor || 0);
+      } else if (mov.caja == 3) {
+        datos.caja3.ingresosAcumulados += parseFloat(mov.valor || 0);
       }
     });
 
     // Calcular papelería acumulada por caja
     todosPrestamos.forEach(mov => {
-      if (mov.caja === 1 && mov.papeleria) {
-        datos.caja1.papeleriaAcumulada += parseFloat(mov.papeleria);
-      } else if (mov.caja === 2 && mov.papeleria) {
-        datos.caja2.papeleriaAcumulada += parseFloat(mov.papeleria);
+      // Verificar que papeleria existe y es un número válido (puede ser 0)
+      const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+        ? parseFloat(mov.papeleria)
+        : 0;
+
+      if (mov.caja == 1) {
+        datos.caja1.papeleriaAcumulada += papeleria;
+      } else if (mov.caja == 2) {
+        datos.caja2.papeleriaAcumulada += papeleria;
+      } else if (mov.caja == 3) {
+        datos.caja3.papeleriaAcumulada += papeleria;
       }
     });
 
     // Restar retiros de papelería
     retirosPapeleria.forEach(mov => {
-      if (mov.caja === 1) {
+      if (mov.caja == 1) {
         datos.caja1.retirosPapeleria += parseFloat(mov.valor || 0);
         datos.caja1.papeleriaAcumulada -= parseFloat(mov.valor || 0);
-      } else if (mov.caja === 2) {
+      } else if (mov.caja == 2) {
         datos.caja2.retirosPapeleria += parseFloat(mov.valor || 0);
         datos.caja2.papeleriaAcumulada -= parseFloat(mov.valor || 0);
+      } else if (mov.caja == 3) {
+        datos.caja3.retirosPapeleria += parseFloat(mov.valor || 0);
+        datos.caja3.papeleriaAcumulada -= parseFloat(mov.valor || 0);
       }
     });
 
     // Asegurar que la papelería no sea negativa
     datos.caja1.papeleriaAcumulada = Math.max(0, datos.caja1.papeleriaAcumulada);
     datos.caja2.papeleriaAcumulada = Math.max(0, datos.caja2.papeleriaAcumulada);
+    datos.caja3.papeleriaAcumulada = Math.max(0, datos.caja3.papeleriaAcumulada);
 
     // Calcular saldo acumulado (saldo anterior + ingresos del día - gastos del día)
     datos.caja1.saldoAcumulado = datos.caja1.saldoAnterior;
     datos.caja2.saldoAcumulado = datos.caja2.saldoAnterior;
+    datos.caja3.saldoAcumulado = datos.caja3.saldoAnterior;
 
     // Sumar ingresos del día
     movimientosFecha.forEach(mov => {
       if (mov.tipo === 'inicioCaja') {
-        if (mov.caja === 1) datos.caja1.saldoAcumulado += parseFloat(mov.valor || 0);
-        if (mov.caja === 2) datos.caja2.saldoAcumulado += parseFloat(mov.valor || 0);
+        if (mov.caja == 1) datos.caja1.saldoAcumulado += parseFloat(mov.valor || 0);
+        if (mov.caja == 2) datos.caja2.saldoAcumulado += parseFloat(mov.valor || 0);
+        if (mov.caja == 3) datos.caja3.saldoAcumulado += parseFloat(mov.valor || 0);
       }
     });
 
     // Restar gastos y préstamos del día
     movimientosFecha.forEach(mov => {
-      if (mov.tipo === 'gasto' || mov.tipo === 'prestamo') {
-        if (mov.caja === 1) datos.caja1.saldoAcumulado -= parseFloat(mov.valor || 0);
-        if (mov.caja === 2) datos.caja2.saldoAcumulado -= parseFloat(mov.valor || 0);
+      if (mov.tipo === 'gasto') {
+        if (mov.caja == 1) datos.caja1.saldoAcumulado -= parseFloat(mov.valor || 0);
+        if (mov.caja == 2) datos.caja2.saldoAcumulado -= parseFloat(mov.valor || 0);
+        if (mov.caja == 3) datos.caja3.saldoAcumulado -= parseFloat(mov.valor || 0);
+      } else if (mov.tipo === 'prestamo') {
+        // Restar el monto entregado del préstamo
+        let montoARestar = mov.montoEntregado;
+        if (montoARestar === undefined || montoARestar === null) {
+          const valorPrestamo = mov.valor || 0;
+          const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+            ? mov.papeleria
+            : calcularPapeleria(valorPrestamo);
+          const valorCuotasPendientes = mov.valorCuotasPendientes || 0;
+          montoARestar = Math.max(0, valorPrestamo - papeleria - valorCuotasPendientes);
+        }
+        if (mov.caja == 1) datos.caja1.saldoAcumulado -= parseFloat(montoARestar || 0);
+        if (mov.caja == 2) datos.caja2.saldoAcumulado -= parseFloat(montoARestar || 0);
+        if (mov.caja == 3) datos.caja3.saldoAcumulado -= parseFloat(montoARestar || 0);
+
+        // Restar también la papelería del saldo final
+        const papeleria = mov.papeleria !== undefined && mov.papeleria !== null
+          ? mov.papeleria
+          : calcularPapeleria(mov.valor || 0);
+        if (mov.caja == 1) datos.caja1.saldoAcumulado -= parseFloat(papeleria || 0);
+        if (mov.caja == 2) datos.caja2.saldoAcumulado -= parseFloat(papeleria || 0);
+        if (mov.caja == 3) datos.caja3.saldoAcumulado -= parseFloat(papeleria || 0);
       }
     });
 
     return datos;
   }, [movimientosFlujo, fechaFormato]);
 
-  // Calcular multas pagadas en el día por cartera (Caja 1 = K1, Caja 2 = K2, Caja 3 = K3)
-  // Usando la misma lógica que DiaDeCobro.jsx
-  const multasPorCaja = useMemo(() => {
-    const resultado = {
-      caja1: 0, // K1
-      caja2: 0, // K2
-      caja3: 0  // K3
-    };
-
-    if (!clientes || clientes.length === 0) return resultado;
-
-    clientes.forEach(cliente => {
-      if (!cliente.creditos) return;
-
-      const cartera = cliente.cartera || 'K1';
-
-      cliente.creditos.forEach(credito => {
-        // Las multas se guardan en credito.abonosMulta (igual que en DiaDeCobro.jsx)
-        if (!credito.abonosMulta || credito.abonosMulta.length === 0) return;
-
-        credito.abonosMulta.forEach(abonoMulta => {
-          // Normalizar fecha del abono (misma lógica que DiaDeCobro.jsx líneas 674-713)
-          let fechaAbonoNormalizada = null;
-          if (abonoMulta.fecha) {
-            try {
-              let fechaObj = null;
-
-              if (typeof abonoMulta.fecha === 'string') {
-                if (abonoMulta.fecha.includes('T')) {
-                  fechaAbonoNormalizada = abonoMulta.fecha.split('T')[0];
-                } else if (abonoMulta.fecha.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                  fechaAbonoNormalizada = abonoMulta.fecha;
-                } else {
-                  fechaObj = new Date(abonoMulta.fecha);
-                  if (!isNaN(fechaObj.getTime())) {
-                    // Usar UTC para evitar problemas de zona horaria
-                    const year = fechaObj.getUTCFullYear();
-                    const month = String(fechaObj.getUTCMonth() + 1).padStart(2, '0');
-                    const day = String(fechaObj.getUTCDate()).padStart(2, '0');
-                    fechaAbonoNormalizada = `${year}-${month}-${day}`;
-                  }
-                }
-              } else if (abonoMulta.fecha instanceof Date) {
-                // Usar UTC para evitar problemas de zona horaria
-                const year = abonoMulta.fecha.getUTCFullYear();
-                const month = String(abonoMulta.fecha.getUTCMonth() + 1).padStart(2, '0');
-                const day = String(abonoMulta.fecha.getUTCDate()).padStart(2, '0');
-                fechaAbonoNormalizada = `${year}-${month}-${day}`;
-              } else if (typeof abonoMulta.fecha === 'object') {
-                fechaObj = new Date(abonoMulta.fecha);
-                if (!isNaN(fechaObj.getTime())) {
-                  // Usar UTC para evitar problemas de zona horaria
-                  const year = fechaObj.getUTCFullYear();
-                  const month = String(fechaObj.getUTCMonth() + 1).padStart(2, '0');
-                  const day = String(fechaObj.getUTCDate()).padStart(2, '0');
-                  fechaAbonoNormalizada = `${year}-${month}-${day}`;
-                }
-              }
-            } catch (error) {
-              console.error('Error normalizando fecha de abono de multa:', error, abonoMulta.fecha);
-            }
-          }
-
-          // Si la fecha del abono coincide con la fecha seleccionada, sumar al total de la caja correspondiente
-          if (fechaAbonoNormalizada === fechaFormato) {
-            const valor = parseFloat(abonoMulta.valor) || 0;
-            if (cartera === 'K1') {
-              resultado.caja1 += valor;
-            } else if (cartera === 'K2') {
-              resultado.caja2 += valor;
-            } else if (cartera === 'K3') {
-              resultado.caja3 += valor;
-            }
-          }
-        });
-      });
-    });
-
-    return resultado;
-  }, [clientes, fechaFormato]);
-
   // Funciones de navegación de fecha
   const irAyer = useCallback(() => setFechaSeleccionada(prev => subDays(prev, 1)), []);
   const irHoy = useCallback(() => setFechaSeleccionada(hoy), [hoy]);
   const irMañana = useCallback(() => setFechaSeleccionada(prev => addDays(prev, 1)), []);
   const cambiarFecha = useCallback((e) => {
-    const nuevaFecha = new Date(e.target.value);
+    // Solución al problema de timezone: crear la fecha localmente
+    // new Date('2025-12-30') crea un UTC 00:00 que en local puede ser día anterior
+    // new Date(y, m, d) crea fecha local
+    if (!e.target.value) return;
+    const [year, month, day] = e.target.value.split('-').map(Number);
+    const nuevaFecha = new Date(year, month - 1, day);
     setFechaSeleccionada(startOfDay(nuevaFecha));
   }, []);
 
@@ -1115,7 +1220,21 @@ const FlujoCajas = () => {
     setCajaSeleccionada(null);
   }, []);
 
-  const handleGuardar = useCallback((tipo, monto, descripcion, datosAdicionales = {}) => {
+  const handleAgregarTotalBilletes = useCallback((numero) => {
+    setCajaSeleccionada(numero);
+    setModalAbierto('totalBilletes');
+  }, []);
+
+  const handleAgregarTotalMonedas = useCallback((numero) => {
+    setCajaSeleccionada(numero);
+    setModalAbierto('totalMonedas');
+  }, []);
+
+  const handleAgregarPapeleria = useCallback(() => {
+    setModalAbierto('ingresoPapeleria');
+  }, []);
+
+  const handleGuardar = useCallback(async (tipo, monto, descripcion, datosAdicionales = {}) => {
     if (!monto || monto <= 0) return;
 
     // Verificar que haya una caja seleccionada para los tipos que lo requieren
@@ -1129,7 +1248,9 @@ const FlujoCajas = () => {
     if (tipo === 'retiroPapeleria') {
       const papeleriaDisponible = cajaSeleccionada === 1
         ? datosCajas.caja1.papeleriaAcumulada
-        : datosCajas.caja2.papeleriaAcumulada;
+        : cajaSeleccionada === 2
+          ? datosCajas.caja2.papeleriaAcumulada
+          : datosCajas.caja3.papeleriaAcumulada;
 
       if (monto > papeleriaDisponible) {
         alert(`No hay suficiente saldo en la papelería. Disponible: ${formatearMoneda(papeleriaDisponible)}`);
@@ -1140,16 +1261,24 @@ const FlujoCajas = () => {
     const esPrestamo = tipo === 'prestamo';
     const esRetiroPapeleria = tipo === 'retiroPapeleria';
 
+    // Preparar fecha para guardar: Usar mediodía (12:00) para evitar problemas de zona horaria
+    const fechaParaGuardar = new Date(fechaSeleccionada);
+    fechaParaGuardar.setHours(12, 0, 0, 0);
+
     // Calcular papelería automáticamente para préstamos (5,000 por cada 100,000)
     let papeleria = 0;
+    let valorCuotasPendientes = 0;
     if (esPrestamo) {
       // Si se proporciona un valor manual, usarlo, de lo contrario calcularlo
       papeleria = datosAdicionales.papeleria !== undefined && datosAdicionales.papeleria !== null
         ? parseFloat(datosAdicionales.papeleria)
         : calcularPapeleria(monto);
+      // Obtener el valor de cuotas pendientes si existe
+      valorCuotasPendientes = datosAdicionales.valorCuotasPendientes || 0;
     }
 
-    const montoEntregado = esPrestamo ? (monto - papeleria) : 0;
+    // Monto a entregar = Monto préstamo - Papelería - Valor cuotas pendientes
+    const montoEntregado = esPrestamo ? Math.max(0, monto - papeleria - valorCuotasPendientes) : 0;
 
     const movimientoData = {
       tipo: esRetiroPapeleria ? 'retiroPapeleria' : (tipo === 'inicioCaja' ? 'inicioCaja' : tipo),
@@ -1163,7 +1292,7 @@ const FlujoCajas = () => {
             : `Préstamo - ${descripcion || 'Sin descripción'}`,
       valor: monto,
       descripcion: descripcion || '',
-      fecha: fechaFormato,
+      fecha: fechaParaGuardar.toISOString(),
       caja: cajaSeleccionada,
       categoria: esRetiroPapeleria
         ? 'Retiro de Papelería'
@@ -1174,66 +1303,85 @@ const FlujoCajas = () => {
             : 'Préstamo',
       ...(esPrestamo ? {
         papeleria: papeleria,
+        valorCuotasPendientes: valorCuotasPendientes,
         montoEntregado: montoEntregado
       } : {})
     };
 
-    // Guardar el movimiento en la caja
-    const movimientoId = agregarMovimientoCaja(movimientoData);
+    try {
+      // Guardar el movimiento en la caja
+      const movimientoCreado = await agregarMovimientoCaja(movimientoData);
+      const movimientoId = movimientoCreado?.id || movimientoCreado?._id || movimientoCreado;
 
-    // Si es un préstamo con papelería, guardar también en el historial de papelería
-    if (esPrestamo && papeleria > 0) {
-      savePapeleriaTransaction({
-        tipo: 'ingreso',
-        cantidad: papeleria,
-        descripcion: `Ingreso por préstamo - ${descripcion || 'Sin descripción'}`,
-        fecha: new Date().toISOString(),
-        movimientoId: movimientoId,
-        caja: cajaSeleccionada,
-        tipoMovimiento: 'ingreso',
-        cliente: descripcion || 'Cliente no especificado',
-        montoPrestamo: monto
-      });
-    }
+      // NOTA: Los préstamos NO crean ingresos en la vista de Papelería
+      // Solo se suman al fondo de papelería en FlujoCajas para mostrar el total disponible
+      // Los ingresos de papelería solo se crean cuando se registran explícitamente desde la vista de Papelería
 
-    // Si es un retiro de papelería, guardar en el historial de papelería
-    if (esRetiroPapeleria) {
-      savePapeleriaTransaction({
-        tipo: 'retiro',
-        cantidad: monto,
-        descripcion: `Retiro de papelería - ${descripcion || 'Sin descripción'}`,
-        fecha: new Date().toISOString(),
-        movimientoId: movimientoId,
-        caja: cajaSeleccionada,
-        tipoMovimiento: 'retiro'
-      });
-    }
-
-    handleCerrarModal();
-  }, [cajaSeleccionada, fechaFormato, agregarMovimientoCaja, handleCerrarModal, datosCajas]);
-
-  const handleEliminarMovimiento = useCallback((movimientoId) => {
-    if (window.confirm('¿Estás seguro de eliminar este movimiento?')) {
-      // Buscar el movimiento para ver su tipo
-      const movimiento = movimientosCaja.find(mov => mov.id === movimientoId);
-
-      // Si se encuentra el movimiento, verificar si tiene una transacción de papelería asociada
-      if (movimiento) {
-        const transacciones = getPapeleriaTransactions();
-        const transaccionRelacionada = transacciones.find(
-          tx => tx.movimientoId === movimientoId
-        );
-
-        // Eliminar la transacción de papelería si existe
-        if (transaccionRelacionada) {
-          deletePapeleriaTransaction(transaccionRelacionada.id);
-        }
+      // Si es un retiro de papelería, guardar en el historial de papelería
+      if (esRetiroPapeleria) {
+        // Determinar ciudad de papelería según la caja: Caja 3 = Buga, otras = Tuluá
+        const ciudadPapeleria = cajaSeleccionada === 3 ? 'Guadalajara de Buga' : 'Tuluá';
+        savePapeleriaTransaction({
+          tipo: 'retiro',
+          cantidad: monto,
+          descripcion: `Retiro de papelería - ${descripcion || 'Sin descripción'}`,
+          fecha: new Date().toISOString(),
+          movimientoId: movimientoId,
+          caja: cajaSeleccionada,
+          tipoMovimiento: 'retiro',
+          ciudadPapeleria: ciudadPapeleria
+        });
       }
 
-      // Eliminar el movimiento de la caja
-      eliminarMovimientoCaja(movimientoId);
+      handleCerrarModal();
+    } catch (error) {
+      console.error('Error guardando movimiento de caja:', error);
+      alert('No se pudo guardar el movimiento. Revisa tu conexión o credenciales.');
     }
-  }, [eliminarMovimientoCaja, movimientosCaja]);
+  }, [cajaSeleccionada, fechaFormato, agregarMovimientoCaja, handleCerrarModal, datosCajas]);
+
+  const handleGuardarIngresoPapeleria = useCallback(async (monto, descripcion, ciudad) => {
+    try {
+      const fechaParaGuardar = new Date(fechaSeleccionada);
+      fechaParaGuardar.setHours(12, 0, 0, 0);
+
+      await savePapeleriaTransaction({
+        tipo: 'ingreso',
+        cantidad: monto,
+        descripcion: descripcion || 'Ingreso manual papelería',
+        fecha: fechaParaGuardar.toISOString(),
+        ciudadPapeleria: ciudad
+      });
+
+      handleCerrarModal();
+      // Recargar datos para ver el nuevo saldo
+      fetchData();
+      // Mostrar toast de éxito
+      setToast({ mensaje: 'Monto añadido correctamente', tipo: 'success' });
+    } catch (error) {
+      console.error('Error guardando ingreso de papelería:', error);
+      setToast({ mensaje: 'No se pudo guardar el ingreso', tipo: 'error' });
+    }
+  }, [fechaSeleccionada, handleCerrarModal, fetchData]);
+
+  const handleEliminarMovimiento = useCallback((movimientoId) => {
+    setMovimientoAEliminar(movimientoId);
+    setModalEliminarAbierto(true);
+  }, []);
+
+  const confirmarEliminacion = useCallback(async (motivo) => {
+    if (!movimientoAEliminar) return;
+
+    try {
+      // Llamar al backend pasando el motivo
+      await eliminarMovimientoCaja(movimientoAEliminar, motivo);
+      setMovimientoAEliminar(null);
+      setModalEliminarAbierto(false);
+    } catch (error) {
+      console.error('Error eliminando movimiento:', error);
+      alert('No se pudo eliminar el movimiento.');
+    }
+  }, [movimientoAEliminar, eliminarMovimientoCaja]);
 
   const fechaFormateada = useMemo(() =>
     format(fechaSeleccionada, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es }),
@@ -1265,8 +1413,8 @@ const FlujoCajas = () => {
                 onClick={irHoy}
                 disabled={esHoy}
                 className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${esHoy
-                    ? 'bg-blue-500 text-white cursor-default'
-                    : 'bg-white/10 hover:bg-white/20'
+                  ? 'bg-blue-500 text-white cursor-default'
+                  : 'bg-white/10 hover:bg-white/20'
                   }`}
               >
                 Hoy
@@ -1309,15 +1457,17 @@ const FlujoCajas = () => {
           papeleriaAcumulada={datosCajas.caja1.papeleriaAcumulada}
           saldoAnterior={datosCajas.caja1.saldoAnterior}
           saldoAcumulado={datosCajas.caja1.saldoAcumulado}
-          totalMultasDia={multasPorCaja.caja1}
           onIniciarCaja={handleIniciarCaja}
           onAgregarGasto={() => handleAgregarGasto(1)}
           onAgregarPrestamo={() => handleAgregarPrestamo(1)}
           onRetirarPapeleria={handleRetirarPapeleria}
+          onAgregarPapeleria={handleAgregarPapeleria}
           onEliminarMovimiento={handleEliminarMovimiento}
-          movimientosCaja={movimientosCaja}
-          multasDia={multasPagadasDia}
-          totalMultas={totalMultasDia}
+          movimientosCaja={movimientosFlujo}
+          totalBilletesItem={datosCajas.caja1.totalBilletesItem}
+          totalMonedasItem={datosCajas.caja1.totalMonedasItem}
+          onAgregarTotalBilletes={() => handleAgregarTotalBilletes(1)}
+          onAgregarTotalMonedas={() => handleAgregarTotalMonedas(1)}
         />
 
         <CajaSection
@@ -1329,11 +1479,11 @@ const FlujoCajas = () => {
           papeleriaAcumulada={datosCajas.caja2.papeleriaAcumulada}
           saldoAnterior={datosCajas.caja2.saldoAnterior}
           saldoAcumulado={datosCajas.caja2.saldoAcumulado}
-          totalMultasDia={multasPorCaja.caja2}
           onIniciarCaja={handleIniciarCaja}
           onAgregarGasto={() => handleAgregarGasto(2)}
           onAgregarPrestamo={() => handleAgregarPrestamo(2)}
           onRetirarPapeleria={handleRetirarPapeleria}
+          onAgregarPapeleria={handleAgregarPapeleria}
           onEliminarMovimiento={handleEliminarMovimiento}
           movimientosCaja={movimientosFlujo}
           totalBilletesItem={datosCajas.caja2.totalBilletesItem}
@@ -1351,7 +1501,6 @@ const FlujoCajas = () => {
           papeleriaAcumulada={datosCajas.caja3.papeleriaAcumulada}
           saldoAnterior={datosCajas.caja3.saldoAnterior}
           saldoAcumulado={datosCajas.caja3.saldoAcumulado}
-          totalMultasDia={multasPorCaja.caja3}
           onIniciarCaja={handleIniciarCaja}
           onAgregarGasto={() => handleAgregarGasto(3)}
           onAgregarPrestamo={() => handleAgregarPrestamo(3)}
@@ -1399,14 +1548,11 @@ const FlujoCajas = () => {
         <ModalForm
           titulo={`Nuevo Préstamo/RF - Caja ${cajaSeleccionada}`}
           labelMonto="Monto del Préstamo/Renovación"
-          placeholderMonto="200000, 300000, 400000, 500000 o 1000000"
-          labelDescripcion="Cliente/Descripción"
-          placeholderDescripcion="Ej: Javier - Préstamo nuevo"
+          placeholderMonto="Ingrese el monto del préstamo"
           onClose={handleCerrarModal}
           onSave={handleGuardar}
           tipo="prestamo"
           color="green"
-          mostrarMontosPrestamo={true}
         />
       )}
 
@@ -1424,10 +1570,51 @@ const FlujoCajas = () => {
           mostrarMensajeDisponible={true}
           montoDisponible={cajaSeleccionada === 1
             ? datosCajas.caja1.papeleriaAcumulada
-            : datosCajas.caja2.papeleriaAcumulada}
+            : cajaSeleccionada === 2
+              ? datosCajas.caja2.papeleriaAcumulada
+              : datosCajas.caja3.papeleriaAcumulada}
           montoDisponibleLabel="Saldo disponible en papelería"
           textoBotonConfirmar="Confirmar Retiro"
           mostrarBotonCancelar={true}
+        />
+      )}
+
+      {modalAbierto === 'ingresoPapeleria' && (
+        <ModalIngresoPapeleria
+          onClose={handleCerrarModal}
+          onSave={handleGuardarIngresoPapeleria}
+          fechaSeleccionada={fechaSeleccionada}
+        />
+      )}
+
+      {(modalAbierto === 'totalBilletes' || modalAbierto === 'totalMonedas') && (
+        <ModalForm
+          titulo={`Añadir Total ${modalAbierto === 'totalBilletes' ? 'Billetes' : 'Monedas'} - Caja ${cajaSeleccionada}`}
+          labelMonto="Monto Total"
+          placeholderMonto="Ingrese el monto total"
+          onClose={handleCerrarModal}
+          onSave={handleGuardar}
+          tipo={modalAbierto}
+          color={modalAbierto === 'totalBilletes' ? 'indigo' : 'amber'}
+        />
+      )}
+
+      {/* Modal de Motivo de Eliminación */}
+      <MotivoEliminacionModal
+        isOpen={modalEliminarAbierto}
+        onClose={() => {
+          setModalEliminarAbierto(false);
+          setMovimientoAEliminar(null);
+        }}
+        onConfirm={confirmarEliminacion}
+        titulo="Eliminar Movimiento de Caja"
+      />
+
+      {toast && (
+        <Toast
+          mensaje={toast.mensaje}
+          tipo={toast.tipo}
+          onClose={() => setToast(null)}
         />
       )}
     </div>
