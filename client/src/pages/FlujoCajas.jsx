@@ -598,7 +598,7 @@ const CajaSection = ({
                 <th className="border border-gray-500 px-4 py-3 text-left">
                   <div className="flex flex-col">
                     <span className="text-white text-base font-bold uppercase tracking-wide">MULTAS</span>
-                    <span className="text-gray-300 text-xs font-normal mt-1">Multas diarias</span>
+                    <span className="text-gray-300 text-xs font-normal mt-1">Recogido Multas diarias</span>
                   </div>
                 </th>
                 <th className="border border-gray-500 px-4 py-3 text-left">
@@ -1533,7 +1533,7 @@ const FlujoCajas = () => {
           totalMonedasItem={datosCajas.caja1.totalMonedasItem}
           onAgregarTotalBilletes={() => handleAgregarTotalBilletes(1)}
           onAgregarTotalMonedas={() => handleAgregarTotalMonedas(1)}
-        multasDia={multasDiaPorCaja[1]}
+          multasDia={multasDiaPorCaja[1]}
         />
 
         <CajaSection
@@ -1556,7 +1556,7 @@ const FlujoCajas = () => {
           totalMonedasItem={datosCajas.caja2.totalMonedasItem}
           onAgregarTotalBilletes={() => handleAgregarTotalBilletes(2)}
           onAgregarTotalMonedas={() => handleAgregarTotalMonedas(2)}
-        multasDia={multasDiaPorCaja[2]}
+          multasDia={multasDiaPorCaja[2]}
         />
 
         <CajaSection
@@ -1579,7 +1579,7 @@ const FlujoCajas = () => {
           totalMonedasItem={datosCajas.caja3.totalMonedasItem}
           onAgregarTotalBilletes={() => handleAgregarTotalBilletes(3)}
           onAgregarTotalMonedas={() => handleAgregarTotalMonedas(3)}
-        multasDia={multasDiaPorCaja[3]}
+          multasDia={multasDiaPorCaja[3]}
         />
       </div>
 

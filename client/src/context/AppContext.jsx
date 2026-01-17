@@ -148,6 +148,15 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const toggleReportado = async (clienteId, currentValue) => {
+    try {
+      return await actualizarCliente(clienteId, { reportado: !currentValue });
+    } catch (error) {
+      console.error('Error toggling reportado:', error);
+      throw error;
+    }
+  };
+
   const eliminarCliente = async (id) => {
     try {
       const response = await api.delete(`/clientes/${id}`);
@@ -728,6 +737,7 @@ export const AppProvider = ({ children }) => {
     fetchData,
     agregarCliente,
     actualizarCliente,
+    toggleReportado,
     eliminarCliente,
     archivarCliente,
     desarchivarCliente,

@@ -46,7 +46,7 @@ const OrdenInput = ({ valorInicial, onGuardar }) => {
 
 const DiaDeCobro = () => {
   const navigate = useNavigate();
-  const { clientes, obtenerCliente, obtenerCredito, actualizarCliente, agregarNota } = useApp();
+  const { clientes, obtenerCliente, obtenerCredito, actualizarCliente, agregarNota, toggleReportado } = useApp();
   const { user } = useAuth();
   const hoy = startOfDay(new Date());
 
@@ -254,6 +254,7 @@ const DiaDeCobro = () => {
     };
 
     const clientesUnicos = new Set();
+    const clientesUnicosHoy = new Set();
 
     // Helper para agregar item a barrio
     const agregarItem = (barrioRaw, item) => {
@@ -443,12 +444,42 @@ const DiaDeCobro = () => {
           cuotasVencidasCount,
           primerCuotaVencidaFecha,
           clienteRF: cliente.rf,
-          nroCuotasPendientes: nroCuotasPendientes
+          nroCuotasPendientes: nroCuotasPendientes,
+          reportado: cliente.reportado !== false
         };
 
         agregarItem(cliente.barrio, item);
 
-        // Stats
+        // Identificar si tiene cuota programada exactamente para hoy
+        const tieneCuotaHoy = cuotasActualizadas.some((cuota, index) => {
+          const cuotaOriginal = credito.cuotas[index];
+          const keyCuota = `${cliente.id}-${credito.id}-${cuota.nroCuota}`;
+          const fechaProrroga = prorrogasCuotas[keyCuota];
+          let fechaReferencia = fechaProrroga || cuotaOriginal.fechaProgramada;
+
+          if (typeof fechaReferencia === 'string') {
+            if (fechaReferencia.includes('T')) {
+              fechaReferencia = fechaReferencia.split('T')[0];
+            } else if (!fechaReferencia.match(/^\d{4}-\d{2}-\d{2}$/)) {
+              // Si no está en formato YYYY-MM-DD, intentar parsear
+              const fechaObj = parseISO(fechaReferencia);
+              if (!isNaN(fechaObj.getTime())) {
+                fechaReferencia = format(fechaObj, 'yyyy-MM-dd');
+              }
+            }
+          } else if (fechaReferencia instanceof Date) {
+            fechaReferencia = format(fechaReferencia, 'yyyy-MM-dd');
+          }
+
+          return fechaReferencia === fechaSeleccionadaStr;
+        });
+
+        // 1. Clientes: Contar solo si está reportado (Sí)
+        if (cliente.reportado !== false) {
+          clientesUnicosHoy.add(cliente.id);
+        }
+
+        // 2. Dinero (Por Cobrar / Recogido): Siempre sumar de todos, sin restricciones
         stats.esperado += totalACobrarHoy + totalCobradoHoy + totalAbonadoHoy;
         stats.pendiente += totalACobrarHoy;
         stats.recogido += (totalCobradoHoy + totalAbonadoHoy);
@@ -456,7 +487,7 @@ const DiaDeCobro = () => {
       });
     });
 
-    stats.clientesTotal = clientesUnicos.size;
+    stats.clientesTotal = clientesUnicosHoy.size;
 
     const barriosOrdenados = Object.keys(porBarrio).sort().reduce((obj, key) => {
       obj[key] = porBarrio[key];
@@ -475,10 +506,14 @@ const DiaDeCobro = () => {
 
     const ordenFecha = ordenCobro[fechaSeleccionadaStr] || {};
 
-    // Separar por cartera
-    const itemsK1 = items.filter(item => item.clienteCartera === 'K1');
-    const itemsK2 = items.filter(item => item.clienteCartera === 'K2');
-    const itemsK3 = items.filter(item => item.clienteCartera === 'K3');
+    // Separar por reporteado
+    const itemsReportados = items.filter(item => item.reportado !== false);
+    const itemsNoReportados = items.filter(item => item.reportado === false);
+
+    // Separar por cartera (solo reportados)
+    const itemsK1 = itemsReportados.filter(item => item.clienteCartera === 'K1');
+    const itemsK2 = itemsReportados.filter(item => item.clienteCartera === 'K2');
+    const itemsK3 = itemsReportados.filter(item => item.clienteCartera === 'K3');
 
     // Función para aplicar filtro de tipo de pago
     const aplicarFiltroTipoPago = (itemsList, filtro) => {
@@ -528,7 +563,8 @@ const DiaDeCobro = () => {
     return {
       K1: k1Final,
       K2: k2Final,
-      K3: k3Final
+      K3: k3Final,
+      NoReportados: filtrarPorBusqueda(ordenarItems(itemsNoReportados))
     };
   }, [datosCobro, ordenCobro, fechaSeleccionadaStr, searchTerm, filtroK1, filtroK3]);
 
@@ -1009,7 +1045,7 @@ const DiaDeCobro = () => {
   };
 
   // Tabla de Cobros del día en lista única con numeración
-  const TablaCobrosLista = ({ items, onCambioOrden, ordenFecha, onProrrogaDias, onProrrogaFecha, actualizarCliente }) => (
+  const TablaCobrosLista = ({ items, onCambioOrden, ordenFecha, onProrrogaDias, onProrrogaFecha, actualizarCliente, toggleReportado }) => (
     <div className="overflow-x-auto">
       <table className="w-full text-sm text-left text-gray-500">
         <thead className="text-xs text-white uppercase bg-slate-800">
@@ -1025,6 +1061,7 @@ const DiaDeCobro = () => {
             <th scope="col" className="px-4 py-3">Vencido</th>
             <th scope="col" className="px-4 py-3">Modalidad</th>
             <th scope="col" className="px-4 py-3 text-center">RF</th>
+            <th scope="col" className="px-4 py-3 text-center">Reportado</th>
             <th scope="col" className="px-4 py-3 text-center">Acciones</th>
           </tr>
         </thead>
@@ -1032,159 +1069,173 @@ const DiaDeCobro = () => {
           {items
             .filter(item => item.clienteRF !== 'RF')
             .map((item, index) => {
-            const numeroLista = index + 1;
-            const rawOrden = ordenFecha[item.clienteId];
-            const valorOrden =
-              rawOrden === undefined || rawOrden === null ? '' : String(rawOrden);
+              const numeroLista = index + 1;
+              const rawOrden = ordenFecha[item.clienteId];
+              const valorOrden =
+                rawOrden === undefined || rawOrden === null ? '' : String(rawOrden);
 
-            // Determinar clase de color según la cartera del cliente
-            let carteraRowClass = item.clienteCartera === 'K2'
-              ? 'bg-green-100 hover:bg-green-200 border-b'
-              : item.clienteCartera === 'K3'
-                ? 'bg-orange-100 hover:bg-orange-200 border-b'
-                : 'bg-blue-100 hover:bg-blue-200 border-b';
+              // Determinar clase de color según la cartera del cliente
+              let carteraRowClass = item.clienteCartera === 'K2'
+                ? 'bg-green-100 hover:bg-green-200 border-b'
+                : item.clienteCartera === 'K3'
+                  ? 'bg-orange-100 hover:bg-orange-200 border-b'
+                  : 'bg-blue-100 hover:bg-blue-200 border-b';
 
-            // Si el cliente tiene RF activo, sobrescribir con color morado claro
-            if (item.clienteRF === 'RF') {
-              carteraRowClass = 'bg-purple-100 hover:bg-purple-200 border-b';
-            }
+              // Si el cliente tiene RF activo, sobrescribir con color morado claro
+              if (item.clienteRF === 'RF') {
+                carteraRowClass = 'bg-purple-100 hover:bg-purple-200 border-b';
+              }
 
-            return (
-              <tr key={`${item.clienteId}-${item.creditoId}-${index}`} className={carteraRowClass}>
-                <td className="px-2 py-4 font-bold text-gray-900 text-center text-base">
-                  {numeroLista}
-                </td>
-                <td className="px-4 py-4 text-center">
-                  <OrdenInput
-                    valorInicial={valorOrden}
-                    onGuardar={(nuevoValor) => onCambioOrden(item.clienteId, nuevoValor, items)}
-                  />
-                </td>
-                <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
-                  {item.clientePosicion ? `#${item.clientePosicion}` : `#${item.creditoId}`}
-                </td>
-                <td className="px-4 py-4">
-                  <div className="flex flex-col">
-                    <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
-                    <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
-                    <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
-                      <Phone className="h-3 w-3" />
-                      <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono}</span>
+              return (
+                <tr key={`${item.clienteId}-${item.creditoId}-${index}`} className={carteraRowClass}>
+                  <td className="px-2 py-4 font-bold text-gray-900 text-center text-base">
+                    {numeroLista}
+                  </td>
+                  <td className="px-4 py-4 text-center">
+                    <OrdenInput
+                      valorInicial={valorOrden}
+                      onGuardar={(nuevoValor) => onCambioOrden(item.clienteId, nuevoValor, items)}
+                    />
+                  </td>
+                  <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
+                    {item.clientePosicion ? `#${item.clientePosicion}` : `#${item.creditoId}`}
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex flex-col">
+                      <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
+                      <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
+                      <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
+                        <Phone className="h-3 w-3" />
+                        <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
+                        <MapPin className="h-3 w-3" />
+                        {item.clienteBarrio || 'Sin barrio'}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
-                      <MapPin className="h-3 w-3" />
-                      {item.clienteBarrio || 'Sin barrio'}
+                  </td>
+                  <td className="px-4 py-4 font-medium text-gray-900">
+                    {formatearMoneda(item.creditoMonto)}
+                  </td>
+                  <td className="px-4 py-4 font-bold text-green-600 text-base">
+                    {item.tipo === 'pendiente'
+                      ? formatearMoneda(item.valorMostrar)
+                      : item.tipo === 'cobrado'
+                        ? <span className="text-green-600">Pagado ({formatearMoneda(item.valorMostrar)})</span>
+                        : <span className="text-yellow-600">Abonado ({formatearMoneda(item.valorMostrar)})</span>
+                    }
+                  </td>
+                  <td className="px-4 py-4 font-medium text-orange-600">
+                    {item.tipo === 'cobrado' ? '-' : formatearMoneda(item.valorRealACobrar)}
+                  </td>
+                  <td className="px-4 py-4 font-medium text-gray-900">
+                    {formatearMoneda(item.saldoTotalCredito)}
+                  </td>
+                  <td className="px-4 py-4">
+                    {item.cuotasVencidasCount > 0 ? (
+                      <div className="text-red-600 font-bold">
+                        (SI) - <span className="text-xs">{formatearFechaCorta(item.primerCuotaVencidaFecha)}</span>
+                        {item.cuotasVencidasCount > 1 && (
+                          <div className="text-xs text-red-500 mt-0.5 font-normal">
+                            ({item.cuotasVencidasCount} cuotas)
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-green-600 font-medium">Al día</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4 capitalize">
+                    {item.creditoTipo}
+                  </td>
+                  <td className="px-4 py-4 text-center">
+                    <div className="relative flex justify-center">
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          // Actualizar RF: '' -> 'RF' -> ''
+                          const currentValue = item.clienteRF || '';
+                          const newValue = currentValue === 'RF' ? '' : 'RF';
+
+                          try {
+                            await actualizarCliente(item.clienteId, {
+                              rf: newValue,
+                              tieneBotonRenovacion: newValue === 'RF'
+                            });
+                          } catch (error) {
+                            console.error('Error actualizando RF:', error);
+                            alert('Error al actualizar RF');
+                          }
+                        }}
+                        className={`px-3 py-1.5 text-sm border rounded-md transition-all flex items-center gap-1 min-w-[70px] justify-between focus:outline-none focus:ring-2 focus:ring-offset-1 ${item.clienteRF === 'RF'
+                          ? 'bg-purple-700 border-purple-800 text-white hover:bg-purple-800 focus:ring-purple-500'
+                          : 'bg-white border-gray-300 text-gray-400 hover:bg-gray-50 focus:ring-blue-500'
+                          }`}
+                      >
+                        <span className="font-bold">
+                          {item.clienteRF === 'RF' ? 'RF' : '-'}
+                        </span>
+                        <ChevronDown className={`h-4 w-4 ${item.clienteRF === 'RF' ? 'text-white' : 'text-gray-400'}`} />
+                      </button>
                     </div>
-                  </div>
-                </td>
-                <td className="px-4 py-4 font-medium text-gray-900">
-                  {formatearMoneda(item.creditoMonto)}
-                </td>
-                <td className="px-4 py-4 font-bold text-green-600 text-base">
-                  {item.tipo === 'pendiente'
-                    ? formatearMoneda(item.valorMostrar)
-                    : item.tipo === 'cobrado'
-                      ? <span className="text-green-600">Pagado ({formatearMoneda(item.valorMostrar)})</span>
-                      : <span className="text-yellow-600">Abonado ({formatearMoneda(item.valorMostrar)})</span>
-                  }
-                </td>
-                <td className="px-4 py-4 font-medium text-orange-600">
-                  {item.tipo === 'cobrado' ? '-' : formatearMoneda(item.valorRealACobrar)}
-                </td>
-                <td className="px-4 py-4 font-medium text-gray-900">
-                  {formatearMoneda(item.saldoTotalCredito)}
-                </td>
-                <td className="px-4 py-4">
-                  {item.cuotasVencidasCount > 0 ? (
-                    <div className="text-red-600 font-bold">
-                      (SI) - <span className="text-xs">{formatearFechaCorta(item.primerCuotaVencidaFecha)}</span>
-                      {item.cuotasVencidasCount > 1 && (
-                        <div className="text-xs text-red-500 mt-0.5 font-normal">
-                          ({item.cuotasVencidasCount} cuotas)
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-green-600 font-medium">Al día</span>
-                  )}
-                </td>
-                <td className="px-4 py-4 capitalize">
-                  {item.creditoTipo}
-                </td>
-                <td className="px-4 py-4 text-center">
-                  <div className="relative flex justify-center">
+                  </td>
+                  <td className="px-4 py-4 text-center">
                     <button
-                      onClick={async (e) => {
+                      onClick={(e) => {
                         e.stopPropagation();
-                        // Actualizar RF: '' -> 'RF' -> ''
-                        const currentValue = item.clienteRF || '';
-                        const newValue = currentValue === 'RF' ? '' : 'RF';
-
-                        try {
-                          await actualizarCliente(item.clienteId, { 
-                            rf: newValue,
-                            tieneBotonRenovacion: newValue === 'RF'
-                          });
-                        } catch (error) {
-                          console.error('Error actualizando RF:', error);
-                          alert('Error al actualizar RF');
-                        }
+                        toggleReportado(item.clienteId, item.reportado);
                       }}
-                      className={`px-3 py-1.5 text-sm border rounded-md transition-all flex items-center gap-1 min-w-[70px] justify-between focus:outline-none focus:ring-2 focus:ring-offset-1 ${item.clienteRF === 'RF'
-                        ? 'bg-purple-700 border-purple-800 text-white hover:bg-purple-800 focus:ring-purple-500'
-                        : 'bg-white border-gray-300 text-gray-400 hover:bg-gray-50 focus:ring-blue-500'
+                      className={`px-3 py-1.5 text-sm border rounded-md font-bold transition-all min-w-[70px] ${item.reportado !== false
+                        ? 'bg-green-600 border-green-700 text-white hover:bg-green-700'
+                        : 'bg-red-600 border-red-700 text-white hover:bg-red-700'
                         }`}
                     >
-                      <span className="font-bold">
-                        {item.clienteRF === 'RF' ? 'RF' : '-'}
-                      </span>
-                      <ChevronDown className={`h-4 w-4 ${item.clienteRF === 'RF' ? 'text-white' : 'text-gray-400'}`} />
+                      {item.reportado !== false ? 'Sí' : 'No'}
                     </button>
-                  </div>
-                </td>
-                <td className="px-4 py-4 text-center">
-                  <div className="flex flex-col items-center gap-1">
-                    <button
-                      onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
-                      className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
-                    >
-                      Ver Detalle
-                    </button>
-                    <div className="flex items-center gap-1 mt-1">
-                      {/* Mostrar botón de prórroga solo si no es domiciliario O si siendo domiciliario tiene permitido verla */}
-                      {(user?.role !== 'domiciliario' || user?.ocultarProrroga === false) && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const input = document.getElementById(`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`);
-                              if (input) {
-                                if (input.showPicker) {
-                                  input.showPicker();
-                                } else {
-                                  input.click();
+                  </td>
+                  <td className="px-4 py-4 text-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <button
+                        onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
+                        className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
+                      >
+                        Ver Detalle
+                      </button>
+                      <div className="flex items-center gap-1 mt-1">
+                        {/* Mostrar botón de prórroga solo si no es domiciliario O si siendo domiciliario tiene permitido verla */}
+                        {(user?.role !== 'domiciliario' || user?.ocultarProrroga === false) && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const input = document.getElementById(`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`);
+                                if (input) {
+                                  if (input.showPicker) {
+                                    input.showPicker();
+                                  } else {
+                                    input.click();
+                                  }
                                 }
-                              }
-                            }}
-                            className="p-1 rounded-full border border-slate-300 bg-slate-50 hover:bg-slate-100"
-                            title="Prorrogar fecha"
-                          >
-                            <Calendar className="h-4 w-4 text-slate-700" />
-                          </button>
-                          <input
-                            id={`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`}
-                            type="date"
-                            className="hidden"
-                            onChange={(e) => onProrrogaFecha(item.clienteId, item.creditoId, e.target.value, item.nroCuotasPendientes)}
-                          />
-                        </>
-                      )}
+                              }}
+                              className="p-1 rounded-full border border-slate-300 bg-slate-50 hover:bg-slate-100"
+                              title="Prorrogar fecha"
+                            >
+                              <Calendar className="h-4 w-4 text-slate-700" />
+                            </button>
+                            <input
+                              id={`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`}
+                              type="date"
+                              className="hidden"
+                              onChange={(e) => onProrrogaFecha(item.clienteId, item.creditoId, e.target.value, item.nroCuotasPendientes)}
+                            />
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
+                  </td>
+                </tr>
+              );
+            })}
         </tbody>
       </table>
     </div>
@@ -1237,19 +1288,13 @@ const DiaDeCobro = () => {
           <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0 overflow-hidden">
             <p className="text-xs text-slate-400 uppercase font-bold mb-1">Por Cobrar</p>
             <p className="text-[10px] sm:text-xs md:text-xl lg:text-2xl font-bold text-orange-300 break-words leading-tight">
-              {formatearMoneda(
-                // Sumar todos los saldos pendientes (valorRealACobrar) de todas las carteras mostradas
-                (cobrosPorCartera.K1 || []).reduce((sum, item) => sum + (item.valorRealACobrar || 0), 0) +
-                (cobrosPorCartera.K2 || []).reduce((sum, item) => sum + (item.valorRealACobrar || 0), 0) +
-                (cobrosPorCartera.K3 || []).reduce((sum, item) => sum + (item.valorRealACobrar || 0), 0)
-              )}
+              {formatearMoneda(datosCobro.stats.pendiente)}
             </p>
           </div>
           <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0 overflow-hidden">
             <p className="text-xs text-slate-400 uppercase font-bold mb-1">Recogido</p>
             <p className="text-[10px] sm:text-xs md:text-xl lg:text-2xl font-bold text-green-300 break-words leading-tight">
               {formatearMoneda(
-                // Sumar todos los totales de la sección "Pagados" de todas las carteras
                 (clientesPagados.K1?.total || 0) +
                 (clientesPagados.K2?.total || 0) +
                 (clientesPagados.K3?.total || 0)
@@ -1259,14 +1304,7 @@ const DiaDeCobro = () => {
           <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0">
             <p className="text-xs text-slate-400 uppercase font-bold mb-1">Clientes</p>
             <p className="text-sm md:text-xl lg:text-2xl font-bold text-blue-300">
-              {(() => {
-                // Contar clientes únicos en las secciones de pendientes
-                const clientesUnicosPendientes = new Set();
-                (cobrosPorCartera.K1 || []).forEach(item => clientesUnicosPendientes.add(item.clienteId));
-                (cobrosPorCartera.K2 || []).forEach(item => clientesUnicosPendientes.add(item.clienteId));
-                (cobrosPorCartera.K3 || []).forEach(item => clientesUnicosPendientes.add(item.clienteId));
-                return clientesUnicosPendientes.size;
-              })()}
+              {datosCobro.stats.clientesTotal}
             </p>
           </div>
         </div>
@@ -1355,6 +1393,7 @@ const DiaDeCobro = () => {
                 onProrrogaDias={handleProrrogaDias}
                 onProrrogaFecha={handleProrrogaFecha}
                 actualizarCliente={actualizarCliente}
+                toggleReportado={toggleReportado}
               />
             )}
           </div>
@@ -1387,6 +1426,7 @@ const DiaDeCobro = () => {
                 onProrrogaDias={handleProrrogaDias}
                 onProrrogaFecha={handleProrrogaFecha}
                 actualizarCliente={actualizarCliente}
+                toggleReportado={toggleReportado}
               />
             )}
           </div>
@@ -1430,10 +1470,42 @@ const DiaDeCobro = () => {
                 onProrrogaDias={handleProrrogaDias}
                 onProrrogaFecha={handleProrrogaFecha}
                 actualizarCliente={actualizarCliente}
+                toggleReportado={toggleReportado}
               />
             )}
           </div>
         )}
+
+        {/* Clientes No Reportados */}
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+          <div className="bg-red-600 text-white px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-lg">
+                <AlertCircle className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold">Clientes no reportados</h3>
+                <p className="text-red-100 text-sm">{cobrosPorCartera.NoReportados.length} {cobrosPorCartera.NoReportados.length === 1 ? 'cliente' : 'clientes'}</p>
+              </div>
+            </div>
+          </div>
+          {cobrosPorCartera.NoReportados.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
+              <p className="text-lg">No hay clientes sin reportar</p>
+            </div>
+          ) : (
+            <TablaCobrosLista
+              items={cobrosPorCartera.NoReportados}
+              onCambioOrden={handleActualizarOrdenManual}
+              ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
+              onProrrogaDias={handleProrrogaDias}
+              onProrrogaFecha={handleProrrogaFecha}
+              actualizarCliente={actualizarCliente}
+              toggleReportado={toggleReportado}
+            />
+          )}
+        </div>
       </div>
 
       {/* Sección Multas Pagadas - Resumen al final del día */}

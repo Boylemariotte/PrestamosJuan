@@ -196,6 +196,10 @@ const clienteSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  reportado: {
+    type: Boolean,
+    default: true
+  },
   etiqueta: {
     type: String,
     enum: ['excelente', 'bueno', 'atrasado', 'incompleto', 'vetado', 'perdido', 'sin-etiqueta'],
@@ -225,6 +229,9 @@ const clienteSchema = new mongoose.Schema({
 clienteSchema.pre('save', function (next) {
   if (this.esArchivado === undefined || this.esArchivado === null) {
     this.esArchivado = false;
+  }
+  if (this.reportado === undefined || this.reportado === null) {
+    this.reportado = true;
   }
   if (this.etiqueta === undefined || this.etiqueta === null) {
     this.etiqueta = 'sin-etiqueta';
