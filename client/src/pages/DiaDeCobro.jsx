@@ -85,6 +85,10 @@ const DiaDeCobro = () => {
   const [modalProrrogaOpen, setModalProrrogaOpen] = useState(false);
   const [datosProrrogaPendiente, setDatosProrrogaPendiente] = useState(null);
 
+  // Estado para clientes marcados como no encontrados por fecha
+  // Estructura: { [fechaStr]: Set([clienteId, clienteId, ...]) }
+  const [clientesNoEncontradosPorFecha, setClientesNoEncontradosPorFecha] = useState({});
+
   // Cargar visitas y orden de cobro desde localStorage
   useEffect(() => {
     const cargarVisitas = () => {
@@ -97,6 +101,30 @@ const DiaDeCobro = () => {
     cargarVisitas();
     window.addEventListener('storage', cargarVisitas);
     return () => window.removeEventListener('storage', cargarVisitas);
+  }, []);
+
+  // Cargar clientes no encontrados desde localStorage
+  useEffect(() => {
+    const cargarClientesNoEncontrados = () => {
+      const savedClientesNoEncontrados = localStorage.getItem('clientesNoEncontradosPorFecha');
+      if (savedClientesNoEncontrados) {
+        try {
+          const parsed = JSON.parse(savedClientesNoEncontrados);
+          // Convertir arrays de vuelta a Sets
+          const conSets = {};
+          Object.keys(parsed).forEach(fecha => {
+            conSets[fecha] = new Set(parsed[fecha]);
+          });
+          setClientesNoEncontradosPorFecha(conSets);
+        } catch (error) {
+          console.error('Error cargando clientes no encontrados:', error);
+        }
+      }
+    };
+
+    cargarClientesNoEncontrados();
+    window.addEventListener('storage', cargarClientesNoEncontrados);
+    return () => window.removeEventListener('storage', cargarClientesNoEncontrados);
   }, []);
 
   // Cargar orden de cobro desde el servidor al cambiar la fecha
@@ -175,6 +203,9 @@ const DiaDeCobro = () => {
     );
   }, [clientes, searchTerm]);
 
+  // Debug: Mostrar estado de clientes no encontrados
+  console.log('clientesNoEncontradosPorFecha:', clientesNoEncontradosPorFecha);
+
   // Filtrar visitas para el día seleccionado
   const visitasDelDia = useMemo(() => {
     return visitas.filter(visita => {
@@ -195,6 +226,96 @@ const DiaDeCobro = () => {
       localStorage.setItem('visitas', JSON.stringify(nuevasVisitas));
       toast.success('Visita marcada como completada');
     }
+  };
+
+  // Función para manejar clientes marcados como no encontrados
+  const handleMarcarComoNoEncontrado = (clienteId, currentValue) => {
+    // Llamar a la función original de toggleReportado
+    toggleReportado(clienteId, currentValue);
+    
+    // Si se está marcando como no encontrado (currentValue es true, se cambiará a false)
+    if (currentValue !== false) {
+      const mañana = format(addDays(fechaSeleccionada, 1), 'yyyy-MM-dd');
+      
+      setClientesNoEncontradosPorFecha(prev => {
+        const nuevo = { ...prev };
+        if (!nuevo[mañana]) {
+          nuevo[mañana] = new Set();
+        }
+        nuevo[mañana].add(clienteId);
+        
+        // Guardar en localStorage (convertir Sets a arrays)
+        const paraGuardar = {};
+        Object.keys(nuevo).forEach(fecha => {
+          paraGuardar[fecha] = Array.from(nuevo[fecha]);
+        });
+        localStorage.setItem('clientesNoEncontradosPorFecha', JSON.stringify(paraGuardar));
+        
+        return nuevo;
+      });
+      
+      toast.success('Cliente marcado como no encontrado. Aparecerá mañana en la sección de "Clientes no encontrados - no dieron razón"');
+    }
+  };
+
+  // FUNCIÓN TEMPORAL - Mover clientes del 17 y 18 al 19 de enero
+  // Ejecutar en consola: window.moverClientes1718al19()
+  window.moverClientes1718al19 = () => {
+    const clientesNoEncontrados = JSON.parse(localStorage.getItem('clientesNoEncontradosPorFecha') || '{}');
+    
+    console.log('Estado actual:', clientesNoEncontrados);
+    
+    const fecha17 = '2025-01-17';
+    const fecha18 = '2025-01-18';
+    const fecha19 = '2025-01-19';
+    
+    const clientes17 = clientesNoEncontrados[fecha17] || [];
+    const clientes18 = clientesNoEncontrados[fecha18] || [];
+    
+    console.log('Clientes del 17:', clientes17);
+    console.log('Clientes del 18:', clientes18);
+    
+    // Combinar todos los clientes únicos
+    const todosLosClientes = [...new Set([...clientes17, ...clientes18])];
+    
+    if (todosLosClientes.length === 0) {
+      console.log('No hay clientes para mover del 17 y 18 de enero');
+      alert('No hay clientes para mover del 17 y 18 de enero');
+      return;
+    }
+    
+    // Crear nuevo estado
+    const nuevoEstado = { ...clientesNoEncontrados };
+    
+    // Agregar clientes al 19
+    if (!nuevoEstado[fecha19]) {
+      nuevoEstado[fecha19] = [];
+    }
+    nuevoEstado[fecha19] = [...new Set([...nuevoEstado[fecha19], ...todosLosClientes])];
+    
+    // Eliminar del 17 y 18
+    delete nuevoEstado[fecha17];
+    delete nuevoEstado[fecha18];
+    
+    // Guardar en localStorage
+    localStorage.setItem('clientesNoEncontradosPorFecha', JSON.stringify(nuevoEstado));
+    
+    // Actualizar el estado del componente
+    const conSets = {};
+    Object.keys(nuevoEstado).forEach(fecha => {
+      conSets[fecha] = new Set(nuevoEstado[fecha]);
+    });
+    setClientesNoEncontradosPorFecha(conSets);
+    
+    console.log('Clientes movidos exitosamente:', todosLosClientes);
+    console.log('Nuevo estado:', nuevoEstado);
+    
+    alert(`Se movieron ${todosLosClientes.length} clientes del 17 y 18 de enero al 19 de enero`);
+    
+    return {
+      movidos: todosLosClientes,
+      nuevoEstado: nuevoEstado
+    };
   };
 
 
@@ -487,6 +608,20 @@ const DiaDeCobro = () => {
       });
     });
 
+    // Agregar clientes no encontrados para esta fecha al conteo total
+    const clientesNoEncontradosHoy = clientesNoEncontradosPorFecha[fechaSeleccionadaStr] || new Set();
+    const clientesNoEncontradosArray = Array.from(clientesNoEncontradosHoy);
+    
+    // Agregar cada cliente no encontrado al conjunto de clientes únicos
+    clientesNoEncontradosArray.forEach(clienteId => {
+      clientesUnicosHoy.add(clienteId);
+    });
+
+    // Debug: Mostrar conteo desglosado
+    const clientesReportadosCount = clientesUnicosHoy.size - clientesNoEncontradosArray.length;
+    console.log(`[${fechaSeleccionadaStr}] Clientes reportados: ${clientesReportadosCount}, No encontrados: ${clientesNoEncontradosArray.length}, Total: ${clientesUnicosHoy.size}`);
+    console.log('Clientes no encontrados IDs:', clientesNoEncontradosArray);
+
     stats.clientesTotal = clientesUnicosHoy.size;
 
     const barriosOrdenados = Object.keys(porBarrio).sort().reduce((obj, key) => {
@@ -495,7 +630,7 @@ const DiaDeCobro = () => {
     }, {});
 
     return { porBarrio: barriosOrdenados, stats };
-  }, [clientesFiltrados, fechaSeleccionadaStr, creditosInvalidos, prorrogasCuotas]);
+  }, [clientesFiltrados, fechaSeleccionadaStr, creditosInvalidos, prorrogasCuotas, clientesNoEncontradosPorFecha]);
 
   // Construir listas de cobros del día separadas por cartera
   const cobrosPorCartera = useMemo(() => {
@@ -509,6 +644,55 @@ const DiaDeCobro = () => {
     // Separar por reporteado
     const itemsReportados = items.filter(item => item.reportado !== false);
     const itemsNoReportados = items.filter(item => item.reportado === false);
+
+    // Agregar clientes marcados como no encontrados para esta fecha
+    const clientesNoEncontradosHoy = clientesNoEncontradosPorFecha[fechaSeleccionadaStr] || new Set();
+    const clientesNoEncontradosItems = clientesFiltrados
+      .filter(cliente => clientesNoEncontradosHoy.has(cliente.id))
+      .map(cliente => {
+        // Buscar si el cliente tiene créditos activos para mostrar información básica
+        const creditoActivo = cliente.creditos?.find(cred => !cred.renovado && cred.cuotas?.some(c => !c.pagado));
+        if (!creditoActivo) return null;
+        
+        const { cuotasActualizadas } = aplicarAbonosAutomaticamente(creditoActivo);
+        const estadoCredito = determinarEstadoCredito(creditoActivo.cuotas, creditoActivo);
+        
+        // Calcular saldo total
+        const saldoTotalCredito = cuotasActualizadas.reduce((sum, c) => {
+          if (c.pagado) return sum;
+          const abono = c.abonoAplicado || 0;
+          const multas = calcularTotalMultasCuota(c) - (c.multasCubiertas || 0);
+          return sum + (creditoActivo.valorCuota - abono) + multas;
+        }, 0);
+
+        return {
+          tipo: 'no_encontrado',
+          clienteId: cliente.id,
+          clienteNombre: cliente.nombre,
+          clienteDocumento: cliente.documento,
+          clienteTelefono: cliente.telefono,
+          clienteDireccion: cliente.direccion,
+          clienteBarrio: cliente.barrio,
+          clienteCartera: cliente.cartera || 'K1',
+          clientePosicion: cliente.posicion,
+          creditoId: creditoActivo.id,
+          creditoMonto: creditoActivo.monto,
+          creditoTipo: creditoActivo.tipo,
+          valorMostrar: 0,
+          valorRealACobrar: 0,
+          saldoTotalCredito: saldoTotalCredito,
+          estadoCredito: estadoCredito,
+          cuotasVencidasCount: 0,
+          primerCuotaVencidaFecha: null,
+          clienteRF: cliente.rf,
+          nroCuotasPendientes: [],
+          reportado: false // Para que aparezca en esta sección
+        };
+      })
+      .filter(item => item !== null);
+
+    // Combinar items no reportados tradicionales con los no encontrados
+    const todosItemsNoReportados = [...itemsNoReportados, ...clientesNoEncontradosItems];
 
     // Separar por cartera (solo reportados)
     const itemsK1 = itemsReportados.filter(item => item.clienteCartera === 'K1');
@@ -564,9 +748,21 @@ const DiaDeCobro = () => {
       K1: k1Final,
       K2: k2Final,
       K3: k3Final,
-      NoReportados: filtrarPorBusqueda(ordenarItems(itemsNoReportados))
+      NoReportados: filtrarPorBusqueda(ordenarItems(todosItemsNoReportados))
     };
-  }, [datosCobro, ordenCobro, fechaSeleccionadaStr, searchTerm, filtroK1, filtroK3]);
+  }, [datosCobro, ordenCobro, fechaSeleccionadaStr, searchTerm, filtroK1, filtroK3, clientesNoEncontradosPorFecha]);
+
+  // Calcular total de clientes de forma directa: K1 + K2 + NoReportados
+  const totalClientesDirecto = useMemo(() => {
+    const totalK1 = cobrosPorCartera.K1.length;
+    const totalK2 = cobrosPorCartera.K2.length;
+    const totalNoReportados = cobrosPorCartera.NoReportados.length;
+    const total = totalK1 + totalK2 + totalNoReportados;
+    
+    console.log(`Conteo directo - K1: ${totalK1}, K2: ${totalK2}, NoReportados: ${totalNoReportados}, Total: ${total}`);
+    
+    return total;
+  }, [cobrosPorCartera]);
 
   // Obtener clientes que pagaron ese día, separados por cartera
   const clientesPagados = useMemo(() => {
@@ -1190,7 +1386,7 @@ const DiaDeCobro = () => {
                         : 'bg-red-600 border-red-700 text-white hover:bg-red-700'
                         }`}
                     >
-                      {item.reportado !== false ? 'Sí' : 'No'}
+                      {item.reportado !== false ? 'Reportado' : 'No encontrado'}
                     </button>
                   </td>
                   <td className="px-4 py-4 text-center">
@@ -1304,7 +1500,7 @@ const DiaDeCobro = () => {
           <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0">
             <p className="text-xs text-slate-400 uppercase font-bold mb-1">Clientes</p>
             <p className="text-sm md:text-xl lg:text-2xl font-bold text-blue-300">
-              {datosCobro.stats.clientesTotal}
+              {totalClientesDirecto}
             </p>
           </div>
         </div>
@@ -1393,7 +1589,7 @@ const DiaDeCobro = () => {
                 onProrrogaDias={handleProrrogaDias}
                 onProrrogaFecha={handleProrrogaFecha}
                 actualizarCliente={actualizarCliente}
-                toggleReportado={toggleReportado}
+                toggleReportado={handleMarcarComoNoEncontrado}
               />
             )}
           </div>
@@ -1426,7 +1622,7 @@ const DiaDeCobro = () => {
                 onProrrogaDias={handleProrrogaDias}
                 onProrrogaFecha={handleProrrogaFecha}
                 actualizarCliente={actualizarCliente}
-                toggleReportado={toggleReportado}
+                toggleReportado={handleMarcarComoNoEncontrado}
               />
             )}
           </div>
@@ -1470,7 +1666,7 @@ const DiaDeCobro = () => {
                 onProrrogaDias={handleProrrogaDias}
                 onProrrogaFecha={handleProrrogaFecha}
                 actualizarCliente={actualizarCliente}
-                toggleReportado={toggleReportado}
+                toggleReportado={handleMarcarComoNoEncontrado}
               />
             )}
           </div>
@@ -1484,7 +1680,7 @@ const DiaDeCobro = () => {
                 <AlertCircle className="h-6 w-6" />
               </div>
               <div>
-                <h3 className="text-xl font-bold">Clientes no reportados</h3>
+                <h3 className="text-xl font-bold">Clientes no encontrados - no dieron razón</h3>
                 <p className="text-red-100 text-sm">{cobrosPorCartera.NoReportados.length} {cobrosPorCartera.NoReportados.length === 1 ? 'cliente' : 'clientes'}</p>
               </div>
             </div>
@@ -1492,7 +1688,7 @@ const DiaDeCobro = () => {
           {cobrosPorCartera.NoReportados.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-              <p className="text-lg">No hay clientes sin reportar</p>
+              <p className="text-lg">No hay clientes no encontrados para esta fecha</p>
             </div>
           ) : (
             <TablaCobrosLista
@@ -1502,7 +1698,7 @@ const DiaDeCobro = () => {
               onProrrogaDias={handleProrrogaDias}
               onProrrogaFecha={handleProrrogaFecha}
               actualizarCliente={actualizarCliente}
-              toggleReportado={toggleReportado}
+              toggleReportado={handleMarcarComoNoEncontrado}
             />
           )}
         </div>
