@@ -323,11 +323,11 @@ const DiaDeCobro = () => {
           const multasPendientes = totalMultas - multasCubiertas;
           const tieneSaldo = valorCuotaPendiente > 0 || multasPendientes > 0;
 
-          // Check fecha - comparar strings normalizados
+          // Check fecha - solo mostrar en fecha exacta programada
           if (fechaReferencia === fechaSeleccionadaStr) return tieneSaldo;
 
-          // Para fechas vencidas, comparar strings directamente (más seguro que Date)
-          return tieneSaldo && fechaReferencia <= fechaSeleccionadaStr;
+          // No mostrar clientes en fechas pasadas si no pagan hoy
+          return false;
         });
 
         if (cuotasPendientesHoy.length > 0) {
