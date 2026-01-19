@@ -1,8 +1,8 @@
 import React from 'react';
 import { Calendar, DollarSign, TrendingUp, AlertCircle } from 'lucide-react';
-import { 
-  determinarEstadoCredito, 
-  getColorEstado, 
+import {
+  determinarEstadoCredito,
+  getColorEstado,
   calcularProgreso,
   formatearMoneda,
   formatearFechaCorta
@@ -16,7 +16,8 @@ const CreditoCard = ({ credito, onClick }) => {
   return (
     <div
       onClick={onClick}
-      className="card cursor-pointer hover:scale-[1.02] transition-transform duration-200"
+      className={`card cursor-pointer hover:scale-[1.02] transition-transform duration-200 ${estado === 'renovado' ? 'opacity-60 saturate-50 bg-gray-50 border-gray-200' : ''
+        }`}
     >
       <div className="flex items-start justify-between mb-4">
         <div>
@@ -30,7 +31,7 @@ const CreditoCard = ({ credito, onClick }) => {
             {formatearMoneda(credito.monto)}
           </h3>
         </div>
-        
+
         <div className="bg-sky-100 p-3 rounded-full">
           <TrendingUp className="h-6 w-6 text-sky-600" />
         </div>
@@ -77,13 +78,14 @@ const CreditoCard = ({ credito, onClick }) => {
         </div>
         <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all duration-300 ${
-              estado === 'finalizado'
+            className={`h-full rounded-full transition-all duration-300 ${estado === 'finalizado'
                 ? 'bg-blue-500'
                 : estado === 'mora'
-                ? 'bg-red-500'
-                : 'bg-green-500'
-            }`}
+                  ? 'bg-red-500'
+                  : estado === 'renovado'
+                    ? 'bg-gray-400'
+                    : 'bg-green-500'
+              }`}
             style={{ width: `${progreso.porcentaje}%` }}
           />
         </div>

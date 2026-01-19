@@ -10,7 +10,7 @@ import { es } from 'date-fns/locale';
 
 const RF = () => {
     const navigate = useNavigate();
-    const { loading, fetchData } = useApp();
+    const { loading, fetchData, actualizarCliente } = useApp();
     const { user } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
     const [filtroCartera, setFiltroCartera] = useState('todas');
@@ -146,8 +146,8 @@ const RF = () => {
     const toggleRF = async (cliente) => {
         const newValue = cliente.rf === 'RF' ? '' : 'RF';
         try {
-            const response = await api.put(`/clientes/${cliente.id || cliente._id}`, { rf: newValue });
-            if (response.success) {
+            const response = await actualizarCliente(cliente.id || cliente._id, { rf: newValue });
+            if (response) {
                 // Actualizar lista local o recargar
                 if (newValue !== 'RF') {
                     // Si se quitó de RF, remover de la lista local
@@ -181,11 +181,11 @@ const RF = () => {
 
     const saveDate = async (cliente) => {
         try {
-            const response = await api.put(`/clientes/${cliente.id || cliente._id}`, {
+            const response = await actualizarCliente(cliente.id || cliente._id, {
                 rf: 'RF', // Asegurar que sigue siendo RF
                 fechaRF: new Date(tempDate)
             });
-            if (response.success) {
+            if (response) {
                 // Actualizar en la lista local
                 setClientesRF(prev => prev.map(c => {
                     if ((c.id || c._id) === (cliente.id || cliente._id)) {
