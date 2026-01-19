@@ -183,43 +183,15 @@ export const totalMultasService = {
  * Servicio de notas y tareas
  */
 export const notaService = {
-  // Obtener todas las notas
-  obtenerTodas: async () => {
-    return await api.get('/notas');
+  // Obtener notas por fecha (incluye nota general)
+  obtenerTodas: async (fecha) => {
+    return await api.get(`/notas/${fecha}`);
   },
 
-  // Actualizar nota general
-  actualizarNotaGeneral: async (notaGeneral) => {
-    return await api.put('/notas/general', { notaGeneral });
+  // Guardar todas las secciones del día
+  guardarNotaDiaria: async (datos) => {
+    return await api.post('/notas/diaria', datos);
   },
-
-  // Agregar sección
-  agregarSeccion: async (nombre) => {
-    return await api.post('/notas/secciones', { nombre });
-  },
-
-  // Actualizar sección
-  actualizarSeccion: async (seccionId, nombre) => {
-    return await api.put(`/notas/secciones/${seccionId}`, { nombre });
-  },
-
-  // Eliminar sección
-  eliminarSeccion: async (seccionId) => {
-    return await api.delete(`/notas/secciones/${seccionId}`);
-  },
-
-  // Agregar tarea
-  agregarTarea: async (seccionId, texto) => {
-    return await api.post(`/notas/secciones/${seccionId}/tareas`, { texto });
-  },
-
-  // Actualizar tarea (completada o texto)
-  actualizarTarea: async (seccionId, tareaId, updates) => {
-    return await api.put(`/notas/secciones/${seccionId}/tareas/${tareaId}`, updates);
-  },
-
-  // Eliminar tarea
-  eliminarTarea: async (seccionId, tareaId) => {
-    return await api.delete(`/notas/secciones/${seccionId}/tareas/${tareaId}`);
-  }
 };
+
+
