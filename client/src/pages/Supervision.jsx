@@ -152,15 +152,16 @@ const Supervision = () => {
     const toggleSupervision = async (cliente) => {
         const newValue = !cliente.enSupervision;
         try {
-            const response = await api.put(`/clientes/${cliente.id || cliente._id}`, { enSupervision: newValue });
-            if (response.success) {
+            const response = await actualizarCliente(cliente.id || cliente._id, { enSupervision: newValue });
+            if (response) {
                 // Actualizar lista local o recargar
                 if (!newValue) {
                     // Si se quitó de supervisión, remover de la lista local
                     setClientesSupervision(prev => prev.filter(c => (c.id || c._id) !== (cliente.id || cliente._id)));
+                } else {
+                    // Si se agregó, recargar para asegurar datos consistentes (aunque esto se hace desde Clientes.jsx normalmente)
+                    await cargarSupervision();
                 }
-                // También actualizar el contexto global
-                await fetchData();
             }
         } catch (error) {
             console.error('Error actualizando supervisión:', error);

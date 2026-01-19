@@ -297,6 +297,8 @@ export const getColorEstado = (estado) => {
       return 'text-red-600 bg-red-100';
     case 'finalizado':
       return 'text-blue-600 bg-blue-100';
+    case 'renovado':
+      return 'text-gray-600 bg-gray-200';
     default:
       return 'text-gray-600 bg-gray-100';
   }
