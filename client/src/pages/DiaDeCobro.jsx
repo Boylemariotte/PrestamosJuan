@@ -761,6 +761,10 @@ const DiaDeCobro = () => {
     
     console.log(`Conteo directo - K1: ${totalK1}, K2: ${totalK2}, NoReportados: ${totalNoReportados}, Total: ${total}`);
     
+    // Sincronizar con Notas a través de localStorage
+    console.log('DiaDeCobro - Guardando en localStorage:', total);
+    localStorage.setItem('totalClientesHoy', total.toString());
+    
     return total;
   }, [cobrosPorCartera]);
 
