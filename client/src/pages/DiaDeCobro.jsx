@@ -230,31 +230,62 @@ const DiaDeCobro = () => {
 
   // Función para manejar clientes marcados como no encontrados
   const handleMarcarComoNoEncontrado = (clienteId, currentValue) => {
-    // Llamar a la función original de toggleReportado
+    // Llamar a la función original de toggleReportado para actualizar el estado en la DB
     toggleReportado(clienteId, currentValue);
-    
+
+    const mañanaStr = format(addDays(fechaSeleccionada, 1), 'yyyy-MM-dd');
+    const hoyStr = format(fechaSeleccionada, 'yyyy-MM-dd');
+
     // Si se está marcando como no encontrado (currentValue es true, se cambiará a false)
     if (currentValue !== false) {
-      const mañana = format(addDays(fechaSeleccionada, 1), 'yyyy-MM-dd');
-      
       setClientesNoEncontradosPorFecha(prev => {
         const nuevo = { ...prev };
-        if (!nuevo[mañana]) {
-          nuevo[mañana] = new Set();
+        if (!nuevo[mañanaStr]) {
+          nuevo[mañanaStr] = new Set();
         }
-        nuevo[mañana].add(clienteId);
-        
+        nuevo[mañanaStr].add(clienteId);
+
         // Guardar en localStorage (convertir Sets a arrays)
         const paraGuardar = {};
         Object.keys(nuevo).forEach(fecha => {
           paraGuardar[fecha] = Array.from(nuevo[fecha]);
         });
         localStorage.setItem('clientesNoEncontradosPorFecha', JSON.stringify(paraGuardar));
-        
+
         return nuevo;
       });
-      
-      toast.success('Cliente marcado como no encontrado. Aparecerá mañana en la sección de "Clientes no encontrados - no dieron razón"');
+
+      toast.success('Cliente marcado como no encontrado. Aparecerá mañana en la sección de "Clientes no encontrados"');
+    } else {
+      // Si se está marcando como reportado (currentValue es false, se cambiará a true)
+      // Remover de la lista de no encontrados de hoy y mañana por si acaso
+      setClientesNoEncontradosPorFecha(prev => {
+        const nuevo = { ...prev };
+        let modificado = false;
+
+        if (nuevo[hoyStr] && nuevo[hoyStr].has(clienteId)) {
+          nuevo[hoyStr] = new Set(nuevo[hoyStr]);
+          nuevo[hoyStr].delete(clienteId);
+          modificado = true;
+        }
+        if (nuevo[mañanaStr] && nuevo[mañanaStr].has(clienteId)) {
+          nuevo[mañanaStr] = new Set(nuevo[mañanaStr]);
+          nuevo[mañanaStr].delete(clienteId);
+          modificado = true;
+        }
+
+        if (modificado) {
+          const paraGuardar = {};
+          Object.keys(nuevo).forEach(fecha => {
+            paraGuardar[fecha] = Array.from(nuevo[fecha]);
+          });
+          localStorage.setItem('clientesNoEncontradosPorFecha', JSON.stringify(paraGuardar));
+        }
+
+        return nuevo;
+      });
+
+      toast.success('Cliente marcado como reportado');
     }
   };
 
@@ -262,56 +293,56 @@ const DiaDeCobro = () => {
   // Ejecutar en consola: window.moverClientes1718al19()
   window.moverClientes1718al19 = () => {
     const clientesNoEncontrados = JSON.parse(localStorage.getItem('clientesNoEncontradosPorFecha') || '{}');
-    
+
     console.log('Estado actual:', clientesNoEncontrados);
-    
+
     const fecha17 = '2025-01-17';
     const fecha18 = '2025-01-18';
     const fecha19 = '2025-01-19';
-    
+
     const clientes17 = clientesNoEncontrados[fecha17] || [];
     const clientes18 = clientesNoEncontrados[fecha18] || [];
-    
+
     console.log('Clientes del 17:', clientes17);
     console.log('Clientes del 18:', clientes18);
-    
+
     // Combinar todos los clientes únicos
     const todosLosClientes = [...new Set([...clientes17, ...clientes18])];
-    
+
     if (todosLosClientes.length === 0) {
       console.log('No hay clientes para mover del 17 y 18 de enero');
       alert('No hay clientes para mover del 17 y 18 de enero');
       return;
     }
-    
+
     // Crear nuevo estado
     const nuevoEstado = { ...clientesNoEncontrados };
-    
+
     // Agregar clientes al 19
     if (!nuevoEstado[fecha19]) {
       nuevoEstado[fecha19] = [];
     }
     nuevoEstado[fecha19] = [...new Set([...nuevoEstado[fecha19], ...todosLosClientes])];
-    
+
     // Eliminar del 17 y 18
     delete nuevoEstado[fecha17];
     delete nuevoEstado[fecha18];
-    
+
     // Guardar en localStorage
     localStorage.setItem('clientesNoEncontradosPorFecha', JSON.stringify(nuevoEstado));
-    
+
     // Actualizar el estado del componente
     const conSets = {};
     Object.keys(nuevoEstado).forEach(fecha => {
       conSets[fecha] = new Set(nuevoEstado[fecha]);
     });
     setClientesNoEncontradosPorFecha(conSets);
-    
+
     console.log('Clientes movidos exitosamente:', todosLosClientes);
     console.log('Nuevo estado:', nuevoEstado);
-    
+
     alert(`Se movieron ${todosLosClientes.length} clientes del 17 y 18 de enero al 19 de enero`);
-    
+
     return {
       movidos: todosLosClientes,
       nuevoEstado: nuevoEstado
@@ -611,7 +642,7 @@ const DiaDeCobro = () => {
     // Agregar clientes no encontrados para esta fecha al conteo total
     const clientesNoEncontradosHoy = clientesNoEncontradosPorFecha[fechaSeleccionadaStr] || new Set();
     const clientesNoEncontradosArray = Array.from(clientesNoEncontradosHoy);
-    
+
     // Agregar cada cliente no encontrado al conjunto de clientes únicos
     clientesNoEncontradosArray.forEach(clienteId => {
       clientesUnicosHoy.add(clienteId);
@@ -640,23 +671,31 @@ const DiaDeCobro = () => {
     });
 
     const ordenFecha = ordenCobro[fechaSeleccionadaStr] || {};
+    const mañanaStr = format(addDays(fechaSeleccionada, 1), 'yyyy-MM-dd');
+    const clientesProgramadosParaMañana = clientesNoEncontradosPorFecha[mañanaStr] || new Set();
 
-    // Separar por reporteado
+    // Un cliente se muestra en su cartera normal si es reportado (true)
     const itemsReportados = items.filter(item => item.reportado !== false);
-    const itemsNoReportados = items.filter(item => item.reportado === false);
+    // Un cliente se muestra en la lista roja si ya es no reportado (false) 
+    // Y NO está programado para aparecer "por primera vez" mañana
+    const itemsNoReportados = items.filter(item =>
+      item.reportado === false && !clientesProgramadosParaMañana.has(item.clienteId)
+    );
 
-    // Agregar clientes marcados como no encontrados para esta fecha
+    // Agregar clientes marcados como no encontrados para esta fecha (evitando duplicados si ya tienen cuota hoy)
     const clientesNoEncontradosHoy = clientesNoEncontradosPorFecha[fechaSeleccionadaStr] || new Set();
+    const idsYaEnLista = new Set(items.map(i => i.clienteId));
+
     const clientesNoEncontradosItems = clientesFiltrados
-      .filter(cliente => clientesNoEncontradosHoy.has(cliente.id))
+      .filter(cliente => clientesNoEncontradosHoy.has(cliente.id) && !idsYaEnLista.has(cliente.id))
       .map(cliente => {
         // Buscar si el cliente tiene créditos activos para mostrar información básica
         const creditoActivo = cliente.creditos?.find(cred => !cred.renovado && cred.cuotas?.some(c => !c.pagado));
         if (!creditoActivo) return null;
-        
+
         const { cuotasActualizadas } = aplicarAbonosAutomaticamente(creditoActivo);
         const estadoCredito = determinarEstadoCredito(creditoActivo.cuotas, creditoActivo);
-        
+
         // Calcular saldo total
         const saldoTotalCredito = cuotasActualizadas.reduce((sum, c) => {
           if (c.pagado) return sum;
@@ -758,13 +797,13 @@ const DiaDeCobro = () => {
     const totalK2 = cobrosPorCartera.K2.length;
     const totalNoReportados = cobrosPorCartera.NoReportados.length;
     const total = totalK1 + totalK2 + totalNoReportados;
-    
+
     console.log(`Conteo directo - K1: ${totalK1}, K2: ${totalK2}, NoReportados: ${totalNoReportados}, Total: ${total}`);
-    
+
     // Sincronizar con Notas a través de localStorage
     console.log('DiaDeCobro - Guardando en localStorage:', total);
     localStorage.setItem('totalClientesHoy', total.toString());
-    
+
     return total;
   }, [cobrosPorCartera]);
 
@@ -1162,6 +1201,33 @@ const DiaDeCobro = () => {
       if (response.success) {
         // Actualizar estado local solo si hubo éxito
         setProrrogasCuotas(nuevasProrrogas);
+
+        // Si el cliente está en la lista de "no encontrados" de la fecha actual, moverlo a la nueva fecha
+        if (clientesNoEncontradosPorFecha[fechaSeleccionadaStr]?.has(clienteId)) {
+          setClientesNoEncontradosPorFecha(prev => {
+            const nuevo = { ...prev };
+
+            // Quitar de la fecha de origen
+            const origenSet = new Set(nuevo[fechaSeleccionadaStr] || []);
+            origenSet.delete(clienteId);
+            nuevo[fechaSeleccionadaStr] = origenSet;
+
+            // Añadir a la fecha de destino
+            const destinoSet = new Set(nuevo[nuevaFechaStr] || []);
+            destinoSet.add(clienteId);
+            nuevo[nuevaFechaStr] = destinoSet;
+
+            // Persistir en localStorage
+            const paraGuardar = {};
+            Object.keys(nuevo).forEach(fecha => {
+              paraGuardar[fecha] = Array.from(nuevo[fecha]);
+            });
+            localStorage.setItem('clientesNoEncontradosPorFecha', JSON.stringify(paraGuardar));
+
+            return nuevo;
+          });
+        }
+
         toast.success('Prórroga aplicada y guardada correctamente');
       } else {
         toast.error('Error al guardar la prórroga en el servidor');
