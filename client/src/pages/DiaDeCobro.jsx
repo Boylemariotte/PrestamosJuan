@@ -84,6 +84,7 @@ const DiaDeCobro = () => {
   // Estados para el Modal de Motivo de Prórroga
   const [modalProrrogaOpen, setModalProrrogaOpen] = useState(false);
   const [datosProrrogaPendiente, setDatosProrrogaPendiente] = useState(null);
+  const [esProrrogaGlobal, setEsProrrogaGlobal] = useState(false); // Nuevo estado para diferenciar tipo de prórroga
 
   // Estado para clientes marcados como no encontrados por fecha
   // Estructura: { [fechaStr]: Set([clienteId, clienteId, ...]) }
@@ -475,11 +476,14 @@ const DiaDeCobro = () => {
           const multasPendientes = totalMultas - multasCubiertas;
           const tieneSaldo = valorCuotaPendiente > 0 || multasPendientes > 0;
 
-          // Check fecha - solo mostrar en fecha exacta programada
-          if (fechaReferencia === fechaSeleccionadaStr) return tieneSaldo;
+          // Check fecha - mostrar si:
+          // 1. Es la fecha exacta seleccionada
+          // 2. Es una fecha anterior (está vencida)
+          // 3. Tiene multas pendientes (el usuario desea ver deudores de multas siempre)
+          const esFechaOAntigua = fechaReferencia <= fechaSeleccionadaStr;
+          const tieneMultasPendientes = multasPendientes > 0;
 
-          // No mostrar clientes en fechas pasadas si no pagan hoy
-          return false;
+          if (esFechaOAntigua || tieneMultasPendientes) return tieneSaldo;
         });
 
         if (cuotasPendientesHoy.length > 0) {
@@ -1245,41 +1249,87 @@ const DiaDeCobro = () => {
   };
 
   const handleProrrogaFecha = (clienteId, creditoId, nuevaFechaStr, nroCuotas) => {
-    if (!nuevaFechaStr) return;
-
-    const valor = nuevaFechaStr.trim();
-    const regexFecha = /^\d{4}-\d{2}-\d{2}$/;
-    if (!regexFecha.test(valor)) {
-      toast.error('Formato de fecha no válido. Usa YYYY-MM-DD');
-      return;
-    }
-
-    setDatosProrrogaPendiente({ clienteId, creditoId, nuevaFecha: valor, nroCuotas });
+    // Esta función queda simplificada ya que el modal manejará la fecha
+    setEsProrrogaGlobal(false);
+    setDatosProrrogaPendiente({ clienteId, creditoId, nroCuotas });
     setModalProrrogaOpen(true);
   };
 
-  const handleConfirmarProrroga = async (motivo) => {
+  const handleProrrogaGlobalBtn = () => {
+    // Identificar a todos los clientes que tienen actividad hoy 
+    const todosLosClientesHoy = [
+      ...cobrosPorCartera.K1,
+      ...cobrosPorCartera.K2,
+      ...cobrosPorCartera.K3,
+      ...cobrosPorCartera.NoReportados
+    ];
+
+    if (todosLosClientesHoy.length === 0) {
+      toast.info('No hay clientes para prorrogar en esta fecha');
+      return;
+    }
+
+    setEsProrrogaGlobal(true);
+    setDatosProrrogaPendiente({ clientes: todosLosClientesHoy });
+    setModalProrrogaOpen(true);
+  };
+
+  const handleConfirmarProrroga = async (motivo, nuevaFecha) => {
     if (!datosProrrogaPendiente) return;
 
-    const { clienteId, creditoId, nuevaFecha, nroCuotas } = datosProrrogaPendiente;
+    if (esProrrogaGlobal) {
+      await handleConfirmarProrrogaGlobal(motivo, nuevaFecha);
+    } else {
+      const { clienteId, creditoId, nroCuotas } = datosProrrogaPendiente;
 
-    // 1. Aplicar la prórroga (lógica original mejorada)
-    await aplicarProrrogaCuotasDelDia(clienteId, creditoId, nuevaFecha, nroCuotas);
+      // 1. Aplicar la prórroga
+      await aplicarProrrogaCuotasDelDia(clienteId, creditoId, nuevaFecha, nroCuotas);
 
-    // 2. Agregar la nota
-    if (agregarNota) {
-      try {
-        const textoNota = `Fecha de cobro pospuesta - ${motivo}`;
-        await agregarNota(clienteId, creditoId, textoNota);
-      } catch (error) {
-        console.error('Error al guardar la nota de prórroga:', error);
-        toast.warning('La prórroga se aplicó pero hubo un error al guardar la nota');
+      // 2. Agregar la nota
+      if (agregarNota) {
+        try {
+          const textoNota = `Fecha de cobro pospuesta - ${motivo}`;
+          await agregarNota(clienteId, creditoId, textoNota);
+        } catch (error) {
+          console.error('Error al guardar la nota de prórroga:', error);
+          toast.warning('La prórroga se aplicó pero hubo un error al guardar la nota');
+        }
       }
     }
 
     // 3. Limpiar estado y cerrar modal
+    setEsProrrogaGlobal(false);
     setDatosProrrogaPendiente(null);
     setModalProrrogaOpen(false);
+  };
+
+  const handleConfirmarProrrogaGlobal = async (motivo, nuevaFecha) => {
+    const { clientes } = datosProrrogaPendiente;
+    const total = clientes.length;
+    let exitosos = 0;
+
+    toast.info(`Iniciando prórroga global para ${total} clientes...`, { autoClose: 2000 });
+
+    // Procesar cada cliente
+    for (const item of clientes) {
+      try {
+        // 1. Aplicar prórroga
+        // Usamos la misma lógica que la individual pero masiva
+        await aplicarProrrogaCuotasDelDia(item.clienteId, item.creditoId, nuevaFecha, item.nroCuotasPendientes);
+
+        // 2. Agregar nota
+        if (agregarNota) {
+          const textoNota = `Prórroga Global: Fecha de cobro pospuesta - ${motivo}`;
+          await agregarNota(item.clienteId, item.creditoId, textoNota);
+        }
+
+        exitosos++;
+      } catch (error) {
+        console.error(`Error prorrogando cliente ${item.clienteNombre}:`, error);
+      }
+    }
+
+    toast.success(`Prórroga global completada: ${exitosos} de ${total} clientes movidos a ${nuevaFecha}`);
   };
 
   const abrirDetalle = async (clienteId, creditoId) => {
@@ -1474,26 +1524,19 @@ const DiaDeCobro = () => {
                             <button
                               type="button"
                               onClick={() => {
-                                const input = document.getElementById(`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`);
-                                if (input) {
-                                  if (input.showPicker) {
-                                    input.showPicker();
-                                  } else {
-                                    input.click();
-                                  }
-                                }
+                                setEsProrrogaGlobal(false);
+                                setDatosProrrogaPendiente({
+                                  clienteId: item.clienteId,
+                                  creditoId: item.creditoId,
+                                  nroCuotas: item.nroCuotasPendientes
+                                });
+                                setModalProrrogaOpen(true);
                               }}
                               className="p-1 rounded-full border border-slate-300 bg-slate-50 hover:bg-slate-100"
                               title="Prorrogar fecha"
                             >
                               <Calendar className="h-4 w-4 text-slate-700" />
                             </button>
-                            <input
-                              id={`fecha-prorroga-${item.clienteId}-${item.creditoId}-${index}`}
-                              type="date"
-                              className="hidden"
-                              onChange={(e) => onProrrogaFecha(item.clienteId, item.creditoId, e.target.value, item.nroCuotasPendientes)}
-                            />
                           </>
                         )}
                       </div>
@@ -1525,27 +1568,44 @@ const DiaDeCobro = () => {
           </div>
 
           {/* Navegación Fecha */}
-          <div className="flex bg-slate-700/50 rounded-lg p-1">
-            <button onClick={irAyer} className="p-2 hover:bg-white/10 rounded-md transition-colors">
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <div className="relative">
-              <input
-                type="date"
-                value={fechaSeleccionadaStr}
-                onChange={cambiarFecha}
-                className="bg-transparent text-center font-bold w-32 focus:outline-none cursor-pointer h-full"
-              />
+          <div className="flex items-center gap-2">
+            {(user?.role !== 'domiciliario' || user?.ocultarProrroga === false) && (
+              <div className="flex items-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleProrrogaGlobalBtn();
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-all shadow-md active:scale-95"
+                  title="Prórroga Global (todos los clientes)"
+                >
+                  <Calendar className="h-4 w-4" />
+                  <span className="hidden sm:inline">Prórroga global</span>
+                </button>
+              </div>
+            )}
+            <div className="flex bg-slate-700/50 rounded-lg p-1">
+              <button onClick={irAyer} className="p-2 hover:bg-white/10 rounded-md transition-colors">
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <div className="relative">
+                <input
+                  type="date"
+                  value={fechaSeleccionadaStr}
+                  onChange={cambiarFecha}
+                  className="bg-transparent text-center font-bold w-32 focus:outline-none cursor-pointer h-full"
+                />
+              </div>
+              <button onClick={irMañana} className="p-2 hover:bg-white/10 rounded-md transition-colors">
+                <ChevronRight className="h-5 w-5" />
+              </button>
+              <button
+                onClick={irHoy}
+                className={`ml-2 px-3 text-sm font-bold rounded-md transition-colors ${esHoy ? 'bg-blue-600 text-white' : 'hover:bg-white/10 text-slate-300'}`}
+              >
+                Hoy
+              </button>
             </div>
-            <button onClick={irMañana} className="p-2 hover:bg-white/10 rounded-md transition-colors">
-              <ChevronRight className="h-5 w-5" />
-            </button>
-            <button
-              onClick={irHoy}
-              className={`ml-2 px-3 text-sm font-bold rounded-md transition-colors ${esHoy ? 'bg-blue-600 text-white' : 'hover:bg-white/10 text-slate-300'}`}
-            >
-              Hoy
-            </button>
           </div>
         </div>
 
@@ -2198,6 +2258,7 @@ const DiaDeCobro = () => {
       {/* Modal para Motivo de Prórroga */}
       <MotivoProrrogaModal
         isOpen={modalProrrogaOpen}
+        initialDate={fechaSeleccionadaStr}
         onClose={() => {
           setModalProrrogaOpen(false);
           setDatosProrrogaPendiente(null);

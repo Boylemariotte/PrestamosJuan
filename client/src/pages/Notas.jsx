@@ -382,31 +382,31 @@ const Notas = () => {
         )}
 
         {/* Header con fecha y navegación */}
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl shadow-lg p-6 text-white mb-6">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="bg-white/10 p-3 rounded-lg">
-                <Calendar className="h-8 w-8 text-blue-300" />
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl shadow-lg p-4 md:p-6 text-white mb-6">
+          <div className="flex flex-col lg:flex-row justify-between items-center gap-6">
+            <div className="flex items-center gap-3 w-full lg:w-auto">
+              <div className="bg-white/10 p-2 md:p-3 rounded-lg shrink-0">
+                <Calendar className="h-6 w-6 md:h-8 md:w-8 text-blue-300" />
               </div>
-              <div>
-                <h1 className="text-2xl font-bold">Notas</h1>
-                <p className="text-slate-300 text-sm">
+              <div className="min-w-0">
+                <h1 className="text-xl md:text-2xl font-bold truncate">Notas</h1>
+                <p className="text-slate-300 text-xs md:text-sm truncate">
                   {format(fechaSeleccionada, "EEEE, d 'de' MMMM", { locale: es })}
                 </p>
               </div>
             </div>
 
             {/* Navegación Fecha */}
-            <div className="flex bg-slate-700/50 rounded-lg p-1">
+            <div className="flex flex-wrap justify-center bg-slate-700/50 rounded-lg p-1 w-full sm:w-auto">
               <button onClick={irAyer} className="p-2 hover:bg-white/10 rounded-md transition-colors">
                 <ChevronLeft className="h-5 w-5" />
               </button>
-              <div className="relative">
+              <div className="relative flex-1 sm:flex-none">
                 <input
                   type="date"
                   value={fechaSeleccionadaStr}
                   onChange={cambiarFecha}
-                  className="bg-transparent text-center font-bold w-32 focus:outline-none cursor-pointer h-full"
+                  className="bg-transparent text-center font-bold w-full sm:w-32 focus:outline-none cursor-pointer h-full text-sm md:text-base"
                 />
               </div>
               <button onClick={irMañana} className="p-2 hover:bg-white/10 rounded-md transition-colors">
@@ -414,18 +414,18 @@ const Notas = () => {
               </button>
               <button
                 onClick={irHoy}
-                className={`ml-2 px-3 text-sm font-bold rounded-md transition-colors ${esHoy ? 'bg-blue-600 text-white' : 'hover:bg-white/10 text-slate-300'}`}
+                className={`ml-1 md:ml-2 px-3 py-1 text-xs md:text-sm font-bold rounded-md transition-colors ${esHoy ? 'bg-blue-600 text-white' : 'hover:bg-white/10 text-slate-300'}`}
               >
                 Hoy
               </button>
             </div>
 
             {/* Botones de Acción */}
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
               {hayCambios && (
                 <button
                   onClick={descartarCambios}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-lg transition-all"
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-lg transition-all text-sm flex-1 sm:flex-none"
                 >
                   <X className="h-4 w-4" />
                   Descartar
@@ -433,11 +433,11 @@ const Notas = () => {
               )}
               <button
                 onClick={guardarTodo}
-                className={`flex items-center gap-2 px-6 py-2 font-bold rounded-lg shadow-lg transition-all active:scale-95 ${hayCambios ? 'bg-blue-600 hover:bg-blue-700 text-white animate-pulse' : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}
-                disabled={!hayCambios && !notaGeneral} // notaGeneral auto-saves but we show button enabled if changes
+                className={`flex items-center justify-center gap-2 px-6 py-2 font-bold rounded-lg shadow-lg transition-all active:scale-95 text-sm flex-1 sm:flex-none ${hayCambios ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}
+                disabled={!hayCambios && !notaGeneral}
               >
                 <Save className="h-5 w-5" />
-                Guardar Cambios
+                <span>{hayCambios ? (esHoy ? 'Guardar Cambios' : 'Actualizar Notas') : 'Sin cambios'}</span>
               </button>
             </div>
           </div>
@@ -448,21 +448,20 @@ const Notas = () => {
         {/* Secciones principales */}
         <div className="space-y-6 mb-6">
 
-          {/* Clientes del Día */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6">
+            <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
               <Square className="h-5 w-5 text-blue-600" />
               Clientes del Día #{obtenerCantidadClientesHoy()}
             </h2>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
                 Total de clientes hoy:
               </label>
-              <div className="flex gap-2 items-center">
-                <div className="w-32 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-gray-700 font-medium">
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                <div className="w-full sm:w-32 px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-gray-700 font-medium text-center sm:text-left">
                   {obtenerCantidadClientesHoy()}
                 </div>
-                <span className="text-sm text-gray-600">clientes (sincronizado con Día de Cobro - solo lectura)</span>
+                <span className="text-xs text-gray-500 italic sm:not-italic">Sincronizado con Día de Cobro (solo lectura)</span>
               </div>
             </div>
           </div>
@@ -509,52 +508,52 @@ const Notas = () => {
 
 
           {/* Registro de clientes */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6">
+            <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
               <Square className="h-5 w-5 text-green-600" />
               Prestamos nuevos y renovaciones
             </h2>
-            <div className="mb-4">
+            <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipo de cliente:
+                Tipo de cliente predeterminado:
               </label>
               <select
                 value={tipoCliente}
                 onChange={(e) => setTipoCliente(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+                className="w-full sm:w-64 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
               >
                 <option value="">Seleccionar...</option>
                 <option value="RF">RF</option>
                 <option value="PN">PN</option>
               </select>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+
+            <div className="overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-gray-300">
+              <table className="w-full text-sm border-collapse min-w-[1000px]">
                 <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-2 px-2 font-medium text-gray-700">#</th>
-                    <th className="text-left py-2 px-2 font-medium text-gray-700">Tipo</th>
-                    <th className="text-left py-2 px-2 font-medium text-gray-700">Nombre cliente</th>
-                    <th className="text-left py-2 px-2 font-medium text-gray-700">Valor</th>
-                    <th className="text-left py-2 px-2 font-medium text-gray-700">Cuota</th>
-                    <th className="text-left py-2 px-2 font-medium text-gray-700">Caja</th>
-                    <th className="text-left py-2 px-2 font-medium text-gray-700">Libro</th>
-                    <th className="text-left py-2 px-2 font-medium text-gray-700">Cel.</th>
-                    <th className="text-left py-2 px-2 font-medium text-gray-700">Fiador</th>
-                    <th className="text-left py-2 px-2 font-medium text-gray-700">Método de entrega</th>
-                    <th className="text-center py-2 px-2 font-medium text-gray-700">Acción</th>
+                  <tr className="border-b border-gray-200 text-gray-500 text-xs">
+                    <th className="text-left py-3 px-2 font-semibold">#</th>
+                    <th className="text-left py-3 px-2 font-semibold">TIPO</th>
+                    <th className="text-left py-3 px-2 font-semibold">NOMBRE CLIENTE</th>
+                    <th className="text-left py-3 px-2 font-semibold">VALOR</th>
+                    <th className="text-center py-3 px-1 font-semibold">CUO.</th>
+                    <th className="text-center py-3 px-1 font-semibold">CAJ.</th>
+                    <th className="text-center py-3 px-1 font-semibold">LIB.</th>
+                    <th className="text-center py-3 px-1 font-semibold">CEL.</th>
+                    <th className="text-left py-3 px-2 font-semibold">FIADOR</th>
+                    <th className="text-left py-3 px-2 font-semibold">MÉTODO ENTREGA</th>
+                    <th className="text-center py-3 px-2 font-semibold">ACC.</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-gray-100">
                   {filasPrestamos.map((row, index) => (
-                    <tr key={index} className="border-b border-gray-100 group">
-                      <td className="py-2 px-2 text-gray-600">{index + 1}</td>
-
+                    <tr key={index} className="hover:bg-slate-50/50 transition-colors group">
+                      <td className="py-2 px-2 text-gray-400 font-mono text-xs">{index + 1}</td>
                       <td className="py-2 px-2">
                         <select
                           value={row.tipo}
                           onChange={(e) => actualizarFilaPrestamo(index, 'tipo', e.target.value)}
-                          className="w-16 px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded focus:ring-1 focus:ring-green-500 text-xs outline-none"
                         >
                           <option value="">-</option>
                           <option value="PN">PN</option>
@@ -566,7 +565,8 @@ const Notas = () => {
                           type="text"
                           value={row.nombre}
                           onChange={(e) => actualizarFilaPrestamo(index, 'nombre', e.target.value)}
-                          className="w-full px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                          placeholder="Nombre..."
+                          className="w-full px-3 py-1.5 border border-transparent hover:border-gray-200 focus:border-green-500 rounded text-sm transition-all outline-none"
                         />
                       </td>
                       <td className="py-2 px-2">
@@ -574,46 +574,47 @@ const Notas = () => {
                           type="text"
                           value={row.valor}
                           onChange={(e) => actualizarFilaPrestamo(index, 'valor', e.target.value)}
-                          className="w-16 px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                          placeholder="$"
+                          className="w-20 px-2 py-1.5 border border-transparent hover:border-gray-200 focus:border-green-500 rounded text-sm font-semibold transition-all outline-none text-green-700"
                         />
                       </td>
-                      <td className="py-2 px-2">
+                      <td className="py-2 px-1 text-center">
                         <input
                           type="checkbox"
                           checked={row.cuota}
                           onChange={(e) => actualizarFilaPrestamo(index, 'cuota', e.target.checked)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                         />
                       </td>
-                      <td className="py-2 px-2">
+                      <td className="py-2 px-1 text-center">
                         <input
                           type="checkbox"
                           checked={row.caja}
                           onChange={(e) => actualizarFilaPrestamo(index, 'caja', e.target.checked)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                         />
                       </td>
-                      <td className="py-2 px-2">
+                      <td className="py-2 px-1 text-center">
                         <input
                           type="checkbox"
                           checked={row.libro}
                           onChange={(e) => actualizarFilaPrestamo(index, 'libro', e.target.checked)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                         />
                       </td>
-                      <td className="py-2 px-2">
+                      <td className="py-2 px-1 text-center">
                         <input
                           type="checkbox"
                           checked={row.cel}
                           onChange={(e) => actualizarFilaPrestamo(index, 'cel', e.target.checked)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                         />
                       </td>
                       <td className="py-2 px-2">
                         <select
                           value={row.fiador}
                           onChange={(e) => actualizarFilaPrestamo(index, 'fiador', e.target.value)}
-                          className="w-full px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                          className="w-full px-2 py-1.5 border border-transparent hover:border-gray-200 rounded text-xs outline-none"
                         >
                           <option value="">Seleccionar...</option>
                           <option value="confirmo">Confirmo</option>
@@ -625,7 +626,7 @@ const Notas = () => {
                         <select
                           value={row.metodoEntrega}
                           onChange={(e) => actualizarFilaPrestamo(index, 'metodoEntrega', e.target.value)}
-                          className="w-full px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                          className="w-full px-2 py-1.5 border border-transparent hover:border-gray-200 rounded text-xs outline-none"
                         >
                           <option value="">Seleccionar...</option>
                           <option value="efectivo">Efectivo</option>
@@ -635,7 +636,7 @@ const Notas = () => {
                       <td className="py-2 px-2 text-center">
                         <button
                           onClick={() => eliminarFilaPrestamo(index)}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                          className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                           title="Eliminar fila"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -643,17 +644,21 @@ const Notas = () => {
                       </td>
                     </tr>
                   ))}
+                  {filasPrestamos.length === 0 && (
+                    <tr>
+                      <td colSpan="11" className="py-8 text-center text-gray-400 italic">No hay registros nuevos aún</td>
+                    </tr>
+                  )}
                 </tbody>
-
               </table>
             </div>
 
             <button
               onClick={agregarFilaPrestamo}
-              className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 text-sm"
+              className="mt-4 w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 text-sm font-bold shadow-md active:scale-[0.98]"
             >
               <Plus className="h-4 w-4" />
-              Añadir
+              Añadir Nuevo Préstamo
             </button>
           </div>
         </div>
@@ -688,73 +693,69 @@ const Notas = () => {
             </div>
 
             {/* Lista de tareas */}
-            <div className="space-y-2 mb-4">
+            <div className="space-y-3 mb-4">
               {tareasPendientes.map((tarea, index) => (
-                <div key={index} className="flex items-center gap-3 p-2 rounded hover:bg-gray-50">
-                  <span className="text-sm font-medium text-gray-500 w-6">{index + 1}.</span>
+                <div key={index} className="flex flex-col sm:flex-row sm:items-center gap-2 md:gap-3 p-3 bg-slate-50/50 rounded-lg border border-transparent hover:border-slate-200 transition-all">
+                  <div className="flex items-center gap-3 flex-1">
+                    <span className="text-xs font-bold text-slate-400 w-4 font-mono">{index + 1}</span>
+                    {editandoTareaPendiente === index ? (
+                      <div className="flex items-center gap-2 flex-1">
+                        <input
+                          type="text"
+                          value={textoEditandoTarea}
+                          onChange={(e) => setTextoEditandoTarea(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && guardarEdicionTarea(index)}
+                          className="flex-1 px-3 py-1.5 border border-red-200 rounded focus:ring-1 focus:ring-red-500 text-sm outline-none"
+                          autoFocus
+                        />
+                        <button onClick={() => guardarEdicionTarea(index)} className="p-1.5 bg-green-600 text-white rounded hover:bg-green-700">
+                          <Save className="h-4 w-4" />
+                        </button>
+                        <button onClick={cancelarEdicionTarea} className="p-1.5 bg-slate-200 text-slate-600 rounded hover:bg-slate-300">
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="flex-1 text-sm text-slate-700 font-medium">{tarea}</span>
+                    )}
+                  </div>
 
-                  {editandoTareaPendiente === index ? (
-                    <div className="flex items-center gap-2 flex-1">
-                      <input
-                        type="text"
-                        value={textoEditandoTarea}
-                        onChange={(e) => setTextoEditandoTarea(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            guardarEdicionTarea(index);
-                          }
-                        }}
-                        className="flex-1 px-3 py-1 border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
-                        autoFocus
-                      />
-                      <button
-                        onClick={() => guardarEdicionTarea(index)}
-                        className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                      >
-                        <Save className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={cancelarEdicionTarea}
-                        className="px-2 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="flex-1 text-sm text-gray-700">{tarea}</span>
-                      <div className="flex items-center gap-2">
+                  {editandoTareaPendiente !== index && (
+                    <div className="flex items-center justify-between sm:justify-end gap-2 pl-7 sm:pl-0">
+                      <div className="flex items-center gap-1">
                         <button
                           onClick={() => iniciarEdicionTarea(index, tarea)}
-                          className="px-2 py-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Editar"
                         >
-                          <Edit2 className="h-3 w-3" />
+                          <Edit2 className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => eliminarTareaPendiente(index)}
-                          className="px-2 py-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Eliminar"
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <Trash2 className="h-4 w-4" />
                         </button>
-                        <select
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              asignarTareaATrabajador(parseInt(e.target.value), tarea);
-                              e.target.value = '';
-                            }
-                          }}
-                          className="px-2 py-1 text-sm border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-red-500"
-                          defaultValue=""
-                        >
-                          <option value="">Asignar...</option>
-                          {trabajadores.map(trabajador => (
-                            <option key={trabajador.id} value={trabajador.id}>
-                              {trabajador.nombre}
-                            </option>
-                          ))}
-                        </select>
                       </div>
-                    </>
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            asignarTareaATrabajador(parseInt(e.target.value), tarea);
+                            e.target.value = '';
+                          }
+                        }}
+                        className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-red-500 outline-none max-w-[120px]"
+                        defaultValue=""
+                      >
+                        <option value="">Asignar...</option>
+                        {trabajadores.map(trabajador => (
+                          <option key={trabajador.id} value={trabajador.id}>
+                            {trabajador.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   )}
                 </div>
               ))}
