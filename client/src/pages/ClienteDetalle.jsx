@@ -71,6 +71,11 @@ const ClienteDetalle = ({ soloLectura = false }) => {
   // Intentar obtener el cliente del contexto primero
   const clienteDelContexto = obtenerCliente(id);
 
+  // Forzar scroll al inicio cuando se carga el componente
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [id]);
+
   // Si el contexto está cargando o el cliente no está en el contexto, intentar cargarlo directamente
   useEffect(() => {
     const cargarCliente = async () => {
@@ -116,20 +121,26 @@ const ClienteDetalle = ({ soloLectura = false }) => {
   // Determinar el tipo de pago predefinido (OBLIGATORIO) para el cliente
   // Solo se fuerza si tiene créditos activos o en mora
   // IMPORTANTE: Este hook debe estar antes de cualquier return condicional
-  const tipoPagoPredefinido = useMemo(() => {
-    if (!cliente) return null;
+  const infoPagoActual = useMemo(() => {
+    if (!cliente) return { tipo: null, cartera: null, posicion: null };
 
     const creditosActivos = (cliente.creditos || []).filter(c => {
       const estado = determinarEstadoCredito(c.cuotas, c);
       return estado === 'activo' || estado === 'mora';
     });
 
-    if (creditosActivos.length > 0) {
-      return creditosActivos[0].tipo;
-    }
+    const tipo = creditosActivos.length > 0
+      ? creditosActivos[0].tipo
+      : (cliente.tipoPagoEsperado || 'quincenal/mensual');
 
-    return null;
+    return {
+      tipo,
+      cartera: cliente.cartera || 'K1',
+      posicion: cliente.posicion || 'N/A'
+    };
   }, [cliente]);
+
+  const tipoPagoPredefinido = infoPagoActual.tipo;
 
 
   // Handlers - deben estar antes de los returns condicionales
@@ -216,28 +227,55 @@ const ClienteDetalle = ({ soloLectura = false }) => {
               <User className="h-8 w-8 text-sky-600" />
             </div>
             <div className="ml-4">
-              <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 break-all">{cliente.nombre}</h1>
-                {/* Etiqueta del cliente */}
-                {cliente.etiqueta && ETIQUETAS[cliente.etiqueta] && (
-                  <span className={`px-3 py-1 rounded-lg text-sm font-medium border-2 flex items-center gap-1 ${ETIQUETAS[cliente.etiqueta].color}`}>
-                    {ETIQUETAS[cliente.etiqueta].icono && React.createElement(ETIQUETAS[cliente.etiqueta].icono, { className: 'h-4 w-4' })}
-                    {ETIQUETAS[cliente.etiqueta].nombre}
+              <div className="flex flex-col">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h1 className="text-2xl md:text-3xl font-bold text-gray-900 break-all">
+                    {cliente.nombre}{" "}
+                    <span className={`font-black ${infoPagoActual.cartera === 'K1' ? 'text-blue-600' :
+                        infoPagoActual.cartera === 'K2' ? 'text-green-600' :
+                          infoPagoActual.cartera === 'K3' ? 'text-orange-600' :
+                            'text-gray-400'
+                      }`}>
+                      #{infoPagoActual.posicion}
+                    </span>
+                  </h1>
+                  {/* Etiqueta del cliente */}
+                  {cliente.etiqueta && ETIQUETAS[cliente.etiqueta] && (
+                    <span className={`px-3 py-1 rounded-lg text-sm font-medium border-2 flex items-center gap-1 ${ETIQUETAS[cliente.etiqueta].color}`}>
+                      {ETIQUETAS[cliente.etiqueta].icono && React.createElement(ETIQUETAS[cliente.etiqueta].icono, { className: 'h-4 w-4' })}
+                      {ETIQUETAS[cliente.etiqueta].nombre}
+                    </span>
+                  )}
+                  {/* Botón para asignar etiqueta (solo si no está en modo solo lectura y no es domiciliario ni supervisor) */}
+                  {!soloLectura && !esDomiciliarioOSupervisor && (
+                    <button
+                      onClick={() => setMostrarSelectorEtiqueta(true)}
+                      className="px-3 py-1 rounded-lg text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 border-2 border-gray-300 flex items-center gap-1 transition-colors"
+                      title="Asignar etiqueta"
+                    >
+                      <Award className="h-4 w-4" />
+                      {cliente.etiqueta && cliente.etiqueta !== 'sin-etiqueta' ? 'Cambiar' : 'Etiquetar'}
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-sm font-bold">
+                  <span className={`px-2 py-0.5 rounded border uppercase ${infoPagoActual.cartera === 'K1' ? 'bg-blue-600 text-white border-blue-700' :
+                      infoPagoActual.cartera === 'K2' ? 'bg-green-600 text-white border-green-700' :
+                        infoPagoActual.cartera === 'K3' ? 'bg-orange-600 text-white border-orange-700' :
+                          'bg-gray-100 text-gray-700 border-gray-200'
+                    }`}>
+                    {infoPagoActual.tipo}
                   </span>
-                )}
-                {/* Botón para asignar etiqueta (solo si no está en modo solo lectura y no es domiciliario ni supervisor) */}
-                {!soloLectura && !esDomiciliarioOSupervisor && (
-                  <button
-                    onClick={() => setMostrarSelectorEtiqueta(true)}
-                    className="px-3 py-1 rounded-lg text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 border-2 border-gray-300 flex items-center gap-1 transition-colors"
-                    title="Asignar etiqueta"
-                  >
-                    <Award className="h-4 w-4" />
-                    {cliente.etiqueta && cliente.etiqueta !== 'sin-etiqueta' ? 'Cambiar' : 'Etiquetar'}
-                  </button>
-                )}
+                  <span className={`px-2 py-0.5 rounded border ${infoPagoActual.cartera === 'K1' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                      infoPagoActual.cartera === 'K2' ? 'bg-green-100 text-green-800 border-green-300' :
+                        infoPagoActual.cartera === 'K3' ? 'bg-orange-100 text-orange-800 border-orange-300' :
+                          'bg-gray-50 text-gray-700 border-gray-200'
+                    }`}>
+                    {infoPagoActual.cartera}
+                  </span>
+                </div>
+                <p className="text-gray-500 text-xs mt-1">CC: {cliente.documento}</p>
               </div>
-              <p className="text-gray-600">CC: {cliente.documento}</p>
             </div>
           </div>
 

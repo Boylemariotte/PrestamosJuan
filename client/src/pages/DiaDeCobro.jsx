@@ -67,6 +67,7 @@ const DiaDeCobro = () => {
 
   // Estado para filtros de tipo de pago por cartera
   const [filtroK1, setFiltroK1] = useState('todos'); // 'todos', 'semanal', 'quincenal'
+  const [filtroK2, setFiltroK2] = useState('todos'); // 'todos', 'quincenal', 'mensual'
   const [filtroK3, setFiltroK3] = useState('todos'); // 'todos', 'semanal', 'quincenal'
 
   // Estado para orden de cobro por fecha y cliente
@@ -750,6 +751,7 @@ const DiaDeCobro = () => {
 
     // Aplicar filtros de tipo de pago
     const itemsK1Filtrados = aplicarFiltroTipoPago(itemsK1, filtroK1);
+    const itemsK2Filtrados = aplicarFiltroTipoPago(itemsK2, filtroK2);
     const itemsK3Filtrados = aplicarFiltroTipoPago(itemsK3, filtroK3);
 
     // Función para ordenar items
@@ -784,7 +786,7 @@ const DiaDeCobro = () => {
     };
 
     const k1Final = filtrarPorBusqueda(ordenarItems(itemsK1Filtrados));
-    const k2Final = filtrarPorBusqueda(ordenarItems(itemsK2));
+    const k2Final = filtrarPorBusqueda(ordenarItems(itemsK2Filtrados));
     const k3Final = filtrarPorBusqueda(ordenarItems(itemsK3Filtrados));
 
     return {
@@ -793,7 +795,7 @@ const DiaDeCobro = () => {
       K3: k3Final,
       NoReportados: filtrarPorBusqueda(ordenarItems(todosItemsNoReportados))
     };
-  }, [datosCobro, ordenCobro, fechaSeleccionadaStr, searchTerm, filtroK1, filtroK3, clientesNoEncontradosPorFecha]);
+  }, [datosCobro, ordenCobro, fechaSeleccionadaStr, searchTerm, filtroK1, filtroK2, filtroK3, clientesNoEncontradosPorFecha]);
 
   // Calcular total de clientes de forma directa: K1 + K2 + NoReportados
   const totalClientesDirecto = useMemo(() => {
@@ -1737,6 +1739,17 @@ const DiaDeCobro = () => {
                   <h3 className="text-xl font-bold">Cartera K2</h3>
                   <p className="text-green-100 text-sm">{cobrosPorCartera.K2.length} {cobrosPorCartera.K2.length === 1 ? 'cliente' : 'clientes'}</p>
                 </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <select
+                  value={filtroK2}
+                  onChange={(e) => setFiltroK2(e.target.value)}
+                  className="bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white/50"
+                >
+                  <option value="todos" className="text-gray-900">Todos</option>
+                  <option value="quincenal" className="text-gray-900">Quincenal</option>
+                  <option value="mensual" className="text-gray-900">Mensual</option>
+                </select>
               </div>
             </div>
             {cobrosPorCartera.K2.length === 0 ? (
