@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { Calendar, Users, ChevronLeft, ChevronRight, CheckCircle, Clock, MapPin, ChevronDown, ChevronUp, Phone, Search, AlertCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { format, parseISO, startOfDay, addDays, subDays, isBefore } from 'date-fns';
+import { format, parseISO, startOfDay, addDays, subDays, isBefore, differenceInCalendarDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatearMoneda, calcularTotalMultasCuota, aplicarAbonosAutomaticamente, determinarEstadoCredito, formatearFechaCorta } from '../utils/creditCalculations';
 import CreditoDetalle from '../components/Creditos/CreditoDetalle';
@@ -477,14 +477,25 @@ const DiaDeCobro = () => {
           const multasPendientes = totalMultas - multasCubiertas;
           const tieneSaldo = valorCuotaPendiente > 0 || multasPendientes > 0;
 
-          // Check fecha - mostrar si:
-          // 1. Es la fecha exacta seleccionada
-          // 2. Es una fecha anterior (está vencida)
-          // 3. Tiene multas pendientes (el usuario desea ver deudores de multas siempre)
-          const esFechaOAntigua = fechaReferencia <= fechaSeleccionadaStr;
-          const tieneMultasPendientes = multasPendientes > 0;
+          // Lógica Dinámica: Mostrar si:
+          // 1. Es exactamente la fecha que estamos viendo (fechaProgramada === fechaSeleccionada)
+          // 2. Es una fecha pasada (vencida) Y estamos viendo "Hoy" o "Mañana" en tiempo real
 
-          if (esFechaOAntigua || tieneMultasPendientes) return tieneSaldo;
+          const esDiaProgramado = fechaReferencia === fechaSeleccionadaStr;
+
+          const fechaReferenciaObj = parseISO(fechaReferencia);
+          const esVencidaOActual = isBefore(fechaReferenciaObj, hoy) || format(fechaReferenciaObj, 'yyyy-MM-dd') === format(hoy, 'yyyy-MM-dd');
+
+          const diffRespectoHoy = differenceInCalendarDays(
+            parseISO(fechaSeleccionadaStr),
+            hoy
+          );
+
+          const viendoHoyOMañana = diffRespectoHoy === 0 || diffRespectoHoy === 1;
+
+          if (esDiaProgramado || (esVencidaOActual && viendoHoyOMañana)) {
+            return tieneSaldo;
+          }
         });
 
         if (cuotasPendientesHoy.length > 0) {
@@ -666,7 +677,7 @@ const DiaDeCobro = () => {
     }, {});
 
     return { porBarrio: barriosOrdenados, stats };
-  }, [clientesFiltrados, fechaSeleccionadaStr, creditosInvalidos, prorrogasCuotas, clientesNoEncontradosPorFecha]);
+  }, [clientesFiltrados, fechaSeleccionadaStr, creditosInvalidos, prorrogasCuotas, clientesNoEncontradosPorFecha, hoy]);
 
   // Construir listas de cobros del día separadas por cartera
   const cobrosPorCartera = useMemo(() => {
@@ -795,7 +806,7 @@ const DiaDeCobro = () => {
       K3: k3Final,
       NoReportados: filtrarPorBusqueda(ordenarItems(todosItemsNoReportados))
     };
-  }, [datosCobro, ordenCobro, fechaSeleccionadaStr, searchTerm, filtroK1, filtroK2, filtroK3, clientesNoEncontradosPorFecha]);
+  }, [datosCobro, ordenCobro, fechaSeleccionadaStr, searchTerm, filtroK1, filtroK2, filtroK3, clientesNoEncontradosPorFecha, hoy]);
 
   // Calcular total de clientes de forma directa: K1 + K2 + NoReportados
   const totalClientesDirecto = useMemo(() => {
