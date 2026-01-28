@@ -363,7 +363,7 @@ const obtenerTipoPagoCliente = (cliente) => {
 
 export const desarchivarCliente = async (req, res, next) => {
   try {
-    const { posicion } = req.body; // Posición específica enviada desde el frontend
+    const { posicion, cartera: nuevaCartera, tipoPago: nuevoTipoPago } = req.body; // Posición, cartera y tipo de pago opcionales
     const cliente = await Cliente.findById(req.params.id);
 
     if (!cliente) {
@@ -380,8 +380,16 @@ export const desarchivarCliente = async (req, res, next) => {
       });
     }
 
+    // Actualizar cartera y tipo de pago si se proporcionan
+    if (nuevaCartera) {
+      cliente.cartera = nuevaCartera;
+    }
+    if (nuevoTipoPago) {
+      cliente.tipoPagoEsperado = nuevoTipoPago;
+    }
+
     const cartera = cliente.cartera || 'K1';
-    // Determinar el tipo de pago basándose en créditos activos (no solo tipoPagoEsperado)
+    // Determinar el tipo de pago basándose en créditos activos o el nuevo tipoPagoEsperado
     const tipoPagoCliente = obtenerTipoPagoCliente(cliente);
 
     // Si se proporciona una posición específica, validarla

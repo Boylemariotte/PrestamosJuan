@@ -20,6 +20,9 @@ const ClientesArchivados = () => {
   const [posicionesDisponibles, setPosicionesDisponibles] = useState([]);
   const [cargandoPosiciones, setCargandoPosiciones] = useState(false);
   const [posicionSeleccionada, setPosicionSeleccionada] = useState(null);
+  const [carteraSeleccionada, setCarteraSeleccionada] = useState('K1');
+  const [tipoPagoSeleccionado, setTipoPagoSeleccionado] = useState('semanal');
+  const [bloquearSelectores, setBloquearSelectores] = useState(false);
 
   // Definición de etiquetas
   const ETIQUETAS = {
@@ -181,32 +184,49 @@ const ClientesArchivados = () => {
   };
 
   const abrirModalPosicion = async (cliente) => {
+    const saldoPendiente = calcularSaldoPendienteTotal(cliente);
+    const tieneDeuda = saldoPendiente > 0;
+
     setClienteParaDesarchivar(cliente);
+
+    // Si tiene deuda, se bloquean los selectores a sus valores actuales
+    const carteraInicial = cliente.cartera || 'K1';
+    const tipoPagoInicial = getTipoPagoCliente(cliente) || (carteraInicial === 'K2' ? 'quincenal' : 'semanal');
+
+    setCarteraSeleccionada(carteraInicial);
+    setTipoPagoSeleccionado(tipoPagoInicial);
+    setBloquearSelectores(tieneDeuda);
     setPosicionSeleccionada(null);
-    setCargandoPosiciones(true);
     setMostrarModalPosicion(true);
-
-    try {
-      const cartera = cliente.cartera || 'K1';
-      const tipoPago = getTipoPagoCliente(cliente);
-
-      // Construir URL con query parameter para tipo de pago (para K1 y K3)
-      let url = `/clientes/posiciones-disponibles/${cartera}`;
-      if ((cartera === 'K1' || cartera === 'K3') && tipoPago) {
-        url += `?tipoPago=${tipoPago}`;
-      }
-
-      const response = await api.get(url);
-      if (response.success) {
-        setPosicionesDisponibles(response.data);
-      }
-    } catch (error) {
-      console.error('Error cargando posiciones disponibles:', error);
-      alert('Error al cargar posiciones disponibles');
-    } finally {
-      setCargandoPosiciones(false);
-    }
   };
+
+  // Cargar posiciones cuando cambie la cartera o el tipo de pago en el modal
+  useEffect(() => {
+    if (!mostrarModalPosicion || !clienteParaDesarchivar) return;
+
+    const cargarPosiciones = async () => {
+      setCargandoPosiciones(true);
+      try {
+        // Construir URL con query parameter para tipo de pago (para K1 y K3)
+        let url = `/clientes/posiciones-disponibles/${carteraSeleccionada}`;
+        if (carteraSeleccionada !== 'K2' && tipoPagoSeleccionado) {
+          url += `?tipoPago=${tipoPagoSeleccionado}`;
+        }
+
+        const response = await api.get(url);
+        if (response.success) {
+          setPosicionesDisponibles(response.data);
+          setPosicionSeleccionada(null); // Resetear posición al cambiar filtros
+        }
+      } catch (error) {
+        console.error('Error cargando posiciones disponibles:', error);
+      } finally {
+        setCargandoPosiciones(false);
+      }
+    };
+
+    cargarPosiciones();
+  }, [mostrarModalPosicion, clienteParaDesarchivar, carteraSeleccionada, tipoPagoSeleccionado]);
 
   const handleDesarchivar = async () => {
     if (!clienteParaDesarchivar || !posicionSeleccionada) {
@@ -223,7 +243,9 @@ const ClientesArchivados = () => {
       }
 
       const response = await api.put(`/clientes/${clienteParaDesarchivar.id || clienteParaDesarchivar._id}/desarchivar`, {
-        posicion: posicionNumero
+        posicion: posicionNumero,
+        cartera: carteraSeleccionada,
+        tipoPago: tipoPagoSeleccionado
       });
 
       if (response.success) {
@@ -461,17 +483,57 @@ const ClientesArchivados = () => {
             </div>
 
             <div className="px-6 py-4 overflow-y-auto flex-1">
-              <div className="mb-4 space-y-1">
-                <p className="text-sm text-gray-600">
-                  Cartera: <span className="font-semibold">{clienteParaDesarchivar.cartera || 'K1'}</span>
-                </p>
-                {(clienteParaDesarchivar.cartera === 'K1' || clienteParaDesarchivar.cartera === 'K3') && (
-                  <p className="text-sm text-gray-600">
-                    Modalidad: <span className="font-semibold capitalize">
-                      {getTipoPagoCliente(clienteParaDesarchivar) || 'No definida'}
-                    </span>
-                  </p>
-                )}
+              {bloquearSelectores && (
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+                  <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-800">Cliente con saldo pendiente</p>
+                    <p className="text-xs text-amber-700">
+                      Debido a que el cliente posee un saldo de {formatearMoneda(calcularSaldoPendienteTotal(clienteParaDesarchivar))},
+                      solo puede ser restaurado a su cartera y modalidad original.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Seleccionar Cartera
+                  </label>
+                  <select
+                    value={carteraSeleccionada}
+                    disabled={bloquearSelectores}
+                    onChange={(e) => {
+                      const nuevaC = e.target.value;
+                      setCarteraSeleccionada(nuevaC);
+                      // Ajustar modalidad si cambia a K2 y la actual no es permitida
+                      if (nuevaC === 'K2' && tipoPagoSeleccionado === 'semanal') {
+                        setTipoPagoSeleccionado('quincenal');
+                      }
+                    }}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${bloquearSelectores ? 'bg-gray-100 cursor-not-allowed opacity-75' : ''}`}
+                  >
+                    <option value="K1">Cartera K1</option>
+                    <option value="K2">Cartera K2</option>
+                    <option value="K3">Cartera K3</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Modalidad de Pago
+                  </label>
+                  <select
+                    value={tipoPagoSeleccionado}
+                    disabled={bloquearSelectores}
+                    onChange={(e) => setTipoPagoSeleccionado(e.target.value)}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${bloquearSelectores ? 'bg-gray-100 cursor-not-allowed opacity-75' : ''}`}
+                  >
+                    {carteraSeleccionada !== 'K2' && <option value="semanal">Semanal</option>}
+                    <option value="quincenal">Quincenal</option>
+                    <option value="mensual">Mensual</option>
+                  </select>
+                </div>
               </div>
 
               {cargandoPosiciones ? (
