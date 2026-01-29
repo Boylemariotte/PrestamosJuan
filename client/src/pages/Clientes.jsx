@@ -373,7 +373,120 @@ const Clientes = () => {
     return true;
   });
 
-  // Contar clientes por cartera
+  // Ocupación basada en clientes visibles (lo que realmente se muestra en la tabla)
+  const ocupacionVisible = useMemo(() => {
+    let base;
+    if (esBuga) {
+      base = { K3: { semanal: 0, quincenalMensual: 0 } };
+    } else if (esAdminOCeo) {
+      base = {
+        K1: { semanal: 0, quincenalMensual: 0 },
+        K2: { general: 0 },
+        K3: { semanal: 0, quincenalMensual: 0 }
+      };
+    } else {
+      base = {
+        K1: { semanal: 0, quincenalMensual: 0 },
+        K2: { general: 0 },
+        K3: { semanal: 0, quincenalMensual: 0 }
+      };
+    }
+
+    // Contar basado en las cards filtradas (clientes visibles)
+    cardsFiltradas.forEach((card) => {
+      if (!card.cliente) return; // Solo contar cards con clientes
+      
+      const cartera = card.cartera;
+      const tipoPago = card.tipoPago;
+
+      if (cartera === 'K2') {
+        // Para K2, todo cuenta para general
+        if (base[cartera] && base[cartera].general !== undefined) {
+          base[cartera].general += 1;
+        }
+      } else if (base[cartera]) {
+        // Para K1 y K3
+        if (tipoPago === 'quincenalMensual') {
+          if (typeof base[cartera].quincenalMensual === 'number') {
+            base[cartera].quincenalMensual += 1;
+          }
+        } else if (typeof base[cartera][tipoPago] === 'number') {
+          base[cartera][tipoPago] += 1;
+        }
+      }
+    });
+
+    return base;
+  }, [cardsFiltradas, esBuga, esAdminOCeo]);
+
+  // Contar clientes visibles (basado en cardsFiltradas - lo que realmente se muestra)
+  const clientesVisiblesK1 = cardsFiltradas.filter(card => card.cartera === 'K1' && card.cliente).length;
+  const clientesVisiblesK2 = cardsFiltradas.filter(card => card.cartera === 'K2' && card.cliente).length;
+  const clientesVisiblesK3 = cardsFiltradas.filter(card => card.cartera === 'K3' && card.cliente).length;
+
+  // Contar clientes por tipo de pago (basado en lo visible)
+  const clientesVisiblesK1Semanal = cardsFiltradas.filter(card => 
+    card.cartera === 'K1' && 
+    card.tipoPago === 'semanal' && 
+    card.cliente
+  ).length;
+  
+  const clientesVisiblesK1QuincenalMensual = cardsFiltradas.filter(card => 
+    card.cartera === 'K1' && 
+    card.tipoPago === 'quincenalMensual' && 
+    card.cliente
+  ).length;
+  
+  const clientesVisiblesK2General = cardsFiltradas.filter(card => 
+    card.cartera === 'K2' && 
+    card.tipoPago === 'general' && 
+    card.cliente
+  ).length;
+  
+  const clientesVisiblesK3Semanal = cardsFiltradas.filter(card => 
+    card.cartera === 'K3' && 
+    card.tipoPago === 'semanal' && 
+    card.cliente
+  ).length;
+  
+  const clientesVisiblesK3QuincenalMensual = cardsFiltradas.filter(card => 
+    card.cartera === 'K3' && 
+    card.tipoPago === 'quincenalMensual' && 
+    card.cliente
+  ).length;
+
+  // Total de clientes visibles para admin/CEO
+  const totalClientesVisiblesAdmin = esAdminOCeo ? (clientesVisiblesK1 + clientesVisiblesK2 + clientesVisiblesK3) : cardsFiltradas.filter(card => card.cliente).length;
+
+  // Contar clientes visibles por tipo de pago (para botones de filtro)
+  const clientesVisiblesPorTipo = useMemo(() => {
+    const conteos = {
+      todos: totalClientesVisiblesAdmin,
+      diario: 0,
+      semanal: 0,
+      quincenal: 0,
+      mensual: 0
+    };
+
+    cardsFiltradas.forEach((card) => {
+      if (!card.cliente) return;
+
+      const tiposActivos = getTiposPagoActivos(card.cliente);
+      const tiposCliente = tiposActivos.length > 0 
+        ? tiposActivos 
+        : (card.cliente.tipoPagoEsperado ? [card.cliente.tipoPagoEsperado] : []);
+
+      tiposCliente.forEach(tipo => {
+        if (conteos.hasOwnProperty(tipo)) {
+          conteos[tipo]++;
+        }
+      });
+    });
+
+    return conteos;
+  }, [cardsFiltradas, totalClientesVisiblesAdmin]);
+
+  // Mantener los conteos originales para referencia (opcional)
   const clientesK1 = (esBuga ? 0 : clientes.filter(c => (c.cartera || 'K1') === 'K1').length);
   const clientesK2 = (esBuga ? 0 : clientes.filter(c => c.cartera === 'K2').length);
   const clientesK3 = (esBuga ? clientes.filter(c => (c.cartera || 'K3') === 'K3').length : (esAdminOCeo ? clientes.filter(c => c.cartera === 'K3').length : 0));
@@ -470,11 +583,11 @@ const Clientes = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-orange-100 text-sm">Cartera K3</p>
-                  <p className="text-3xl font-bold mt-1">{clientesK3}</p>
+                  <p className="text-3xl font-bold mt-1">{clientesVisiblesK3}</p>
                   <p className="text-orange-100 text-xs mt-1">clientes</p>
                   <div className="mt-3 space-y-1 text-[11px]">
-                    <p className="text-orange-100">Semanal: {ocupacion.K3?.semanal || 0}/{CAPACIDADES.K3.semanal}</p>
-                    <p className="text-orange-100">Quincenal/Mensual: {ocupacion.K3?.quincenalMensual || 0}/{CAPACIDADES.K3.quincenalMensual}</p>
+                    <p className="text-orange-100">Semanal: {ocupacionVisible.K3?.semanal || 0}/{CAPACIDADES.K3.semanal}</p>
+                    <p className="text-orange-100">Quincenal/Mensual: {ocupacionVisible.K3?.quincenalMensual || 0}/{CAPACIDADES.K3.quincenalMensual}</p>
                   </div>
                 </div>
                 <Briefcase className="h-12 w-12 text-orange-200" />
@@ -484,8 +597,8 @@ const Clientes = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-purple-100 text-sm">Total Clientes</p>
-                  <p className="text-3xl font-bold mt-1">{clientes.length}</p>
-                  <p className="text-purple-100 text-xs mt-1">registrados</p>
+                  <p className="text-3xl font-bold mt-1">{totalClientesVisiblesAdmin}</p>
+                  <p className="text-purple-100 text-xs mt-1">visibles</p>
                 </div>
                 <UsersIcon className="h-12 w-12 text-purple-200" />
               </div>
@@ -499,11 +612,11 @@ const Clientes = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-blue-100 text-sm">Cartera K1</p>
-                  <p className="text-3xl font-bold mt-1">{clientesK1}</p>
+                  <p className="text-3xl font-bold mt-1">{clientesVisiblesK1}</p>
                   <p className="text-blue-100 text-xs mt-1">clientes</p>
                   <div className="mt-3 space-y-1 text-[11px]">
-                    <p className="text-blue-100">Semanal: {ocupacion.K1?.semanal || 0}/{CAPACIDADES.K1.semanal}</p>
-                    <p className="text-blue-100">Quincenal/Mensual: {ocupacion.K1?.quincenalMensual || 0}/{CAPACIDADES.K1.quincenalMensual}</p>
+                    <p className="text-blue-100">Semanal: {ocupacionVisible.K1?.semanal || 0}/{CAPACIDADES.K1.semanal}</p>
+                    <p className="text-blue-100">Quincenal/Mensual: {ocupacionVisible.K1?.quincenalMensual || 0}/{CAPACIDADES.K1.quincenalMensual}</p>
                   </div>
                 </div>
                 <Briefcase className="h-12 w-12 text-blue-200" />
@@ -514,10 +627,10 @@ const Clientes = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-green-100 text-sm">Cartera K2</p>
-                  <p className="text-3xl font-bold mt-1">{clientesK2}</p>
+                  <p className="text-3xl font-bold mt-1">{clientesVisiblesK2}</p>
                   <p className="text-green-100 text-xs mt-1">clientes</p>
                   <div className="mt-3 space-y-1 text-[11px]">
-                    <p className="text-green-100">General: {ocupacion.K2?.general || 0}/{CAPACIDADES.K2.general}</p>
+                    <p className="text-green-100">General: {ocupacionVisible.K2?.general || 0}/{CAPACIDADES.K2.general}</p>
                   </div>
                 </div>
                 <Briefcase className="h-12 w-12 text-green-200" />
@@ -528,11 +641,11 @@ const Clientes = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-orange-100 text-sm">Cartera K3</p>
-                  <p className="text-3xl font-bold mt-1">{clientesK3}</p>
+                  <p className="text-3xl font-bold mt-1">{clientesVisiblesK3}</p>
                   <p className="text-orange-100 text-xs mt-1">clientes</p>
                   <div className="mt-3 space-y-1 text-[11px]">
-                    <p className="text-orange-100">Semanal: {ocupacion.K3?.semanal || 0}/{CAPACIDADES.K3.semanal}</p>
-                    <p className="text-orange-100">Quincenal/Mensual: {ocupacion.K3?.quincenalMensual || 0}/{CAPACIDADES.K3.quincenalMensual}</p>
+                    <p className="text-orange-100">Semanal: {ocupacionVisible.K3?.semanal || 0}/{CAPACIDADES.K3.semanal}</p>
+                    <p className="text-orange-100">Quincenal/Mensual: {ocupacionVisible.K3?.quincenalMensual || 0}/{CAPACIDADES.K3.quincenalMensual}</p>
                   </div>
                 </div>
                 <Briefcase className="h-12 w-12 text-orange-200" />
@@ -543,9 +656,9 @@ const Clientes = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-purple-100 text-sm">Total Clientes</p>
-                  <p className="text-3xl font-bold mt-1">{totalClientesAdmin}</p>
+                  <p className="text-3xl font-bold mt-1">{totalClientesVisiblesAdmin}</p>
                   <div className="mt-3 space-y-1 text-[11px]">
-                    <p className='text-purple-100 text-sm'>registrados</p>
+                    <p className='text-purple-100 text-sm'>visibles</p>
                   </div>
                 </div>
                 <UsersIcon className="h-12 w-12 text-purple-200" />
@@ -559,11 +672,11 @@ const Clientes = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-blue-100 text-sm">Cartera K1</p>
-                  <p className="text-3xl font-bold mt-1">{clientesK1}</p>
+                  <p className="text-3xl font-bold mt-1">{clientesVisiblesK1}</p>
                   <p className="text-blue-100 text-xs mt-1">clientes</p>
                   <div className="mt-3 space-y-1 text-[11px]">
-                    <p className="text-blue-100">Semanal: {ocupacion.K1?.semanal || 0}/{CAPACIDADES.K1.semanal}</p>
-                    <p className="text-blue-100">Quincenal/Mensual: {ocupacion.K1?.quincenalMensual || 0}/{CAPACIDADES.K1.quincenalMensual}</p>
+                    <p className="text-blue-100">Semanal: {ocupacionVisible.K1?.semanal || 0}/{CAPACIDADES.K1.semanal}</p>
+                    <p className="text-blue-100">Quincenal/Mensual: {ocupacionVisible.K1?.quincenalMensual || 0}/{CAPACIDADES.K1.quincenalMensual}</p>
                   </div>
                 </div>
                 <Briefcase className="h-12 w-12 text-blue-200" />
@@ -574,10 +687,10 @@ const Clientes = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-green-100 text-sm">Cartera K2</p>
-                  <p className="text-3xl font-bold mt-1">{clientesK2}</p>
+                  <p className="text-3xl font-bold mt-1">{clientesVisiblesK2}</p>
                   <p className="text-green-100 text-xs mt-1">clientes</p>
                   <div className="mt-3 space-y-1 text-[11px]">
-                    <p className="text-green-100">General: {ocupacion.K2?.general || 0}/{CAPACIDADES.K2.general}</p>
+                    <p className="text-green-100">General: {ocupacionVisible.K2?.general || 0}/{CAPACIDADES.K2.general}</p>
                   </div>
                 </div>
                 <Briefcase className="h-12 w-12 text-green-200" />
@@ -588,8 +701,8 @@ const Clientes = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-purple-100 text-sm">Total Clientes</p>
-                  <p className="text-3xl font-bold mt-1">{clientes.length}</p>
-                  <p className="text-purple-100 text-xs mt-1">registrados</p>
+                  <p className="text-3xl font-bold mt-1">{totalClientesVisiblesAdmin}</p>
+                  <p className="text-purple-100 text-xs mt-1">visibles</p>
                 </div>
                 <UsersIcon className="h-12 w-12 text-purple-200" />
               </div>
@@ -628,7 +741,7 @@ const Clientes = () => {
                   : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
                   }`}
               >
-                Todas ({clientes.length})
+                Todas ({totalClientesVisiblesAdmin})
               </button>
               <button
                 onClick={() => setFiltroCartera('K3')}
@@ -638,7 +751,7 @@ const Clientes = () => {
                   }`}
               >
                 <Briefcase className="h-4 w-4" />
-                Cartera K3 ({clientesK3})
+                Cartera K3 ({clientesVisiblesK3})
               </button>
             </>
           ) : esAdminOCeo ? (
@@ -651,7 +764,7 @@ const Clientes = () => {
                   : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
                   }`}
               >
-                Todas ({clientes.length})
+                Todas ({totalClientesVisiblesAdmin})
               </button>
               <button
                 onClick={() => setFiltroCartera('K1')}
@@ -661,7 +774,7 @@ const Clientes = () => {
                   }`}
               >
                 <Briefcase className="h-4 w-4" />
-                Cartera K1 ({clientesK1})
+                Cartera K1 ({clientesVisiblesK1})
               </button>
               <button
                 onClick={() => setFiltroCartera('K2')}
@@ -671,7 +784,7 @@ const Clientes = () => {
                   }`}
               >
                 <Briefcase className="h-4 w-4" />
-                Cartera K2 ({clientesK2})
+                Cartera K2 ({clientesVisiblesK2})
               </button>
               <button
                 onClick={() => setFiltroCartera('K3')}
@@ -681,7 +794,7 @@ const Clientes = () => {
                   }`}
               >
                 <Briefcase className="h-4 w-4" />
-                Cartera K3 ({clientesK3})
+                Cartera K3 ({clientesVisiblesK3})
               </button>
             </>
           ) : (
@@ -694,7 +807,7 @@ const Clientes = () => {
                   : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
                   }`}
               >
-                Todas ({clientes.length})
+                Todas ({totalClientesVisiblesAdmin})
               </button>
               <button
                 onClick={() => setFiltroCartera('K1')}
@@ -704,7 +817,7 @@ const Clientes = () => {
                   }`}
               >
                 <Briefcase className="h-4 w-4" />
-                Cartera K1 ({clientesK1})
+                Cartera K1 ({clientesVisiblesK1})
               </button>
               <button
                 onClick={() => setFiltroCartera('K2')}
@@ -714,7 +827,7 @@ const Clientes = () => {
                   }`}
               >
                 <Briefcase className="h-4 w-4" />
-                Cartera K2 ({clientesK2})
+                Cartera K2 ({clientesVisiblesK2})
               </button>
             </>
           )}
@@ -737,7 +850,7 @@ const Clientes = () => {
                 : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                 }`}
             >
-              {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
+              {tipo.charAt(0).toUpperCase() + tipo.slice(1)} ({clientesVisiblesPorTipo[tipo] || 0})
             </button>
           ))}
         </div>
