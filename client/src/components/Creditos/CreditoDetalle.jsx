@@ -362,6 +362,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     if (!multaParaEditar) return;
 
     try {
+      setProcesandoPago(true);
       skipSyncNext.current = true;
       const creditoActualizadoRespuesta = await editarMulta(
         clienteId,
@@ -378,33 +379,38 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
         const response = await api.get(`/creditos/${credito.id}`);
         if (response.success) setCreditoActualizado(response.data);
       }
+      setMultaParaEditar(null);
     } catch (error) {
       skipSyncNext.current = false;
       console.error('Error editando multa:', error);
+      alert('Error al editar la multa. Por favor, intente nuevamente.');
+    } finally {
+      setProcesandoPago(false);
     }
-
-    setMultaParaEditar(null);
   };
 
   const handleEliminarMulta = async (multaId) => {
-    if (confirm('¿Estás seguro de eliminar esta multa?')) {
-      try {
-        skipSyncNext.current = true;
-        const creditoActualizadoRespuesta = await eliminarMulta(clienteId, credito.id, multaId);
-        if (creditoActualizadoRespuesta) {
-          setCreditoActualizado(creditoActualizadoRespuesta);
-        } else {
-          const response = await api.get(`/creditos/${credito.id}`);
-          if (response.success) setCreditoActualizado(response.data);
-        }
-      } catch (error) {
-        skipSyncNext.current = false;
-        console.error('Error eliminando multa:', error);
-      }
+    if (!confirm('¿Estás seguro de eliminar esta multa?')) return;
 
+    try {
+      setProcesandoPago(true);
+      skipSyncNext.current = true;
+      const creditoActualizadoRespuesta = await eliminarMulta(clienteId, credito.id, multaId);
+      if (creditoActualizadoRespuesta) {
+        setCreditoActualizado(creditoActualizadoRespuesta);
+      } else {
+        const response = await api.get(`/creditos/${credito.id}`);
+        if (response.success) setCreditoActualizado(response.data);
+      }
+      // Cerrar el modal de edición si está abierto
+      setMultaParaEditar(null);
+    } catch (error) {
+      skipSyncNext.current = false;
+      console.error('Error eliminando multa:', error);
+      alert('Error al eliminar la multa. Por favor, intente nuevamente.');
+    } finally {
+      setProcesandoPago(false);
     }
-    // Cerrar el modal de edición si está abierto
-    setMultaParaEditar(null);
   };
 
   const handlePagarMulta = (multa) => {
@@ -433,6 +439,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
 
     // Pasar multaId para que el backend agregue el abono a abonosMulta (independiente de abonos de cuotas)
     try {
+      setProcesandoPago(true);
       skipSyncNext.current = true;
       await agregarAbono(clienteId, credito.id, valorNumerico, descFinal, fecha, 'multa', null, multa.id);
 
@@ -441,13 +448,14 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
       if (response.success && response.data) {
         setCreditoActualizado(response.data);
       }
+      setMultaParaPagar(null);
     } catch (error) {
       skipSyncNext.current = false;
       console.error('Error agregando abono de multa:', error);
+      alert('Error al procesar el pago de la multa. Por favor, intente nuevamente.');
+    } finally {
+      setProcesandoPago(false);
     }
-
-
-    setMultaParaPagar(null);
   };
 
   const handleAgregarAbono = () => {
@@ -719,6 +727,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     // Se agrega la multa independiente (sin nroCuota)
     const motivoFinal = fecha ? `${motivo} (${fecha})` : motivo;
     try {
+      setProcesandoPago(true);
       skipSyncNext.current = true;
       const creditoActualizadoRespuesta = await agregarMulta(clienteId, credito.id, parseFloat(valor), motivoFinal);
       // Si la respuesta incluye el crédito actualizado, usarlo directamente
@@ -728,12 +737,14 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
         const response = await api.get(`/creditos/${credito.id}`);
         if (response.success) setCreditoActualizado(response.data);
       }
+      setMostrarModalNuevaMulta(false);
     } catch (error) {
       skipSyncNext.current = false;
       console.error('Error agregando multa:', error);
+      alert('Error al crear la multa. Por favor, intente nuevamente.');
+    } finally {
+      setProcesandoPago(false);
     }
-
-    setMostrarModalNuevaMulta(false);
   };
 
 
@@ -1075,6 +1086,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
                   onEditarMulta={soloLectura ? null : (multa) => handleEditarMulta(multa)}
                   sinContenedor={true}
                   soloLectura={soloLectura}
+                  procesando={procesandoPago}
                 />
               </div>
             </div>
@@ -1166,6 +1178,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
             <ModalMulta
               onClose={() => setMostrarModalNuevaMulta(false)}
               onConfirm={handleConfirmarMulta}
+              procesando={procesandoPago}
             />
           )}
 
@@ -1174,6 +1187,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
               multa={multaParaPagar}
               onClose={() => setMultaParaPagar(null)}
               onConfirm={handleConfirmarPagoMulta}
+              procesando={procesandoPago}
             />
           )}
 
@@ -1183,6 +1197,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
               onClose={() => setMultaParaEditar(null)}
               onGuardar={handleGuardarEdicionMulta}
               onEliminar={handleEliminarMulta}
+              procesando={procesandoPago}
             />
           )}
 
@@ -1208,6 +1223,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
               // Pasamos el crédito con cuotasActualizadas para que la deuda pendiente
               // se calcule usando los abonos aplicados (abonoAplicado) por cuota
               creditoAnterior={{ ...creditoActualizado, cuotas: cuotasActualizadas }}
+              cliente={cliente}
               onSubmit={handleRenovar}
               onClose={() => setMostrarFormularioRenovacion(false)}
             />
@@ -1311,33 +1327,29 @@ const ModalEditarAbono = ({ abono, maxCuotas, onClose, onConfirm, onDelete }) =>
               placeholder="Ej: Abono cuota #1"
             />
           </div>
-          <div className="flex justify-between pt-2">
+          <div className="flex flex-wrap justify-center sm:justify-between items-center gap-3 pt-4 border-t border-gray-100">
             {onDelete && (
               <button
                 type="button"
-                onClick={() => {
-                  // Confirmación está en handleEliminarAbono, pero aquí cerramos el modal si se borra?
-                  // handleEliminarAbono tiene su propio confirm. Si el usuario cancela, no cerramos modal?
-                  // Mejor llamar a onDelete y que él maneje.
-                  onDelete();
-                }}
-                className="px-3 py-2 text-red-600 hover:bg-red-50 rounded flex items-center gap-1"
+                onClick={onDelete}
+                className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg flex items-center justify-center gap-2 border border-red-100 transition-colors w-full sm:w-auto order-3 sm:order-1"
                 title="Eliminar pago"
               >
-                <Trash2 className="h-4 w-4" /> Eliminar
+                <Trash2 className="h-4 w-4" />
+                <span className="font-semibold text-sm">Eliminar</span>
               </button>
             )}
-            <div className="flex gap-2">
+            <div className="flex gap-2 w-full sm:w-auto order-1 sm:order-2 justify-center sm:justify-end">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded"
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold text-sm transition-colors flex-1 sm:flex-none"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold text-sm transition-all shadow-sm flex-1 sm:flex-none"
               >
                 Guardar cambios
               </button>
@@ -1366,7 +1378,7 @@ const ModalPago = ({ cuota, onClose, onConfirm, procesando = false }) => {
       <div className="bg-white rounded-lg p-6 w-96 shadow-2xl">
         <h3 className="text-lg font-bold text-blue-600 mb-4">Pagar Cuota #{cuota.nroCuota}</h3>
         <p className="text-sm text-gray-600 mb-4">
-          Pendiente: <span className="font-bold text-red-600">${formatearMoneda(cuota.valorPendiente)}</span>
+          Pendiente: <span className="font-bold text-red-600">{formatearMoneda(cuota.valorPendiente)}</span>
         </p>
         {procesando && (
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
@@ -1407,24 +1419,24 @@ const ModalPago = ({ cuota, onClose, onConfirm, procesando = false }) => {
               disabled={procesando}
             />
           </div>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded"
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold text-sm transition-colors"
               disabled={procesando}
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-all shadow-sm min-w-[120px]"
               disabled={procesando}
             >
               {procesando ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>Procesando...</span>
+                  <span className="text-xs">Procesando...</span>
                 </>
               ) : (
                 'Confirmar Pago'
@@ -1437,7 +1449,7 @@ const ModalPago = ({ cuota, onClose, onConfirm, procesando = false }) => {
   );
 };
 
-const ModalPagoMulta = ({ multa, onClose, onConfirm }) => {
+const ModalPagoMulta = ({ multa, onClose, onConfirm, procesando = false }) => {
   const { multa: multaData, valorPendiente } = multa;
   const [valor, setValor] = useState(valorPendiente || '');
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
@@ -1445,6 +1457,7 @@ const ModalPagoMulta = ({ multa, onClose, onConfirm }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (procesando) return;
     if (!valor || parseFloat(valor) <= 0) return alert('Ingrese un valor válido');
     if (parseFloat(valor) > valorPendiente) {
       return alert(`El valor a pagar no puede ser mayor al pendiente (${formatearMoneda(valorPendiente)})`);
@@ -1470,6 +1483,7 @@ const ModalPagoMulta = ({ multa, onClose, onConfirm }) => {
               autoFocus
               min="0"
               max={valorPendiente}
+              disabled={procesando}
             />
           </div>
           <div>
@@ -1479,6 +1493,7 @@ const ModalPagoMulta = ({ multa, onClose, onConfirm }) => {
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
               className="w-full border rounded p-2"
+              disabled={procesando}
             />
           </div>
           <div>
@@ -1489,21 +1504,31 @@ const ModalPagoMulta = ({ multa, onClose, onConfirm }) => {
               onChange={(e) => setDescripcion(e.target.value)}
               className="w-full border rounded p-2"
               placeholder="Ej: Abono parcial"
+              disabled={procesando}
             />
           </div>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded"
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold text-sm transition-colors"
+              disabled={procesando}
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-all shadow-sm min-w-[120px]"
+              disabled={procesando}
             >
-              Confirmar Pago
+              {procesando ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span className="text-xs">Procesando...</span>
+                </>
+              ) : (
+                'Confirmar Pago'
+              )}
             </button>
           </div>
         </form>
@@ -1512,13 +1537,14 @@ const ModalPagoMulta = ({ multa, onClose, onConfirm }) => {
   );
 };
 
-const ModalMulta = ({ onClose, onConfirm }) => {
+const ModalMulta = ({ onClose, onConfirm, procesando = false }) => {
   const [valor, setValor] = useState('');
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
   const [motivo, setMotivo] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (procesando) return;
     if (!valor || valor <= 0) return alert('Ingrese un valor válido');
     onConfirm({ valor, fecha, motivo });
   };
@@ -1536,6 +1562,7 @@ const ModalMulta = ({ onClose, onConfirm }) => {
               onChange={(e) => setValor(e.target.value)}
               className="w-full border rounded p-2"
               autoFocus
+              disabled={procesando}
             />
           </div>
           <div>
@@ -1545,6 +1572,7 @@ const ModalMulta = ({ onClose, onConfirm }) => {
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
               className="w-full border rounded p-2"
+              disabled={procesando}
             />
           </div>
           <div>
@@ -1554,21 +1582,31 @@ const ModalMulta = ({ onClose, onConfirm }) => {
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
               className="w-full border rounded p-2"
+              disabled={procesando}
             />
           </div>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded"
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold text-sm transition-colors"
+              disabled={procesando}
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-bold"
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-all shadow-sm min-w-[120px]"
+              disabled={procesando}
             >
-              Crear Multa
+              {procesando ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span className="text-xs">Procesando...</span>
+                </>
+              ) : (
+                'Crear Multa'
+              )}
             </button>
           </div>
         </form>
@@ -1577,21 +1615,22 @@ const ModalMulta = ({ onClose, onConfirm }) => {
   );
 };
 
-const ModalEditarMulta = ({ multa, onClose, onGuardar, onEliminar }) => {
+const ModalEditarMulta = ({ multa, onClose, onGuardar, onEliminar, procesando = false }) => {
   const [valor, setValor] = useState(multa.valor || '');
   const [fecha, setFecha] = useState(multa.fecha || new Date().toISOString().split('T')[0]);
   const [motivo, setMotivo] = useState(multa.motivo || '');
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (procesando) return;
     if (!valor || parseFloat(valor) <= 0) return alert('Ingrese un valor válido');
     onGuardar(valor, fecha, motivo);
   };
 
   const handleEliminar = () => {
-    if (confirm('¿Estás seguro de eliminar esta multa?')) {
-      onEliminar(multa.id);
-    }
+    if (procesando) return;
+    // La confirmación ahora se maneja solo en el padre
+    onEliminar(multa.id);
   };
 
   return (
@@ -1609,6 +1648,7 @@ const ModalEditarMulta = ({ multa, onClose, onGuardar, onEliminar }) => {
               autoFocus
               min="0"
               step="0.01"
+              disabled={procesando}
             />
           </div>
           <div>
@@ -1618,6 +1658,7 @@ const ModalEditarMulta = ({ multa, onClose, onGuardar, onEliminar }) => {
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
               className="w-full border rounded p-2"
+              disabled={procesando}
             />
           </div>
           <div>
@@ -1628,29 +1669,47 @@ const ModalEditarMulta = ({ multa, onClose, onGuardar, onEliminar }) => {
               onChange={(e) => setMotivo(e.target.value)}
               className="w-full border rounded p-2"
               placeholder="Ej: Retraso en pago"
+              disabled={procesando}
             />
           </div>
-          <div className="flex justify-between gap-2 pt-2">
+          <div className="flex flex-wrap justify-between items-center gap-3 pt-4 border-t border-gray-100">
             <button
               type="button"
               onClick={handleEliminar}
-              className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-bold"
+              className="px-4 py-2 bg-red-200 text-red-600 border border-red-100 rounded-lg hover:bg-red-100 font-bold disabled:opacity-50 flex items-center justify-center gap-2 transition-all min-w-[100px]"
+              disabled={procesando}
             >
-              Eliminar
+              {procesando ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                  <span className="text-xs">Procesando...</span>
+                </>
+              ) : (
+                'Eliminar'
+              )}
             </button>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded"
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold text-sm transition-colors"
+                disabled={procesando}
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold disabled:opacity-50 flex items-center justify-center gap-2 transition-all shadow-sm min-w-[100px]"
+                disabled={procesando}
               >
-                Guardar
+                {procesando ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span className="text-xs">Procesando...</span>
+                  </>
+                ) : (
+                  'Guardar'
+                )}
               </button>
             </div>
           </div>

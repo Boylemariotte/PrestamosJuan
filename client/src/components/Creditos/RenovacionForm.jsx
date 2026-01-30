@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
 import { X, RefreshCw, AlertCircle } from 'lucide-react';
-import { 
-  MONTOS_DISPONIBLES, 
-  calcularTotalAPagar, 
+import {
+  MONTOS_DISPONIBLES,
+  calcularTotalAPagar,
   calcularValorCuota,
   obtenerNumCuotas,
   calcularPapeleria,
-  formatearMoneda 
+  formatearMoneda
 } from '../../utils/creditCalculations';
 import { obtenerFechaLocal } from '../../utils/dateUtils';
 
-const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
+const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
   const [formData, setFormData] = useState({
     monto: MONTOS_DISPONIBLES[0],
     tipo: creditoAnterior.tipo, // Mantener el mismo tipo de pago
@@ -18,11 +18,18 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
     fechaInicio: obtenerFechaLocal()
   });
 
+  // Nombres de tipos de pago
+  const nombresTipos = {
+    diario: 'Diario',
+    semanal: 'Semanal',
+    quincenal: 'Quincenal',
+    mensual: 'Mensual'
+  };
+
   // Calcular deuda pendiente del crédito anterior
   const cuotasPendientes = creditoAnterior.cuotas.filter(c => !c.pagado);
 
   // Deuda pendiente: saldo real de cada cuota no pagada, considerando abonos parciales
-  // Ejemplo: valorCuota = 120, abonoAplicado = 100 => saldo cuota = 20
   const valorCuotasPendientes = creditoAnterior.cuotas.reduce((sum, cuota) => {
     if (cuota.pagado) return sum;
     const abonoAplicado = cuota.abonoAplicado || 0;
@@ -37,7 +44,7 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
   const totalAPagar = calcularTotalAPagar(formData.monto, formData.tipo);
   const numCuotas = obtenerNumCuotas(formData.monto, formData.tipo);
   const valorCuota = calcularValorCuota(formData.monto, formData.tipo);
-  
+
   // Monto a entregar = Nuevo monto - Papelería - Deuda pendiente
   const montoAEntregar = formData.monto - papeleria - deudaPendiente;
 
@@ -63,7 +70,7 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 text-left">
       <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] flex flex-col">
         <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-4 flex items-center justify-between rounded-t-xl shrink-0">
           <div className="flex items-center gap-2">
@@ -79,6 +86,35 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto flex-1">
+          {/* Información del Cliente */}
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+            <h3 className="font-bold text-blue-900 mb-3 text-sm uppercase tracking-wider border-b border-blue-200 pb-2">
+              Información del Cliente
+            </h3>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="col-span-2">
+                <span className="text-blue-700 font-medium">Cliente:</span>
+                <p className="font-bold text-blue-900 text-base">{cliente?.nombre || 'N/A'}</p>
+              </div>
+              <div>
+                <span className="text-blue-700 font-medium">Ref. Crédito:</span>
+                <p className="font-bold text-blue-900">
+                  {cliente?.posicion ? `#${cliente.posicion}` : 'N/A'}
+                </p>
+              </div>
+              <div>
+                <span className="text-blue-700 font-medium">Cartera:</span>
+                <p className="font-bold text-blue-900 capitalize">{cliente?.cartera || 'N/A'}</p>
+              </div>
+              <div className="col-span-2">
+                <span className="text-blue-700 font-medium">Modalidad:</span>
+                <p className="font-bold text-blue-900">
+                  {nombresTipos[creditoAnterior.tipo] || nombresTipos[cliente?.modalidad] || 'N/A'}
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Información del crédito anterior */}
           <div className="bg-orange-50 border-2 border-orange-200 rounded-lg p-4">
             <h3 className="font-semibold text-orange-900 mb-2 flex items-center gap-2">
@@ -109,12 +145,12 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
 
           {/* Selección de monto */}
           <div>
-            <label className="label">Monto de Renovación *</label>
+            <label className="label block text-sm font-medium text-gray-700 mb-1 font-bold">Monto de Renovación *</label>
             <select
               name="monto"
               value={formData.monto}
               onChange={handleChange}
-              className="input-field"
+              className="input-field w-full border rounded-md p-2"
               required
             >
               {MONTOS_DISPONIBLES.map(monto => (
@@ -127,7 +163,7 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
 
           {/* Tipo de pago */}
           <div>
-            <label className="label">Tipo de Pago *</label>
+            <label className="label block text-sm font-medium text-gray-700 mb-1 font-bold">Tipo de Pago *</label>
             <div className="space-y-2">
               <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
                 <input
@@ -136,9 +172,9 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
                   value="semanal"
                   checked={formData.tipo === 'semanal'}
                   onChange={handleChange}
-                  className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
                 />
-                <div className="ml-3">
+                <div className="ml-3 text-left">
                   <span className="font-medium text-gray-900">Semanal</span>
                   <p className="text-sm text-gray-500">10 cuotas - Cada sábado</p>
                 </div>
@@ -151,9 +187,9 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
                   value="quincenal"
                   checked={formData.tipo === 'quincenal'}
                   onChange={handleChange}
-                  className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
                 />
-                <div className="ml-3">
+                <div className="ml-3 text-left">
                   <span className="font-medium text-gray-900">Quincenal</span>
                   <p className="text-sm text-gray-500">5 cuotas</p>
                 </div>
@@ -166,9 +202,9 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
                   value="mensual"
                   checked={formData.tipo === 'mensual'}
                   onChange={handleChange}
-                  className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
                 />
-                <div className="ml-3">
+                <div className="ml-3 text-left">
                   <span className="font-medium text-gray-900">Mensual</span>
                   <p className="text-sm text-gray-500">3 cuotas - Cada mes</p>
                 </div>
@@ -179,12 +215,12 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
           {/* Opciones quincenales */}
           {formData.tipo === 'quincenal' && (
             <div>
-              <label className="label">Días de Cobro Quincenal *</label>
+              <label className="label block text-sm font-medium text-gray-700 mb-1 font-bold">Días de Cobro Quincenal *</label>
               <select
                 name="tipoQuincenal"
                 value={formData.tipoQuincenal}
                 onChange={handleChange}
-                className="input-field"
+                className="input-field w-full border rounded-md p-2"
                 required
               >
                 <option value="1-16">Días 1 y 16 de cada mes</option>
@@ -195,13 +231,13 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
 
           {/* Fecha de inicio */}
           <div>
-            <label className="label">Fecha de Inicio *</label>
+            <label className="label block text-sm font-medium text-gray-700 mb-1 font-bold">Fecha de Inicio *</label>
             <input
               type="date"
               name="fechaInicio"
               value={formData.fechaInicio}
               onChange={handleChange}
-              className="input-field"
+              className="input-field w-full border rounded-md p-2"
               required
             />
           </div>
@@ -209,7 +245,7 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
           {/* Resumen de la renovación */}
           <div className={`p-4 rounded-lg space-y-2 ${montoAEntregar >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
             <h3 className="font-semibold text-gray-900 mb-3">Resumen de Renovación</h3>
-            
+
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Monto de renovación:</span>
               <span className="font-semibold text-gray-900">
@@ -248,7 +284,7 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
               </div>
             )}
 
-            <div className="mt-4 pt-4 border-t border-gray-300">
+            <div className="mt-4 pt-4 border-t border-gray-300 text-left">
               <p className="text-sm text-gray-600 mb-2">Nuevo crédito:</p>
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between">
@@ -272,18 +308,17 @@ const RenovacionForm = ({ creditoAnterior, onSubmit, onClose }) => {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 btn-secondary"
+              className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg font-bold hover:bg-gray-50 transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={montoAEntregar < 0}
-              className={`flex-1 flex items-center justify-center gap-2 ${
-                montoAEntregar >= 0
-                  ? 'btn-primary bg-gradient-to-r from-purple-600 to-blue-600'
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold text-white transition-all ${montoAEntregar >= 0
+                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 hover:opacity-90 shadow-md'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
+                }`}
             >
               <RefreshCw className="h-4 w-4" />
               Renovar Crédito

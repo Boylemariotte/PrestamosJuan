@@ -2,7 +2,7 @@ import React from 'react';
 import { Check, Plus, Edit2 } from 'lucide-react';
 import { formatearMoneda, formatearFechaCorta } from '../../utils/creditCalculations';
 
-const RecobroCard = ({ todasLasMultas, onNuevaMulta, onPagarMulta, onEditarMulta, soloLectura = false }) => {
+const RecobroCard = ({ todasLasMultas, onNuevaMulta, onPagarMulta, onEditarMulta, soloLectura = false, procesando = false }) => {
   return (
     <div key="recobro" className="border-2 border-blue-600 rounded-lg p-3 flex flex-col min-h-36 w-full print-grid-item recobro-card">
       <div className="flex items-center justify-between mb-2">
@@ -16,7 +16,8 @@ const RecobroCard = ({ todasLasMultas, onNuevaMulta, onPagarMulta, onEditarMulta
           {!soloLectura && onNuevaMulta && (
             <button
               onClick={onNuevaMulta}
-              className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-[10px] px-2 py-1 rounded transition-colors"
+              disabled={procesando}
+              className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-[10px] px-2 py-1 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="h-3 w-3" />
               Nueva multa
@@ -73,7 +74,8 @@ const RecobroCard = ({ todasLasMultas, onNuevaMulta, onPagarMulta, onEditarMulta
                       {!soloLectura && onEditarMulta && (
                         <button
                           onClick={() => onEditarMulta(multa)}
-                          className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          disabled={procesando}
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors disabled:opacity-50"
                           title="Editar multa"
                         >
                           <Edit2 className="h-3 w-3" />
@@ -85,7 +87,8 @@ const RecobroCard = ({ todasLasMultas, onNuevaMulta, onPagarMulta, onEditarMulta
                       {!soloLectura && onPagarMulta && (
                         <button
                           onClick={() => onPagarMulta(multa)}
-                          className={`flex-1 py-1 px-2 ${esParcial ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-red-600 hover:bg-red-700'} text-white text-[10px] font-bold rounded flex items-center justify-center gap-1 transition-colors`}
+                          disabled={procesando}
+                          className={`flex-1 py-1 px-2 ${esParcial ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-red-600 hover:bg-red-700'} text-white text-[10px] font-bold rounded flex items-center justify-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
                           {esParcial ? 'Abonar' : 'Pagar'}
                         </button>
@@ -93,7 +96,8 @@ const RecobroCard = ({ todasLasMultas, onNuevaMulta, onPagarMulta, onEditarMulta
                       {!soloLectura && onEditarMulta && (
                         <button
                           onClick={() => onEditarMulta(multa)}
-                          className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          disabled={procesando}
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors disabled:opacity-50"
                           title="Editar multa"
                         >
                           <Edit2 className="h-3 w-3" />
