@@ -232,9 +232,9 @@ const ClienteDetalle = ({ soloLectura = false }) => {
                   <h1 className="text-2xl md:text-3xl font-bold text-gray-900 break-all">
                     {cliente.nombre}{" "}
                     <span className={`font-black ${infoPagoActual.cartera === 'K1' ? 'text-blue-600' :
-                        infoPagoActual.cartera === 'K2' ? 'text-green-600' :
-                          infoPagoActual.cartera === 'K3' ? 'text-orange-600' :
-                            'text-gray-400'
+                      infoPagoActual.cartera === 'K2' ? 'text-green-600' :
+                        infoPagoActual.cartera === 'K3' ? 'text-orange-600' :
+                          'text-gray-400'
                       }`}>
                       #{infoPagoActual.posicion}
                     </span>
@@ -260,16 +260,16 @@ const ClienteDetalle = ({ soloLectura = false }) => {
                 </div>
                 <div className="flex items-center gap-2 text-sm font-bold">
                   <span className={`px-2 py-0.5 rounded border uppercase ${infoPagoActual.cartera === 'K1' ? 'bg-blue-600 text-white border-blue-700' :
-                      infoPagoActual.cartera === 'K2' ? 'bg-green-600 text-white border-green-700' :
-                        infoPagoActual.cartera === 'K3' ? 'bg-orange-600 text-white border-orange-700' :
-                          'bg-gray-100 text-gray-700 border-gray-200'
+                    infoPagoActual.cartera === 'K2' ? 'bg-green-600 text-white border-green-700' :
+                      infoPagoActual.cartera === 'K3' ? 'bg-orange-600 text-white border-orange-700' :
+                        'bg-gray-100 text-gray-700 border-gray-200'
                     }`}>
                     {infoPagoActual.tipo}
                   </span>
                   <span className={`px-2 py-0.5 rounded border ${infoPagoActual.cartera === 'K1' ? 'bg-blue-100 text-blue-800 border-blue-300' :
-                      infoPagoActual.cartera === 'K2' ? 'bg-green-100 text-green-800 border-green-300' :
-                        infoPagoActual.cartera === 'K3' ? 'bg-orange-100 text-orange-800 border-orange-300' :
-                          'bg-gray-50 text-gray-700 border-gray-200'
+                    infoPagoActual.cartera === 'K2' ? 'bg-green-100 text-green-800 border-green-300' :
+                      infoPagoActual.cartera === 'K3' ? 'bg-orange-100 text-orange-800 border-orange-300' :
+                        'bg-gray-50 text-gray-700 border-gray-200'
                     }`}>
                     {infoPagoActual.cartera}
                   </span>
@@ -518,7 +518,7 @@ const ClienteDetalle = ({ soloLectura = false }) => {
           onSubmit={handleAgregarCredito}
           onClose={() => setShowCreditoForm(false)}
           carteraCliente={cliente.cartera || 'K1'}
-          tipoPagoPredefinido={tipoPagoPredefinido}
+          tipoPagoPredefinido={tipoPagoPredefinido === 'quincenal/mensual' ? null : tipoPagoPredefinido}
           tipoPagoPreferido={cliente.tipoPagoEsperado}
         />
       )}
