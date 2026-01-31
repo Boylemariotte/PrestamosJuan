@@ -194,4 +194,38 @@ export const notaService = {
   },
 };
 
+/**
+ * Servicio de visitas
+ */
+export const visitaService = {
+  // Obtener todas las visitas
+  obtenerTodas: async (params) => {
+    const query = params ? `?${new URLSearchParams(params).toString()}` : '';
+    return await api.get(`/visitas${query}`);
+  },
 
+  // Obtener una visita por ID
+  obtenerPorId: async (id) => {
+    return await api.get(`/visitas/${id}`);
+  },
+
+  // Crear una nueva visita
+  crear: async (visita) => {
+    return await api.post('/visitas', visita);
+  },
+
+  // Actualizar una visita
+  actualizar: async (id, visita) => {
+    return await api.put(`/visitas/${id}`, visita);
+  },
+
+  // Eliminar una visita
+  eliminar: async (id) => {
+    return await api.delete(`/visitas/${id}`);
+  },
+
+  // Completar una visita
+  completar: async (id) => {
+    return await api.put(`/visitas/${id}/completar`);
+  }
+};

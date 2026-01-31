@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Save, Printer, UserPlus, X, Briefcase, Trash2, PlusCircle, Search } from 'lucide-react';
+import { Save, Printer, UserPlus, X, Briefcase, Trash2, PlusCircle, Search, Pencil } from 'lucide-react';
 import { BARRIOS_TULUA, BARRIOS_BUGA } from '../constants/barrios';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
@@ -10,7 +10,9 @@ const Visitas = () => {
     const { user } = useAuth();
     const [showCarteraModal, setShowCarteraModal] = useState(false);
     const [selectedVisit, setSelectedVisit] = useState(null);
-    
+    const [isEditing, setIsEditing] = useState(false);
+    const [editingId, setEditingId] = useState(null);
+
     // Estados para manejar la selección de barrios
     const [showBarriosSolicitanteCasa, setShowBarriosSolicitanteCasa] = useState(false);
     const [barrioSearchSolicitanteCasa, setBarrioSearchSolicitanteCasa] = useState('');
@@ -20,7 +22,7 @@ const Visitas = () => {
     const [barrioSearchFiadorCasa, setBarrioSearchFiadorCasa] = useState('');
     const [showBarriosFiadorTrabajo, setShowBarriosFiadorTrabajo] = useState(false);
     const [barrioSearchFiadorTrabajo, setBarrioSearchFiadorTrabajo] = useState('');
-    
+
     const barriosRefSolicitanteCasa = useRef(null);
     const barriosRefSolicitanteTrabajo = useRef(null);
     const barriosRefFiadorCasa = useRef(null);
@@ -28,7 +30,7 @@ const Visitas = () => {
 
     const [visitas, setVisitas] = useState([]);
     const [loading, setLoading] = useState(true);
-    
+
     // Cerrar dropdowns al hacer clic fuera
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -86,7 +88,7 @@ const Visitas = () => {
     // Filtrar barrios según el término de búsqueda
     const filterBarrios = (searchTerm) => {
         if (!searchTerm) return [];
-        return barriosDisponibles.filter(barrio => 
+        return barriosDisponibles.filter(barrio =>
             normalizeText(barrio).includes(normalizeText(searchTerm))
         );
     };
@@ -94,7 +96,7 @@ const Visitas = () => {
     // Manejador para cambios en la búsqueda de barrios
     const handleBarrioSearchChange = (e, section, field) => {
         const value = e.target.value;
-        
+
         // Actualizar el estado de búsqueda correspondiente
         if (section === 'solicitante' && field === 'barrioCasa') {
             setBarrioSearchSolicitanteCasa(value);
@@ -109,7 +111,7 @@ const Visitas = () => {
             setBarrioSearchFiadorTrabajo(value);
             setShowBarriosFiadorTrabajo(true);
         }
-        
+
         // Actualizar el formulario
         handleChange({
             target: {
@@ -163,6 +165,63 @@ const Visitas = () => {
 
         fetchVisitas();
     }, []);
+
+    const handleEditVisit = (visit) => {
+        const visitId = visit._id || visit.id;
+        setEditingId(visitId);
+        setIsEditing(true);
+
+        // Formatear fechas para los inputs de tipo date (YYYY-MM-DD)
+        const fechaAgendamiento = visit.fechaAgendamiento ? visit.fechaAgendamiento.split('T')[0] : '';
+        const fechaVisita = visit.fechaVisita ? visit.fechaVisita.split('T')[0] : '';
+
+        setFormData({
+            fechaAgendamiento,
+            fechaVisita,
+            tipoPrestamo: visit.tipoPrestamo || '',
+            numeroCliente: visit.numeroCliente || '',
+            valorPrestamo: visit.valorPrestamo || '',
+            valorCuota: visit.valorCuota || '',
+            solicitante: {
+                nombre: visit.solicitante.nombre || '',
+                cc: visit.solicitante.cc || '',
+                telefono: visit.solicitante.telefono || '',
+                direccionCasa: visit.solicitante.direccionCasa || '',
+                barrioCasa: visit.solicitante.barrioCasa || '',
+                direccionTrabajo: visit.solicitante.direccionTrabajo || '',
+                barrioTrabajo: visit.solicitante.barrioTrabajo || ''
+            },
+            fiador: {
+                nombre: visit.fiador.nombre || '',
+                cc: visit.fiador.cc || '',
+                telefono: visit.fiador.telefono || '',
+                direccionCasa: visit.fiador.direccionCasa || '',
+                barrioCasa: visit.fiador.barrioCasa || '',
+                direccionTrabajo: visit.fiador.direccionTrabajo || '',
+                barrioTrabajo: visit.fiador.barrioTrabajo || ''
+            },
+            observaciones: visit.observaciones || ''
+        });
+
+        // Actualizar búsquedas de barrios
+        setBarrioSearchSolicitanteCasa(visit.solicitante.barrioCasa || '');
+        setBarrioSearchSolicitanteTrabajo(visit.solicitante.barrioTrabajo || '');
+        setBarrioSearchFiadorCasa(visit.fiador.barrioCasa || '');
+        setBarrioSearchFiadorTrabajo(visit.fiador.barrioTrabajo || '');
+
+        // Scroll al inicio para ver el formulario
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleCancelEdit = () => {
+        setIsEditing(false);
+        setEditingId(null);
+        setFormData(initialFormState);
+        setBarrioSearchSolicitanteCasa('');
+        setBarrioSearchSolicitanteTrabajo('');
+        setBarrioSearchFiadorCasa('');
+        setBarrioSearchFiadorTrabajo('');
+    };
 
     // Función helper para obtener la fecha de hoy en formato YYYY-MM-DD (local)
     const obtenerFechaHoyLocal = () => {
@@ -237,15 +296,8 @@ const Visitas = () => {
         e.preventDefault();
         try {
             // Preparar fechas forzando mediodía (12:00 PM) para evitar desfases de zona horaria
-            // Al convertir a ISO, las 12:00 PM local suelen caer en el mismo día UTC (ej: 17:00 UTC)
-            
             let fechaAgendamientoISO = formData.fechaAgendamiento;
             if (formData.fechaAgendamiento) {
-                const fecha = new Date(formData.fechaAgendamiento);
-                // Ajustar a mediodía local para seguridad
-                // new Date('2025-12-21') crea 2025-12-21T00:00:00 UTC (ojo, comportamiento estándar de Date.parse)
-                // Pero new Date(year, month, day) crea local.
-                // Mejor estrategia: Crear fecha local y poner horas 12.
                 const [year, month, day] = formData.fechaAgendamiento.split('-').map(Number);
                 const fechaLocal = new Date(year, month - 1, day, 12, 0, 0);
                 fechaAgendamientoISO = fechaLocal.toISOString();
@@ -262,22 +314,28 @@ const Visitas = () => {
                 ...formData,
                 fechaAgendamiento: fechaAgendamientoISO,
                 fechaVisita: fechaVisitaISO,
-                completada: false
             };
 
-            const response = await api.post('/visitas', visitaData);
-            if (response.success) {
-                setVisitas([...visitas, response.data]);
-                setFormData(initialFormState);
-                // Limpiar las búsquedas de barrios
-                setBarrioSearchSolicitanteCasa('');
-                setBarrioSearchSolicitanteTrabajo('');
-                setBarrioSearchFiadorCasa('');
-                setBarrioSearchFiadorTrabajo('');
+            if (isEditing) {
+                const response = await api.put(`/visitas/${editingId}`, visitaData);
+                if (response.success) {
+                    setVisitas(visitas.map(v => (v._id === editingId || v.id === editingId) ? response.data : v));
+                    handleCancelEdit();
+                }
+            } else {
+                const response = await api.post('/visitas', { ...visitaData, completada: false });
+                if (response.success) {
+                    setVisitas([...visitas, response.data]);
+                    setFormData(initialFormState);
+                    setBarrioSearchSolicitanteCasa('');
+                    setBarrioSearchSolicitanteTrabajo('');
+                    setBarrioSearchFiadorCasa('');
+                    setBarrioSearchFiadorTrabajo('');
+                }
             }
         } catch (error) {
-            console.error('Error creando visita:', error);
-            alert('Error al crear la visita. Por favor intenta de nuevo.');
+            console.error(isEditing ? 'Error actualizando visita:' : 'Error creando visita:', error);
+            alert(`Error al ${isEditing ? 'actualizar' : 'crear'} la visita. Por favor intenta de nuevo.`);
         }
     };
 
@@ -346,11 +404,21 @@ const Visitas = () => {
 
             {/* Formulario de Nueva Visita */}
             <div className="bg-white shadow-lg rounded-lg overflow-hidden no-print">
-                <div className="px-8 py-4 border-b border-gray-200 bg-gray-50">
+                <div className="px-8 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                     <h2 className="text-lg font-bold text-gray-700 flex items-center gap-2">
-                        <PlusCircle size={20} />
-                        Nueva Visita
+                        {isEditing ? <Pencil size={20} /> : <PlusCircle size={20} />}
+                        {isEditing ? 'Editar Visita' : 'Nueva Visita'}
                     </h2>
+                    {isEditing && (
+                        <button
+                            type="button"
+                            onClick={handleCancelEdit}
+                            className="text-red-600 hover:text-red-800 flex items-center gap-1 font-semibold"
+                        >
+                            <X size={18} />
+                            Cancelar Edición
+                        </button>
+                    )}
                 </div>
                 <form onSubmit={handleAddVisit} className="p-8 space-y-6">
                     {/* Fechas */}
@@ -664,13 +732,23 @@ const Visitas = () => {
                         ></textarea>
                     </div>
 
-                    <div className="flex justify-end pt-4">
+                    <div className="flex justify-end gap-3 pt-4">
+                        {isEditing && (
+                            <button
+                                type="button"
+                                onClick={handleCancelEdit}
+                                className="flex items-center gap-2 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors shadow-sm"
+                            >
+                                <X size={20} />
+                                Cancelar
+                            </button>
+                        )}
                         <button
                             type="submit"
-                            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+                            className={`flex items-center gap-2 px-6 py-3 ${isEditing ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-lg transition-colors shadow-md`}
                         >
-                            <PlusCircle size={20} />
-                            Agregar a la Lista
+                            {isEditing ? <Save size={20} /> : <PlusCircle size={20} />}
+                            {isEditing ? 'Actualizar Visita' : 'Agregar a la Lista'}
                         </button>
                     </div>
                 </form>
@@ -693,147 +771,154 @@ const Visitas = () => {
                         {visitas.map((visit, index) => {
                             const visitId = visit._id || visit.id;
                             return (
-                            <div key={visitId} className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200 break-inside-avoid print:shadow-none print:border print:mb-2 print:page-break-inside-avoid">
-                                {/* Encabezado similar al formulario */}
-                                <div className="px-8 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center print:px-4 print:py-2">
-                                    <h3 className="text-lg font-bold text-gray-700 flex items-center gap-2">
-                                        <span>Visita #{index + 1}</span>
-                                        <span className="text-sm font-normal text-gray-500">- {visit.solicitante.nombre}</span>
-                                    </h3>
-                                    <div className="flex gap-2 no-print">
-                                        <button
-                                            onClick={() => openCarteraModal(visit)}
-                                            className="p-2 text-green-600 hover:bg-green-50 rounded-full transition-colors"
-                                            title="Añadir a Clientes"
-                                        >
-                                            <UserPlus size={20} />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteVisit(visitId)}
-                                            className="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors"
-                                            title="Eliminar"
-                                        >
-                                            <Trash2 size={20} />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Cuerpo con formato similar al formulario de Nueva Visita */}
-                                <div className="p-8 space-y-6 text-sm print:p-4 print:space-y-3 print:text-[11px]">
-                                    {/* Fechas */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1 print:gap-3">
-                                        <div className="flex flex-col">
-                                            <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Fecha Agendamiento</label>
-                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800">
-                                                {formatearFechaVisual(visit.fechaAgendamiento)}
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Fecha de la Visita</label>
-                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800">
-                                                {formatearFechaVisual(visit.fechaVisita)}
-                                            </div>
+                                <div key={visitId} className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200 break-inside-avoid print:shadow-none print:border print:mb-2 print:page-break-inside-avoid">
+                                    {/* Encabezado similar al formulario */}
+                                    <div className="px-8 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center print:px-4 print:py-2">
+                                        <h3 className="text-lg font-bold text-gray-700 flex items-center gap-2">
+                                            <span>Visita #{index + 1}</span>
+                                            <span className="text-sm font-normal text-gray-500">- {visit.solicitante.nombre}</span>
+                                        </h3>
+                                        <div className="flex gap-2 no-print">
+                                            <button
+                                                onClick={() => handleEditVisit(visit)}
+                                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                                                title="Editar"
+                                            >
+                                                <Pencil size={20} />
+                                            </button>
+                                            <button
+                                                onClick={() => openCarteraModal(visit)}
+                                                className="p-2 text-green-600 hover:bg-green-50 rounded-full transition-colors"
+                                                title="Añadir a Clientes"
+                                            >
+                                                <UserPlus size={20} />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteVisit(visitId)}
+                                                className="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                                                title="Eliminar"
+                                            >
+                                                <Trash2 size={20} />
+                                            </button>
                                         </div>
                                     </div>
 
-                                    {/* Información del Préstamo */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-6">
+                                    {/* Cuerpo con formato similar al formulario de Nueva Visita */}
+                                    <div className="p-8 space-y-6 text-sm print:p-4 print:space-y-3 print:text-[11px]">
+                                        {/* Fechas */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1 print:gap-3">
                                             <div className="flex flex-col">
-                                                <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Tipo de Préstamo</label>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.tipoPrestamo}
+                                                <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Fecha Agendamiento</label>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800">
+                                                    {formatearFechaVisual(visit.fechaAgendamiento)}
                                                 </div>
                                             </div>
                                             <div className="flex flex-col">
-                                                <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Valor del Préstamo</label>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.valorPrestamo ? `$ ${visit.valorPrestamo}` : ''}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="space-y-6">
-                                            <div className="flex flex-col">
-                                                <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Número de Cliente</label>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.numeroCliente}
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Valor Cuota</label>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.valorCuota ? `$ ${visit.valorCuota}` : ''}
+                                                <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Fecha de la Visita</label>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800">
+                                                    {formatearFechaVisual(visit.fechaVisita)}
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    {/* Solicitante */}
-                                    <div className="space-y-4 border-t pt-4">
-                                        <h3 className="text-md font-bold text-gray-700 uppercase">Datos del Solicitante</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1 print:gap-2">
-                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                {visit.solicitante.nombre}
-                                            </div>
-                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                {visit.solicitante.cc}
-                                            </div>
-                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                {visit.solicitante.telefono}
-                                            </div>
-                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                {visit.solicitante.direccionCasa}
-                                            </div>
-                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                {visit.solicitante.barrioCasa}
-                                            </div>
-                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                {visit.solicitante.direccionTrabajo}
-                                            </div>
-                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                {visit.solicitante.barrioTrabajo}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Fiador */}
-                                    <div className="space-y-4 border-t pt-4">
-                                        <h3 className="text-md font-bold text-gray-700 uppercase">Datos del Fiador</h3>
+                                        {/* Información del Préstamo */}
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                {visit.fiador.nombre}
+                                            <div className="space-y-6">
+                                                <div className="flex flex-col">
+                                                    <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Tipo de Préstamo</label>
+                                                    <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                        {visit.tipoPrestamo}
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Valor del Préstamo</label>
+                                                    <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                        {visit.valorPrestamo ? `$ ${visit.valorPrestamo}` : ''}
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                {visit.fiador.cc}
-                                            </div>
-                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                {visit.fiador.telefono}
-                                            </div>
-                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                {visit.fiador.direccionCasa}
-                                            </div>
-                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                {visit.fiador.barrioCasa}
-                                            </div>
-                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                {visit.fiador.direccionTrabajo}
-                                            </div>
-                                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                {visit.fiador.barrioTrabajo}
+                                            <div className="space-y-6">
+                                                <div className="flex flex-col">
+                                                    <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Número de Cliente</label>
+                                                    <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                        {visit.numeroCliente}
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Valor Cuota</label>
+                                                    <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                        {visit.valorCuota ? `$ ${visit.valorCuota}` : ''}
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    {/* Observaciones */}
-                                    <div className="pt-4 border-t min-h-[3rem]">
-                                        <label className="text-xs font-semibold text-gray-600 mb-1 uppercase block">Observaciones</label>
-                                        <div className="w-full border-2 border-gray-300 rounded-lg p-3 min-h-[3rem] text-gray-800 whitespace-pre-wrap">
-                                            {visit.observaciones}
+                                        {/* Solicitante */}
+                                        <div className="space-y-4 border-t pt-4">
+                                            <h3 className="text-md font-bold text-gray-700 uppercase">Datos del Solicitante</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1 print:gap-2">
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.solicitante.nombre}
+                                                </div>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.solicitante.cc}
+                                                </div>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.solicitante.telefono}
+                                                </div>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.solicitante.direccionCasa}
+                                                </div>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.solicitante.barrioCasa}
+                                                </div>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.solicitante.direccionTrabajo}
+                                                </div>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.solicitante.barrioTrabajo}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Fiador */}
+                                        <div className="space-y-4 border-t pt-4">
+                                            <h3 className="text-md font-bold text-gray-700 uppercase">Datos del Fiador</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.fiador.nombre}
+                                                </div>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.fiador.cc}
+                                                </div>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.fiador.telefono}
+                                                </div>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.fiador.direccionCasa}
+                                                </div>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.fiador.barrioCasa}
+                                                </div>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.fiador.direccionTrabajo}
+                                                </div>
+                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                                    {visit.fiador.barrioTrabajo}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Observaciones */}
+                                        <div className="pt-4 border-t min-h-[3rem]">
+                                            <label className="text-xs font-semibold text-gray-600 mb-1 uppercase block">Observaciones</label>
+                                            <div className="w-full border-2 border-gray-300 rounded-lg p-3 min-h-[3rem] text-gray-800 whitespace-pre-wrap">
+                                                {visit.observaciones}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        );
+                            );
                         })}
                     </div>
                 )}
