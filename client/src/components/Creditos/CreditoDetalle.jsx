@@ -11,6 +11,7 @@ import {
   formatearFechaCorta
 } from '../../utils/creditCalculations';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import CowImage from '../../Icon/Cow.png';
 
@@ -32,6 +33,7 @@ import EditorFecha from './EditorFecha';
 
 const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, soloLectura = false }) => {
   const { registrarPago, cancelarPago, editarFechaCuota, agregarNota, eliminarNota, agregarMulta, editarMulta, eliminarMulta, agregarAbono, editarAbono, eliminarAbono, agregarDescuento, eliminarDescuento, asignarEtiquetaCredito, renovarCredito, eliminarCredito, obtenerCredito } = useApp();
+  const { user } = useAuth();
 
   // Obtener el crédito actualizado del contexto
   const creditoDesdeContext = obtenerCredito(clienteId, creditoInicial.id);
@@ -872,6 +874,11 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
   })();
 
   const puedeRenovar = (() => {
+    // Si el rol es ceo, puede renovar siempre que no esté ya renovado o finalizado
+    if (user?.role === 'ceo') {
+      return !credito.renovado && estado !== 'finalizado';
+    }
+
     if (credito.renovado) return false; // Ya fue renovado
     if (estado === 'finalizado') return false; // Ya está finalizado
 
