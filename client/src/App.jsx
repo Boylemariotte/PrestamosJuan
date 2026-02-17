@@ -14,6 +14,7 @@ const CreditosActivos = lazy(() => import('./pages/CreditosActivos'));
 const Estadisticas = lazy(() => import('./pages/Estadisticas'));
 const Configuracion = lazy(() => import('./pages/Configuracion'));
 const DiaDeCobro = lazy(() => import('./pages/DiaDeCobro'));
+const DiaDeCobroBuga = lazy(() => import('./pages/DiaDeCobroBuga'));
 const Rutas = lazy(() => import('./pages/Rutas'));
 const FlujoCajas = lazy(() => import('./pages/FlujoCajas'));
 const Alertas = lazy(() => import('./pages/Alertas'));
@@ -62,6 +63,10 @@ const router = createBrowserRouter([
   {
     path: "/dia-de-cobro",
     element: <ProtectedRoute><Layout><Suspense fallback={<LoadingFallback />}><DiaDeCobro /></Suspense></Layout></ProtectedRoute>
+  },
+  {
+    path: "/dia-de-cobro-buga",
+    element: <ProtectedRoute><Layout><Suspense fallback={<LoadingFallback />}><DiaDeCobroBuga /></Suspense></Layout></ProtectedRoute>
   },
   {
     path: "/rutas",

@@ -48,6 +48,22 @@ const DiaDeCobro = () => {
   const navigate = useNavigate();
   const { clientes, obtenerCliente, obtenerCredito, actualizarCliente, agregarNota, toggleReportado, fetchData } = useApp();
   const { user } = useAuth();
+
+  // Estado para selector de ciudad
+  const [ciudadSeleccionada, setCiudadSeleccionada] = useState('tuluá'); // 'tuluá' o 'buga'
+
+  // Cargar última ciudad seleccionada desde localStorage
+  useEffect(() => {
+    const ultimaCiudad = localStorage.getItem('ultimaCiudadDiaDeCobro');
+    if (ultimaCiudad && ['tuluá', 'buga'].includes(ultimaCiudad)) {
+      setCiudadSeleccionada(ultimaCiudad);
+    }
+  }, []);
+
+  // Guardar ciudad seleccionada en localStorage
+  useEffect(() => {
+    localStorage.setItem('ultimaCiudadDiaDeCobro', ciudadSeleccionada);
+  }, [ciudadSeleccionada]);
   const hoy = startOfDay(new Date());
 
   // Verificar el tipo de usuario para determinar qué carteras mostrar
@@ -65,10 +81,15 @@ const DiaDeCobro = () => {
   // Estado para búsqueda
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Estado para filtros de tipo de pago por cartera
-  const [filtroK1, setFiltroK1] = useState('todos'); // 'todos', 'semanal', 'quincenal'
+  // Estados para filtros de tipo de pago por cartera
+  const [filtroK1, setFiltroK1] = useState('todos'); // 'todos', 'semanal', 'quincenal', 'mensual'
   const [filtroK2, setFiltroK2] = useState('todos'); // 'todos', 'quincenal', 'mensual'
-  const [filtroK3, setFiltroK3] = useState('todos'); // 'todos', 'semanal', 'quincenal'
+  const [filtroK3, setFiltroK3] = useState('todos'); // 'todos', 'semanal', 'quincenal', 'mensual'
+
+  // Estados para filtros de pagos por cartera
+  const [filtroPagosK1, setFiltroPagosK1] = useState('todos'); // 'todos', 'semanal', 'quincenal', 'mensual'
+  const [filtroPagosK2, setFiltroPagosK2] = useState('todos'); // 'todos', 'quincenal', 'mensual'
+  const [filtroPagosK3, setFiltroPagosK3] = useState('todos'); // 'todos', 'semanal', 'quincenal', 'mensual'
 
   // Estado para orden de cobro por fecha y cliente
   // Estructura: { [fechaStr]: { [clienteId]: numeroOrden } }
@@ -746,17 +767,6 @@ const DiaDeCobro = () => {
     const itemsK2 = itemsReportados.filter(item => item.clienteCartera === 'K2');
     const itemsK3 = itemsReportados.filter(item => item.clienteCartera === 'K3');
 
-    // Función para aplicar filtro de tipo de pago
-    const aplicarFiltroTipoPago = (itemsList, filtro) => {
-      if (filtro === 'todos') return itemsList;
-      return itemsList.filter(item => item.creditoTipo === filtro);
-    };
-
-    // Aplicar filtros de tipo de pago
-    const itemsK1Filtrados = aplicarFiltroTipoPago(itemsK1, filtroK1);
-    const itemsK2Filtrados = aplicarFiltroTipoPago(itemsK2, filtroK2);
-    const itemsK3Filtrados = aplicarFiltroTipoPago(itemsK3, filtroK3);
-
     // Función para ordenar items
     const ordenarItems = (itemsList) => {
       return [...itemsList].sort((a, b) => {
@@ -764,7 +774,7 @@ const DiaDeCobro = () => {
         const rawB = ordenFecha[b.clienteId];
 
         const ordenA =
-          rawA === '' || rawA == null ? Number.MAX_SAFE_INTEGER : Number(rawA);
+          rawA === '' || rawB == null ? Number.MAX_SAFE_INTEGER : Number(rawA);
         const ordenB =
           rawB === '' || rawB == null ? Number.MAX_SAFE_INTEGER : Number(rawB);
 
@@ -788,33 +798,59 @@ const DiaDeCobro = () => {
       });
     };
 
-    const k1Final = filtrarPorBusqueda(ordenarItems(itemsK1Filtrados));
-    const k2Final = filtrarPorBusqueda(ordenarItems(itemsK2Filtrados));
-    const k3Final = filtrarPorBusqueda(ordenarItems(itemsK3Filtrados));
+    // Funciones para filtrar K1 y K2 por tipo de pago
+    const filtrarK1PorTipo = (itemsList) => {
+      if (filtroK1 === 'todos') return itemsList;
+      return itemsList.filter(item => item.creditoTipo === filtroK1);
+    };
+
+    const filtrarK2PorTipo = (itemsList) => {
+      if (filtroK2 === 'todos') return itemsList;
+      return itemsList.filter(item => item.creditoTipo === filtroK2);
+    };
+
+    const filtrarK3PorTipo = (itemsList) => {
+      if (filtroK3 === 'todos') return itemsList;
+      return itemsList.filter(item => item.creditoTipo === filtroK3);
+    };
+
+    const k1Final = filtrarPorBusqueda(filtrarK1PorTipo(ordenarItems(itemsK1)));
+    const k2Final = filtrarPorBusqueda(filtrarK2PorTipo(ordenarItems(itemsK2)));
+    const k3Final = filtrarPorBusqueda(filtrarK3PorTipo(ordenarItems(itemsK3)));
 
     return {
       K1: k1Final,
       K2: k2Final,
       K3: k3Final,
-      NoReportados: filtrarPorBusqueda(ordenarItems(todosItemsNoReportados))
+      NoReportados: filtrarPorBusqueda(todosItemsNoReportados)
     };
-  }, [datosCobro, ordenCobro, fechaSeleccionadaStr, searchTerm, filtroK1, filtroK2, filtroK3, clientesNoEncontradosPorFecha, hoy]);
+  }, [datosCobro, ordenCobro, fechaSeleccionadaStr, searchTerm, clientesNoEncontradosPorFecha, hoy, filtroK1, filtroK2, filtroK3]);
 
-  // Calcular total de clientes de forma directa: K1 + K2 + NoReportados
+  // Calcular total de clientes de forma directa: según la ciudad seleccionada
   const totalClientesDirecto = useMemo(() => {
-    const totalK1 = cobrosPorCartera.K1.length;
-    const totalK2 = cobrosPorCartera.K2.length;
-    const totalNoReportados = cobrosPorCartera.NoReportados.length;
-    const total = totalK1 + totalK2 + totalNoReportados;
-
-    console.log(`Conteo directo - K1: ${totalK1}, K2: ${totalK2}, NoReportados: ${totalNoReportados}, Total: ${total}`);
+    let total = 0;
+    
+    if (ciudadSeleccionada === 'tuluá') {
+      const totalK1 = cobrosPorCartera.K1.length;
+      const totalK2 = cobrosPorCartera.K2.length;
+      const totalNoReportados = cobrosPorCartera.NoReportados.length;
+      total = totalK1 + totalK2 + totalNoReportados;
+      
+      console.log(`Conteo directo Tuluá - K1: ${totalK1}, K2: ${totalK2}, NoReportados: ${totalNoReportados}, Total: ${total}`);
+    } else if (ciudadSeleccionada === 'buga') {
+      const totalK3 = cobrosPorCartera.K3.length;
+      const totalNoReportadosK3 = cobrosPorCartera.NoReportados.filter(item => item.clienteCartera === 'K3').length;
+      total = totalK3 + totalNoReportadosK3;
+      
+      console.log(`Conteo directo Buga - K3: ${totalK3}, NoReportadosK3: ${totalNoReportadosK3}, Total: ${total}`);
+    }
 
     // Sincronizar con Notas a través de localStorage
     console.log('DiaDeCobro - Guardando en localStorage:', total);
     localStorage.setItem('totalClientesHoy', total.toString());
 
     return total;
-  }, [cobrosPorCartera]);
+  }, [cobrosPorCartera, ciudadSeleccionada]);
 
   // Obtener clientes que pagaron ese día, separados por cartera
   const clientesPagados = useMemo(() => {
@@ -1109,34 +1145,54 @@ const DiaDeCobro = () => {
 
     // Convertir el mapa a arrays separados por cartera
     itemsMap.forEach(item => {
-      if (item.clienteCartera === 'K2') {
+      if (item.clienteCartera === 'K1') {
+        pagadosK1.push(item);
+      } else if (item.clienteCartera === 'K2') {
         pagadosK2.push(item);
       } else if (item.clienteCartera === 'K3') {
         pagadosK3.push(item);
-      } else {
-        pagadosK1.push(item);
       }
     });
 
+    // Aplicar filtros de pagos
+    const pagadosK1Filtrados = filtroPagosK1 === 'todos' 
+      ? pagadosK1 
+      : pagadosK1.filter(item => item.creditoTipo === filtroPagosK1);
+
+    const pagadosK2Filtrados = filtroPagosK2 === 'todos' 
+      ? pagadosK2 
+      : pagadosK2.filter(item => item.creditoTipo === filtroPagosK2);
+
+    const pagadosK3Filtrados = filtroPagosK3 === 'todos' 
+      ? pagadosK3 
+      : pagadosK3.filter(item => item.creditoTipo === filtroPagosK3);
+
     // Calcular totales (incluyendo multas)
-    const totalK1 = pagadosK1.reduce((sum, item) => sum + item.montoPagado + (item.montoPagadoMulta || 0), 0);
-    const totalK2 = pagadosK2.reduce((sum, item) => sum + item.montoPagado + (item.montoPagadoMulta || 0), 0);
-    const totalK3 = pagadosK3.reduce((sum, item) => sum + item.montoPagado + (item.montoPagadoMulta || 0), 0);
+    const totalK1 = pagadosK1Filtrados.reduce((sum, item) => sum + item.montoPagado + (item.montoPagadoMulta || 0), 0);
+    const totalK2 = pagadosK2Filtrados.reduce((sum, item) => sum + item.montoPagado + (item.montoPagadoMulta || 0), 0);
+    const totalK3 = pagadosK3Filtrados.reduce((sum, item) => sum + item.montoPagado + (item.montoPagadoMulta || 0), 0);
 
     return {
-      K1: { items: pagadosK1, total: totalK1 },
-      K2: { items: pagadosK2, total: totalK2 },
-      K3: { items: pagadosK3, total: totalK3 }
+      K1: { items: pagadosK1Filtrados, total: totalK1 },
+      K2: { items: pagadosK2Filtrados, total: totalK2 },
+      K3: { items: pagadosK3Filtrados, total: totalK3 }
     };
-  }, [clientes, fechaSeleccionadaStr]);
+  }, [clientes, fechaSeleccionadaStr, filtroPagosK1, filtroPagosK2, filtroPagosK3]);
 
   // Listado plano de multas pagadas en el día (para sección resumen)
   const multasPagadasDia = useMemo(() => {
-    const todas = [
-      ...(clientesPagados.K1?.items || []),
-      ...(clientesPagados.K2?.items || []),
-      ...(clientesPagados.K3?.items || [])
-    ];
+    let todas = [];
+    
+    if (ciudadSeleccionada === 'tuluá') {
+      todas = [
+        ...(clientesPagados.K1?.items || []),
+        ...(clientesPagados.K2?.items || [])
+      ];
+    } else if (ciudadSeleccionada === 'buga') {
+      todas = [
+        ...(clientesPagados.K3?.items || [])
+      ];
+    }
 
     return todas
       .filter(item => (item.montoPagadoMulta || 0) > 0)
@@ -1147,7 +1203,7 @@ const DiaDeCobro = () => {
         clientePosicion: item.clientePosicion,
         montoPagadoMulta: item.montoPagadoMulta || 0
       }));
-  }, [clientesPagados]);
+  }, [clientesPagados, ciudadSeleccionada]);
 
   // Funciones de navegación de fecha
   const irAyer = () => setFechaSeleccionada(subDays(fechaSeleccionada, 1));
@@ -1583,9 +1639,25 @@ const DiaDeCobro = () => {
               <Calendar className="h-8 w-8 text-blue-300" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Día de Cobro</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold">Día de Cobro</h1>
+                {/* Selector de Ciudad */}
+                <div className="relative">
+                  <select
+                    value={ciudadSeleccionada}
+                    onChange={(e) => setCiudadSeleccionada(e.target.value)}
+                    className="appearance-none bg-gradient-to-r from-blue-600 to-purple-600 border border-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-blue-500/25 backdrop-blur-sm transition-all duration-300 hover:from-blue-500 hover:to-purple-500 hover:shadow-blue-400/30 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-300/70 focus:ring-offset-2 focus:ring-offset-blue-900/50 cursor-pointer pr-8"
+                  >
+                    <option value="tuluá" className="bg-gray-900 text-gray-100">Tuluá</option>
+                    <option value="buga" className="bg-gray-900 text-gray-100">Buga</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                    <ChevronDown className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+              </div>
               <p className="text-slate-300 text-sm">
-                {format(fechaSeleccionada, "EEEE, d 'de' MMMM", { locale: es })}
+                {format(fechaSeleccionada, "EEEE, d 'de' MMMM", { locale: es })} - {ciudadSeleccionada === 'tuluá' ? 'Carteras K1, K2' : 'Cartera K3'}
               </p>
             </div>
           </div>
@@ -1645,8 +1717,7 @@ const DiaDeCobro = () => {
             <p className="text-[10px] sm:text-xs md:text-xl lg:text-2xl font-bold text-green-300 break-words leading-tight">
               {formatearMoneda(
                 (clientesPagados.K1?.total || 0) +
-                (clientesPagados.K2?.total || 0) +
-                (clientesPagados.K3?.total || 0)
+                (clientesPagados.K2?.total || 0)
               )}
             </p>
           </div>
@@ -1702,10 +1773,26 @@ const DiaDeCobro = () => {
         </div>
       </div>
 
-      {/* Sección por Carteras */}
-      <div className="space-y-6">
-        {/* Cartera K1 */}
-        {!esDomiciliarioBuga && (
+      {/* Sección por Carteras - Reorganizada */}
+      <div className="space-y-8">
+        
+        {/* SECCIÓN TULUÁ */}
+        {ciudadSeleccionada === 'tuluá' && (
+        <div className="space-y-6">
+          {/* Header Día de Cobro Tuluá */}
+          <div className="bg-linear-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-xl shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-3 rounded-lg">
+                <Users className="h-8 w-8" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold">Día de Cobro Tuluá</h2>
+                <p className="text-blue-100 text-sm">Pagos K1 y K2</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Sección K1 */}
           <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
             <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1714,25 +1801,27 @@ const DiaDeCobro = () => {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold">Cartera K1</h3>
-                  <p className="text-blue-100 text-sm">{cobrosPorCartera.K1.length} {cobrosPorCartera.K1.length === 1 ? 'cliente' : 'clientes'}</p>
+                  <p className="text-blue-100 text-sm">
+                    {cobrosPorCartera.K1.length} {cobrosPorCartera.K1.length === 1 ? 'cliente' : 'clientes'}
+                    {filtroK1 !== 'todos' && ` (${filtroK1})`}
+                  </p>
                 </div>
-              </div>
-              <div className="flex items-center gap-3">
                 <select
                   value={filtroK1}
                   onChange={(e) => setFiltroK1(e.target.value)}
-                  className="bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white/50"
+                  className="bg-gradient-to-r from-blue-600 to-blue-700 border border-blue-400/50 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-blue-500/25 backdrop-blur-sm transition-all duration-300 hover:from-blue-500 hover:to-blue-600 hover:shadow-blue-400/30 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-300/70 focus:ring-offset-2 focus:ring-offset-blue-900/50 cursor-pointer"
                 >
-                  <option value="todos" className="text-gray-900">Todos</option>
-                  <option value="semanal" className="text-gray-900">Semanal</option>
-                  <option value="quincenal" className="text-gray-900">Quincenal</option>
+                  <option value="todos" className="bg-gray-900 text-gray-100">Todos</option>
+                  <option value="semanal" className="bg-gray-900 text-gray-100">Semanal</option>
+                  <option value="quincenal" className="bg-gray-900 text-gray-100">Quincenal</option>
+                  <option value="mensual" className="bg-gray-900 text-gray-100">Mensual</option>
                 </select>
               </div>
             </div>
             {cobrosPorCartera.K1.length === 0 ? (
               <div className="text-center py-12 text-gray-400">
                 <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No hay cobros para esta fecha en K1</p>
+                <p className="text-lg">No hay cobros para K1 en esta fecha</p>
               </div>
             ) : (
               <TablaCobrosLista
@@ -1746,10 +1835,39 @@ const DiaDeCobro = () => {
               />
             )}
           </div>
-        )}
 
-        {/* Cartera K2 */}
-        {!esDomiciliarioBuga && (
+          {/* Clientes No Reportados */}
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+            <div className="bg-red-600 text-white px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-lg">
+                  <AlertCircle className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold">Clientes no encontrados - no dieron razón</h3>
+                  <p className="text-red-100 text-sm">{cobrosPorCartera.NoReportados.length} {cobrosPorCartera.NoReportados.length === 1 ? 'cliente' : 'clientes'}</p>
+                </div>
+              </div>
+            </div>
+            {cobrosPorCartera.NoReportados.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                <p className="text-lg">No hay clientes no encontrados para esta fecha</p>
+              </div>
+            ) : (
+              <TablaCobrosLista
+                items={cobrosPorCartera.NoReportados}
+                onCambioOrden={handleActualizarOrdenManual}
+                ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
+                onProrrogaDias={handleProrrogaDias}
+                onProrrogaFecha={handleProrrogaFecha}
+                actualizarCliente={actualizarCliente}
+                toggleReportado={handleMarcarComoNoEncontrado}
+              />
+            )}
+          </div>
+
+          {/* Sección K2 */}
           <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
             <div className="bg-green-600 text-white px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1758,25 +1876,26 @@ const DiaDeCobro = () => {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold">Cartera K2</h3>
-                  <p className="text-green-100 text-sm">{cobrosPorCartera.K2.length} {cobrosPorCartera.K2.length === 1 ? 'cliente' : 'clientes'}</p>
+                  <p className="text-green-100 text-sm">
+                    {cobrosPorCartera.K2.length} {cobrosPorCartera.K2.length === 1 ? 'cliente' : 'clientes'}
+                    {filtroK2 !== 'todos' && ` (${filtroK2})`}
+                  </p>
                 </div>
-              </div>
-              <div className="flex items-center gap-3">
                 <select
                   value={filtroK2}
                   onChange={(e) => setFiltroK2(e.target.value)}
-                  className="bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white/50"
+                  className="bg-gradient-to-r from-green-600 to-green-700 border border-green-400/50 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-green-500/25 backdrop-blur-sm transition-all duration-300 hover:from-green-500 hover:to-green-600 hover:shadow-green-400/30 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-green-300/70 focus:ring-offset-2 focus:ring-offset-green-900/50 cursor-pointer"
                 >
-                  <option value="todos" className="text-gray-900">Todos</option>
-                  <option value="quincenal" className="text-gray-900">Quincenal</option>
-                  <option value="mensual" className="text-gray-900">Mensual</option>
+                  <option value="todos" className="bg-gray-900 text-gray-100">Todos</option>
+                  <option value="quincenal" className="bg-gray-900 text-gray-100">Quincenal</option>
+                  <option value="mensual" className="bg-gray-900 text-gray-100">Mensual</option>
                 </select>
               </div>
             </div>
             {cobrosPorCartera.K2.length === 0 ? (
               <div className="text-center py-12 text-gray-400">
                 <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No hay cobros para esta fecha en K2</p>
+                <p className="text-lg">No hay cobros para K2 en esta fecha</p>
               </div>
             ) : (
               <TablaCobrosLista
@@ -1790,85 +1909,9 @@ const DiaDeCobro = () => {
               />
             )}
           </div>
-        )}
-
-        {/* Cartera K3 */}
-        {(esDomiciliarioBuga || esAdminOCeo) && (
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="bg-orange-600 text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-lg">
-                  <Users className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold">Cartera K3</h3>
-                  <p className="text-orange-100 text-sm">{cobrosPorCartera.K3.length} {cobrosPorCartera.K3.length === 1 ? 'cliente' : 'clientes'}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <select
-                  value={filtroK3}
-                  onChange={(e) => setFiltroK3(e.target.value)}
-                  className="bg-white/20 text-white border border-white/30 rounded-lg px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white/50"
-                >
-                  <option value="todos" className="text-gray-900">Todos</option>
-                  <option value="semanal" className="text-gray-900">Semanal</option>
-                  <option value="quincenal" className="text-gray-900">Quincenal</option>
-                </select>
-              </div>
-            </div>
-            {cobrosPorCartera.K3.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
-                <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No hay cobros para esta fecha en K3</p>
-              </div>
-            ) : (
-              <TablaCobrosLista
-                items={cobrosPorCartera.K3}
-                onCambioOrden={handleActualizarOrdenManual}
-                ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
-                onProrrogaDias={handleProrrogaDias}
-                onProrrogaFecha={handleProrrogaFecha}
-                actualizarCliente={actualizarCliente}
-                toggleReportado={handleMarcarComoNoEncontrado}
-              />
-            )}
-          </div>
-        )}
-
-        {/* Clientes No Reportados */}
-        <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-          <div className="bg-red-600 text-white px-6 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="bg-white/20 p-2 rounded-lg">
-                <AlertCircle className="h-6 w-6" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold">Clientes no encontrados - no dieron razón</h3>
-                <p className="text-red-100 text-sm">{cobrosPorCartera.NoReportados.length} {cobrosPorCartera.NoReportados.length === 1 ? 'cliente' : 'clientes'}</p>
-              </div>
-            </div>
-          </div>
-          {cobrosPorCartera.NoReportados.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
-              <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-              <p className="text-lg">No hay clientes no encontrados para esta fecha</p>
-            </div>
-          ) : (
-            <TablaCobrosLista
-              items={cobrosPorCartera.NoReportados}
-              onCambioOrden={handleActualizarOrdenManual}
-              ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
-              onProrrogaDias={handleProrrogaDias}
-              onProrrogaFecha={handleProrrogaFecha}
-              actualizarCliente={actualizarCliente}
-              toggleReportado={handleMarcarComoNoEncontrado}
-            />
-          )}
         </div>
-      </div>
+        )}
 
-      {/* Sección Multas Pagadas - Resumen al final del día */}
       {multasPagadasDia.length > 0 && (
         <div className="space-y-4 mt-10 pt-6 border-t-2 border-dashed border-gray-300">
           <div className="flex items-center justify-between mb-2">
@@ -1921,13 +1964,212 @@ const DiaDeCobro = () => {
             </div>
           </div>
         </div>
-      )}
+        )}
 
-      {/* Sección Pagados - Siempre visible */}
+        {/* SECCIÓN BUGA */}
+        {ciudadSeleccionada === 'buga' && (
+          <div className="space-y-6">
+            {/* Header Día de Cobro Buga */}
+            <div className="bg-gradient-to-r from-orange-600 to-orange-700 text-white px-6 py-4 rounded-xl shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-3 rounded-lg">
+                  <Users className="h-8 w-8" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold">Día de Cobro Buga</h2>
+                  <p className="text-orange-100 text-sm">Pagos K3</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Sección K3 */}
+            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+              <div className="bg-orange-600 text-white px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-2 rounded-lg">
+                    <Users className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Cartera K3</h3>
+                    <p className="text-orange-100 text-sm">
+                      {cobrosPorCartera.K3.length} {cobrosPorCartera.K3.length === 1 ? 'cliente' : 'clientes'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              {cobrosPorCartera.K3.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                  <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg">No hay cobros para K3 en esta fecha</p>
+                </div>
+              ) : (
+                <TablaCobrosLista
+                  items={cobrosPorCartera.K3}
+                  onCambioOrden={handleActualizarOrdenManual}
+                  ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
+                  onProrrogaDias={handleProrrogaDias}
+                  onProrrogaFecha={handleProrrogaFecha}
+                  actualizarCliente={actualizarCliente}
+                  toggleReportado={handleMarcarComoNoEncontrado}
+                />
+              )}
+            </div>
+
+            {/* Clientes No Reportados - Buga */}
+            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+              <div className="bg-red-600 text-white px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-2 rounded-lg">
+                    <AlertCircle className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Clientes no encontrados - no dieron razón</h3>
+                    <p className="text-red-100 text-sm">{cobrosPorCartera.NoReportados.filter(item => item.clienteCartera === 'K3').length} {cobrosPorCartera.NoReportados.filter(item => item.clienteCartera === 'K3').length === 1 ? 'cliente' : 'clientes'}</p>
+                  </div>
+                </div>
+              </div>
+              {cobrosPorCartera.NoReportados.filter(item => item.clienteCartera === 'K3').length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                  <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg">No hay clientes no encontrados para esta fecha</p>
+                </div>
+              ) : (
+                <TablaCobrosLista
+                  items={cobrosPorCartera.NoReportados.filter(item => item.clienteCartera === 'K3')}
+                  onCambioOrden={handleActualizarOrdenManual}
+                  ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
+                  onProrrogaDias={handleProrrogaDias}
+                  onProrrogaFecha={handleProrrogaFecha}
+                  actualizarCliente={actualizarCliente}
+                  toggleReportado={handleMarcarComoNoEncontrado}
+                />
+              )}
+            </div>
+
+            {/* Pagos K3 - Buga */}
+            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+              <div className="bg-orange-600 text-white px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-2 rounded-lg">
+                    <Users className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Pagos K3</h3>
+                    <p className="text-orange-100 text-sm">{clientesPagados.K3.items.length} {clientesPagados.K3.items.length === 1 ? 'pago' : 'pagos'}</p>
+                  </div>
+                  <select
+                    value={filtroPagosK3}
+                    onChange={(e) => setFiltroPagosK3(e.target.value)}
+                    className="bg-gradient-to-r from-orange-600 to-orange-700 border border-orange-400/50 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-orange-500/25 backdrop-blur-sm transition-all duration-300 hover:from-orange-500 hover:to-orange-600 hover:shadow-orange-400/30 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-orange-300/70 focus:ring-offset-2 focus:ring-offset-orange-900/50 cursor-pointer"
+                  >
+                    <option value="todos" className="bg-gray-900 text-gray-100">Todos</option>
+                    <option value="semanal" className="bg-gray-900 text-gray-100">Semanal</option>
+                    <option value="quincenal" className="bg-gray-900 text-gray-100">Quincenal</option>
+                    <option value="mensual" className="bg-gray-900 text-gray-100">Mensual</option>
+                  </select>
+                </div>
+                <div className="text-right">
+                  <p className="text-orange-100 text-sm">Total Recogido</p>
+                  <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K3.total)}</p>
+                </div>
+              </div>
+              {clientesPagados.K3.items.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                  <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg">No hay pagos para K3 registrados</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left text-gray-500">
+                    <thead className="text-xs text-white uppercase bg-slate-800">
+                      <tr>
+                        <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
+                        <th scope="col" className="px-4 py-3">Cliente</th>
+                        <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
+                        <th scope="col" className="px-4 py-3 text-center">Cuota</th>
+                        <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                        <th scope="col" className="px-4 py-3 text-center">Multa</th>
+                        <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
+                        <th scope="col" className="px-4 py-3 text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {clientesPagados.K3.items.map((item, index) => (
+                        <tr key={`${item.clienteId}-${item.creditoId}-${index}`} className="hover:bg-gray-50">
+                          <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
+                            {item.clientePosicion ? `#${item.clientePosicion}` : `#${item.creditoId}`}
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
+                              <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
+                              <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
+                                <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono || 'N/A'}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
+                                {item.clienteBarrio || 'Sin barrio'}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 font-medium text-gray-900">
+                            {formatearMoneda(item.montoPagado)}
+                          </td>
+                          <td className="px-4 py-4 font-bold text-green-600 text-base text-center">
+                            #{item.numeroCuota || 'N/A'}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              item.tipoPago === 'completo' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            {item.multa ? (
+                              <span className="text-red-600 font-medium">
+                                {item.multaMotivo || 'Multa'}
+                                {item.multaFecha && (
+                                  <span className="block text-xs text-gray-500">
+                                    ({item.multaFecha})
+                                  </span>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 font-bold text-red-600 text-center">
+                            {(item.montoPagadoMulta || 0) > 0 ? formatearMoneda(item.montoPagadoMulta) : '-'}
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            <button
+                              onClick={() => {
+                                setCreditoSeleccionado(item.credito);
+                                setClienteSeleccionado(item.cliente);
+                              }}
+                              className="text-orange-600 hover:text-orange-800 font-medium hover:underline text-sm"
+                            >
+                              Ver Detalle
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+      {/* Sección Pagados - Solo para Tuluá */}
+      {ciudadSeleccionada === 'tuluá' && (
       <div className="space-y-6 mt-8 pt-8 border-t-2 border-gray-300">
         <div className="flex items-center gap-3 mb-4">
           <CheckCircle className="h-6 w-6 text-green-600" />
-          <h2 className="text-2xl font-bold text-gray-900">Pagados</h2>
+          <h1 className="text-3xl font-bold text-gray-900">Día de Cobro Tuluá</h1>
         </div>
 
         {/* Card K1 - Mostrar para administradores, CEO y domiciliarios de Tuluá */}
@@ -1939,9 +2181,19 @@ const DiaDeCobro = () => {
                   <Users className="h-6 w-6" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold">Cartera K1</h3>
+                  <h3 className="text-xl font-bold">Pagos K1</h3>
                   <p className="text-blue-100 text-sm">{clientesPagados.K1.items.length} {clientesPagados.K1.items.length === 1 ? 'pago' : 'pagos'}</p>
                 </div>
+                <select
+                  value={filtroPagosK1}
+                  onChange={(e) => setFiltroPagosK1(e.target.value)}
+                  className="bg-gradient-to-r from-blue-600 to-blue-700 border border-blue-400/50 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-blue-500/25 backdrop-blur-sm transition-all duration-300 hover:from-blue-500 hover:to-blue-600 hover:shadow-blue-400/30 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-300/70 focus:ring-offset-2 focus:ring-offset-blue-900/50 cursor-pointer"
+                >
+                  <option value="todos" className="bg-gray-900 text-gray-100">Todos</option>
+                  <option value="semanal" className="bg-gray-900 text-gray-100">Semanal</option>
+                  <option value="quincenal" className="bg-gray-900 text-gray-100">Quincenal</option>
+                  <option value="mensual" className="bg-gray-900 text-gray-100">Mensual</option>
+                </select>
               </div>
               <div className="text-right">
                 <p className="text-blue-100 text-sm">Total Recogido</p>
@@ -1951,7 +2203,7 @@ const DiaDeCobro = () => {
             {clientesPagados.K1.items.length === 0 ? (
               <div className="text-center py-12 text-gray-400">
                 <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No hay pagos registrados para K1</p>
+                <p className="text-lg">No hay pagos para K1 registrados</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -2054,9 +2306,18 @@ const DiaDeCobro = () => {
                   <Users className="h-6 w-6" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold">Cartera K2</h3>
+                  <h3 className="text-xl font-bold">Pagos K2</h3>
                   <p className="text-green-100 text-sm">{clientesPagados.K2.items.length} {clientesPagados.K2.items.length === 1 ? 'pago' : 'pagos'}</p>
                 </div>
+                <select
+                  value={filtroPagosK2}
+                  onChange={(e) => setFiltroPagosK2(e.target.value)}
+                  className="bg-gradient-to-r from-green-600 to-green-700 border border-green-400/50 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-green-500/25 backdrop-blur-sm transition-all duration-300 hover:from-green-500 hover:to-green-600 hover:shadow-green-400/30 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-green-300/70 focus:ring-offset-2 focus:ring-offset-green-900/50 cursor-pointer"
+                >
+                  <option value="todos" className="bg-gray-900 text-gray-100">Todos</option>
+                  <option value="quincenal" className="bg-gray-900 text-gray-100">Quincenal</option>
+                  <option value="mensual" className="bg-gray-900 text-gray-100">Mensual</option>
+                </select>
               </div>
               <div className="text-right">
                 <p className="text-green-100 text-sm">Total Recogido</p>
@@ -2066,7 +2327,7 @@ const DiaDeCobro = () => {
             {clientesPagados.K2.items.length === 0 ? (
               <div className="text-center py-12 text-gray-400">
                 <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No hay pagos registrados para K2</p>
+                <p className="text-lg">No hay pagos para K2 registrados</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -2160,127 +2421,12 @@ const DiaDeCobro = () => {
           </div>
         )}
 
-        {/* Card K3 - Mostrar para administradores, CEO y domiciliarios de Buga */}
-        {(esDomiciliarioBuga || esAdminOCeo) && (
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="bg-orange-600 text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-lg">
-                  <Users className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold">Cartera K3</h3>
-                  <p className="text-orange-100 text-sm">{clientesPagados.K3.items.length} {clientesPagados.K3.items.length === 1 ? 'pago' : 'pagos'}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-orange-100 text-sm">Total Recogido</p>
-                <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K3.total)}</p>
-              </div>
-            </div>
-            {clientesPagados.K3.items.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
-                <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No hay pagos registrados para K3</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left text-gray-500">
-                  <thead className="text-xs text-white uppercase bg-slate-800">
-                    <tr>
-                      <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
-                      <th scope="col" className="px-4 py-3">Cliente</th>
-                      <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
-                      <th scope="col" className="px-4 py-3 text-center">Cuota</th>
-                      <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
-                      <th scope="col" className="px-4 py-3 text-center">Multa</th>
-                      <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
-                      <th scope="col" className="px-4 py-3 text-center">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {clientesPagados.K3.items.map((item, index) => (
-                      <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-orange-50 hover:bg-orange-100">
-                        <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
-                          {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
-                            <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
-                            <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
-                              <Phone className="h-3 w-3" />
-                              <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono || 'N/A'}</span>
-                            </div>
-                            <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
-                              <MapPin className="h-3 w-3" />
-                              {item.clienteBarrio || 'Sin barrio'}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 font-bold text-green-600 text-base">
-                          {item.montoPagado > 0 ? formatearMoneda(item.montoPagado) : <span className="text-gray-400">-</span>}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.nroCuota ? (
-                            <span className="bg-orange-200 text-orange-800 px-2 py-1 rounded font-medium">
-                              #{item.nroCuota}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.tipoPago ? (
-                            <span className={`px-2 py-1 rounded font-medium ${item.tipoPago === 'completo'
-                              ? 'bg-green-200 text-green-800'
-                              : 'bg-yellow-200 text-yellow-800'
-                              }`}>
-                              {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.tieneMulta ? (
-                            <span className="bg-red-200 text-red-800 px-2 py-1 rounded font-medium text-xs">
-                              {item.multaMotivo || 'Multa'}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center font-bold">
-                          {item.montoPagadoMulta > 0 ? (
-                            <span className="text-orange-600">{formatearMoneda(item.montoPagadoMulta)}</span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <button
-                            onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
-                            className="text-orange-600 hover:text-orange-800 font-medium hover:underline text-sm"
-                          >
-                            Ver Detalle
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Modal Detalle */}
+        {/* Modal Detalle */}
       {creditoSeleccionado && clienteSeleccionado && (
         <CreditoDetalle
           credito={creditoSeleccionado}
           clienteId={clienteSeleccionado.id}
+          clienteNombre={clienteSeleccionado.nombre}
           cliente={clienteSeleccionado}
           onClose={() => {
             setCreditoSeleccionado(null);
@@ -2338,6 +2484,9 @@ const DiaDeCobro = () => {
           </div>
         </div>
       )}
+      </div>
+      )}
+      </div>
     </div>
   );
 };
