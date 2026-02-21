@@ -202,109 +202,7 @@ const DiaDeCobroBuga = () => {
     });
   }, [datosCobroK3.itemsK3, searchTerm]);
 
-  // Calcular estadísticas K3
-  const estadisticasGlobales = useMemo(() => {
-    let porCobrarTotal = 0;
-    let recogidoTotal = 0;
-    let totalClientesBuga = 0;
 
-    clientes.forEach(cliente => {
-      if (!cliente.creditos || cliente.creditos.length === 0) return;
-
-      // Contar clientes específicos de Buga (para la métrica de clientes)
-      const esDeBuga = cliente.cartera === 'K3';
-
-      cliente.creditos.forEach(credito => {
-        if (!credito.cuotas || !Array.isArray(credito.cuotas)) return;
-        if (credito.renovado) return;
-
-        // 1. Calcular Por Cobrar Global (Pendientes hoy o vencidos)
-        const creditoConAbonos = aplicarAbonosAutomaticamente(credito);
-        let tieneActividadBugaHoy = false;
-
-        creditoConAbonos.cuotasActualizadas.forEach((cuota, index) => {
-          const cuotaOriginal = credito.cuotas[index];
-          if (cuotaOriginal.pagado) return;
-
-          const fechaCuota = typeof cuotaOriginal.fechaProgramada === 'string'
-            ? cuotaOriginal.fechaProgramada.split('T')[0]
-            : format(new Date(cuotaOriginal.fechaProgramada), 'yyyy-MM-dd');
-
-          const esVencidaOActual = fechaCuota <= fechaSeleccionadaStr;
-          const abonoAplicado = cuota.abonoAplicado || 0;
-          const valorPendiente = (credito.valorCuota - abonoAplicado) + calcularTotalMultasCuota(cuota, credito);
-
-          if (esVencidaOActual && valorPendiente > 0) {
-            porCobrarTotal += valorPendiente;
-            if (esDeBuga) tieneActividadBugaHoy = true;
-          }
-        });
-
-        // 2. Calcular Recogido Global (Pagado hoy)
-        credito.cuotas.forEach(cuota => {
-          // Normalizar fecha de pago
-          let fechaPagoNormalizada = null;
-          if (cuota.pagada && cuota.fechaPago) {
-            fechaPagoNormalizada = typeof cuota.fechaPago === 'string'
-              ? cuota.fechaPago.split('T')[0]
-              : format(new Date(cuota.fechaPago), 'yyyy-MM-dd');
-          }
-
-          // Sumar abonos realizados hoy
-          const abonosHoy = (cuota.abonosCuota || []).filter(a => {
-            const f = typeof a.fecha === 'string' ? a.fecha.split('T')[0] : format(new Date(a.fecha), 'yyyy-MM-dd');
-            return f === fechaSeleccionadaStr;
-          });
-          const montoAbonosHoy = abonosHoy.reduce((s, a) => s + (a.valor || 0), 0);
-          recogidoTotal += montoAbonosHoy;
-
-          // Si la cuota se pagó completa hoy y no tiene abonos registrados hoy (pago único)
-          if (fechaPagoNormalizada === fechaSeleccionadaStr && montoAbonosHoy === 0) {
-            recogidoTotal += (cuota.valorCuota || credito.valorCuota);
-          }
-        });
-
-        // Sumar abonos generales hoy
-        const abonosGeneralesHoy = (credito.abonos || []).filter(a => {
-          const f = typeof a.fecha === 'string' ? a.fecha.split('T')[0] : format(new Date(a.fecha), 'yyyy-MM-dd');
-          return f === fechaSeleccionadaStr;
-        });
-        recogidoTotal += abonosGeneralesHoy.reduce((s, a) => s + (a.valor || 0), 0);
-
-        // Sumar abonos multas hoy
-        const abonosMultaHoy = (credito.abonosMulta || []).filter(a => {
-          const f = typeof a.fecha === 'string' ? a.fecha.split('T')[0] : format(new Date(a.fecha), 'yyyy-MM-dd');
-          return f === fechaSeleccionadaStr;
-        });
-        recogidoTotal += abonosMultaHoy.reduce((s, a) => s + (a.valor || 0), 0);
-
-        if (esDeBuga && tieneActividadBugaHoy) {
-          totalClientesBuga++;
-        }
-      });
-
-      // Si el cliente no tiene créditos pero está en los cobros de hoy (por otros motivos o reportado)
-      // Ajuste simplificado: sumamos los que están pagados hoy también
-      const tienePagoHoyBuga = cliente.cartera === 'K3' && cliente.creditos.some(cr =>
-        cr.cuotas.some(cu => {
-          const fPago = cu.pagada && cu.fechaPago ? (typeof cu.fechaPago === 'string' ? cu.fechaPago.split('T')[0] : format(new Date(cu.fechaPago), 'yyyy-MM-dd')) : null;
-          return fPago === fechaSeleccionadaStr;
-        })
-      );
-
-      // Si no fue contado por pendiente pero tiene pago
-      // (Buscamos simplificar para que coincida con la lista visible)
-    });
-
-    // Ajustar clientes para que coincida con la lógica de la vista
-    const clisBuga = itemsK3Filtrados.length + (clientesPagadosK3?.K3?.items?.length || 0);
-
-    return {
-      porCobrar: porCobrarTotal,
-      recogido: recogidoTotal,
-      clientes: clisBuga
-    };
-  }, [clientes, itemsK3Filtrados, clientesPagadosK3, fechaSeleccionadaStr]);
 
   // Obtener clientes pagados K3
   const clientesPagadosK3 = useMemo(() => {
@@ -366,7 +264,7 @@ const DiaDeCobroBuga = () => {
     };
   }, [clientes, fechaSeleccionadaStr, filtroK3]);
 
-  // Actualizar estadísticas para incluir lo recogido
+  // Calcular estadísticas Globales
   const estadisticasGlobales = useMemo(() => {
     let porCobrarTotal = 0;
     let recogidoTotal = 0;
@@ -378,7 +276,7 @@ const DiaDeCobroBuga = () => {
         if (!credito.cuotas || !Array.isArray(credito.cuotas)) return;
         if (credito.renovado) return;
 
-        // 1. Por Cobrar Global
+        // 1. Calcular Por Cobrar Global (Pendientes hoy o vencidos)
         const creditoConAbonos = aplicarAbonosAutomaticamente(credito);
         creditoConAbonos.cuotasActualizadas.forEach((cuota, index) => {
           const cuotaOriginal = credito.cuotas[index];
@@ -388,12 +286,16 @@ const DiaDeCobroBuga = () => {
             ? cuotaOriginal.fechaProgramada.split('T')[0]
             : format(new Date(cuotaOriginal.fechaProgramada), 'yyyy-MM-dd');
 
-          if (fechaCuota <= fechaSeleccionadaStr) {
-            porCobrarTotal += (credito.valorCuota - (cuota.abonoAplicado || 0)) + calcularTotalMultasCuota(cuota, credito);
+          const esVencidaOActual = fechaCuota <= fechaSeleccionadaStr;
+          const abonoAplicado = cuota.abonoAplicado || 0;
+          const valorPendiente = (credito.valorCuota - abonoAplicado) + calcularTotalMultasCuota(cuota, credito);
+
+          if (esVencidaOActual && valorPendiente > 0) {
+            porCobrarTotal += valorPendiente;
           }
         });
 
-        // 2. Recogido Global
+        // 2. Calcular Recogido Global (Pagado hoy)
         credito.cuotas.forEach(cuota => {
           let fechaPagoNormalizada = null;
           if (cuota.pagada && cuota.fechaPago) {
@@ -414,7 +316,7 @@ const DiaDeCobroBuga = () => {
           }
         });
 
-        // Abonos generales, multas, etc.
+        // Sumar abonos generales, multas, etc.
         const abonosHoyGenerales = (credito.abonos || []).filter(a => (a.fecha?.split('T')[0] || a.fecha) === fechaSeleccionadaStr);
         recogidoTotal += abonosHoyGenerales.reduce((s, a) => s + a.valor, 0);
 
@@ -431,6 +333,8 @@ const DiaDeCobroBuga = () => {
       clientes: clisBuga
     };
   }, [clientes, itemsK3Filtrados, clientesPagadosK3, fechaSeleccionadaStr]);
+
+
 
   if (loading) {
     return (
