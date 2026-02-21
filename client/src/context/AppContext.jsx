@@ -42,7 +42,7 @@ export const AppProvider = ({ children }) => {
     try {
       setLoading(true);
       // Cargar clientes (limit alto para traer todos)
-      const clientesRes = await api.get('/clientes?limit=1000');
+      const clientesRes = await api.get('/clientes?limit=5000');
       if (clientesRes.success) {
         setClientes(clientesRes.data);
       }
@@ -50,7 +50,7 @@ export const AppProvider = ({ children }) => {
       // Cargar movimientos de caja (Solo si tiene permiso o no es domiciliario)
       // Nota: Domiciliarios no ven caja según PERMISSIONS en Persona.js
       if (user && user.role !== 'domiciliario' && user.role !== 'supervisor') {
-        const movimientosRes = await api.get('/movimientos-caja');
+        const movimientosRes = await api.get('/movimientos-caja?limit=10000');
         if (movimientosRes.success) {
           setMovimientosCaja(movimientosRes.data);
         }

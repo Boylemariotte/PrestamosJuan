@@ -10,7 +10,7 @@ import { registrarBorrado } from './historialBorradoController.js';
  */
 export const getMovimientosCaja = async (req, res, next) => {
   try {
-    const { tipo, tipoMovimiento, fechaInicio, fechaFin, page = 1, limit = 100 } = req.query;
+    const { tipo, tipoMovimiento, fechaInicio, fechaFin, page = 1, limit = 10000 } = req.query;
 
     const query = {};
 
