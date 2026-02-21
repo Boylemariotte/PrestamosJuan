@@ -417,6 +417,8 @@ const DiaDeCobro = () => {
       esperado: 0,
       recogido: 0,
       pendiente: 0,
+      pendienteTuluá: 0,
+      pendienteBuga: 0,
       clientesTotal: 0
     };
 
@@ -663,6 +665,11 @@ const DiaDeCobro = () => {
         // 2. Dinero (Por Cobrar / Recogido): Siempre sumar de todos, sin restricciones
         stats.esperado += totalACobrarHoy + totalCobradoHoy + totalAbonadoHoy;
         stats.pendiente += totalACobrarHoy;
+        if (cliente.cartera === 'K3') {
+          stats.pendienteBuga += totalACobrarHoy;
+        } else {
+          stats.pendienteTuluá += totalACobrarHoy;
+        }
         stats.recogido += (totalCobradoHoy + totalAbonadoHoy);
 
       });
@@ -829,19 +836,19 @@ const DiaDeCobro = () => {
   // Calcular total de clientes de forma directa: según la ciudad seleccionada
   const totalClientesDirecto = useMemo(() => {
     let total = 0;
-    
+
     if (ciudadSeleccionada === 'tuluá') {
       const totalK1 = cobrosPorCartera.K1.length;
       const totalK2 = cobrosPorCartera.K2.length;
       const totalNoReportados = cobrosPorCartera.NoReportados.length;
       total = totalK1 + totalK2 + totalNoReportados;
-      
+
       console.log(`Conteo directo Tuluá - K1: ${totalK1}, K2: ${totalK2}, NoReportados: ${totalNoReportados}, Total: ${total}`);
     } else if (ciudadSeleccionada === 'buga') {
       const totalK3 = cobrosPorCartera.K3.length;
       const totalNoReportadosK3 = cobrosPorCartera.NoReportados.filter(item => item.clienteCartera === 'K3').length;
       total = totalK3 + totalNoReportadosK3;
-      
+
       console.log(`Conteo directo Buga - K3: ${totalK3}, NoReportadosK3: ${totalNoReportadosK3}, Total: ${total}`);
     }
 
@@ -1083,6 +1090,7 @@ const DiaDeCobro = () => {
                 multasPagadas.set(abonoMulta.multaId, {
                   multaId: abonoMulta.multaId,
                   multaMotivo: multa.motivo,
+                  multaFecha: multa.fecha ? format(new Date(multa.fecha), 'yyyy-MM-dd') : null,
                   multaValor: multa.valor,
                   montoPagado: 0
                 });
@@ -1133,7 +1141,8 @@ const DiaDeCobro = () => {
                   tipoPago: null, // No aplica
                   montoPagadoMulta: multaInfo.montoPagado,
                   tieneMulta: true,
-                  multaMotivo: multaInfo.multaMotivo
+                  multaMotivo: multaInfo.multaMotivo,
+                  multaFecha: multaInfo.multaFecha
                 };
                 itemsMap.set(key, item);
               }
@@ -1155,16 +1164,16 @@ const DiaDeCobro = () => {
     });
 
     // Aplicar filtros de pagos
-    const pagadosK1Filtrados = filtroPagosK1 === 'todos' 
-      ? pagadosK1 
+    const pagadosK1Filtrados = filtroPagosK1 === 'todos'
+      ? pagadosK1
       : pagadosK1.filter(item => item.creditoTipo === filtroPagosK1);
 
-    const pagadosK2Filtrados = filtroPagosK2 === 'todos' 
-      ? pagadosK2 
+    const pagadosK2Filtrados = filtroPagosK2 === 'todos'
+      ? pagadosK2
       : pagadosK2.filter(item => item.creditoTipo === filtroPagosK2);
 
-    const pagadosK3Filtrados = filtroPagosK3 === 'todos' 
-      ? pagadosK3 
+    const pagadosK3Filtrados = filtroPagosK3 === 'todos'
+      ? pagadosK3
       : pagadosK3.filter(item => item.creditoTipo === filtroPagosK3);
 
     // Calcular totales (incluyendo multas)
@@ -1182,7 +1191,7 @@ const DiaDeCobro = () => {
   // Listado plano de multas pagadas en el día (para sección resumen)
   const multasPagadasDia = useMemo(() => {
     let todas = [];
-    
+
     if (ciudadSeleccionada === 'tuluá') {
       todas = [
         ...(clientesPagados.K1?.items || []),
@@ -1717,7 +1726,8 @@ const DiaDeCobro = () => {
             <p className="text-[10px] sm:text-xs md:text-xl lg:text-2xl font-bold text-green-300 break-words leading-tight">
               {formatearMoneda(
                 (clientesPagados.K1?.total || 0) +
-                (clientesPagados.K2?.total || 0)
+                (clientesPagados.K2?.total || 0) +
+                (clientesPagados.K3?.total || 0)
               )}
             </p>
           </div>
@@ -1775,195 +1785,195 @@ const DiaDeCobro = () => {
 
       {/* Sección por Carteras - Reorganizada */}
       <div className="space-y-8">
-        
+
         {/* SECCIÓN TULUÁ */}
         {ciudadSeleccionada === 'tuluá' && (
-        <div className="space-y-6">
-          {/* Header Día de Cobro Tuluá */}
-          <div className="bg-linear-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-xl shadow-lg">
-            <div className="flex items-center gap-3">
-              <div className="bg-white/20 p-3 rounded-lg">
-                <Users className="h-8 w-8" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold">Día de Cobro Tuluá</h2>
-                <p className="text-blue-100 text-sm">Pagos K1 y K2</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Sección K1 */}
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
+          <div className="space-y-6">
+            {/* Header Día de Cobro Tuluá */}
+            <div className="bg-linear-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-xl shadow-lg">
               <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-lg">
-                  <Users className="h-6 w-6" />
+                <div className="bg-white/20 p-3 rounded-lg">
+                  <Users className="h-8 w-8" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold">Cartera K1</h3>
-                  <p className="text-blue-100 text-sm">
-                    {cobrosPorCartera.K1.length} {cobrosPorCartera.K1.length === 1 ? 'cliente' : 'clientes'}
-                    {filtroK1 !== 'todos' && ` (${filtroK1})`}
-                  </p>
+                  <h2 className="text-2xl font-bold">Día de Cobro Tuluá</h2>
+                  <p className="text-blue-100 text-sm">Pagos K1 y K2</p>
                 </div>
-                <select
-                  value={filtroK1}
-                  onChange={(e) => setFiltroK1(e.target.value)}
-                  className="bg-gradient-to-r from-blue-600 to-blue-700 border border-blue-400/50 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-blue-500/25 backdrop-blur-sm transition-all duration-300 hover:from-blue-500 hover:to-blue-600 hover:shadow-blue-400/30 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-300/70 focus:ring-offset-2 focus:ring-offset-blue-900/50 cursor-pointer"
-                >
-                  <option value="todos" className="bg-gray-900 text-gray-100">Todos</option>
-                  <option value="semanal" className="bg-gray-900 text-gray-100">Semanal</option>
-                  <option value="quincenal" className="bg-gray-900 text-gray-100">Quincenal</option>
-                  <option value="mensual" className="bg-gray-900 text-gray-100">Mensual</option>
-                </select>
               </div>
             </div>
-            {cobrosPorCartera.K1.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
-                <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No hay cobros para K1 en esta fecha</p>
-              </div>
-            ) : (
-              <TablaCobrosLista
-                items={cobrosPorCartera.K1}
-                onCambioOrden={handleActualizarOrdenManual}
-                ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
-                onProrrogaDias={handleProrrogaDias}
-                onProrrogaFecha={handleProrrogaFecha}
-                actualizarCliente={actualizarCliente}
-                toggleReportado={handleMarcarComoNoEncontrado}
-              />
-            )}
-          </div>
 
-          {/* Clientes No Reportados */}
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="bg-red-600 text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-lg">
-                  <AlertCircle className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold">Clientes no encontrados - no dieron razón</h3>
-                  <p className="text-red-100 text-sm">{cobrosPorCartera.NoReportados.length} {cobrosPorCartera.NoReportados.length === 1 ? 'cliente' : 'clientes'}</p>
+            {/* Sección K1 */}
+            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+              <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-2 rounded-lg">
+                    <Users className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Cartera K1</h3>
+                    <p className="text-blue-100 text-sm">
+                      {cobrosPorCartera.K1.length} {cobrosPorCartera.K1.length === 1 ? 'cliente' : 'clientes'}
+                      {filtroK1 !== 'todos' && ` (${filtroK1})`}
+                    </p>
+                  </div>
+                  <select
+                    value={filtroK1}
+                    onChange={(e) => setFiltroK1(e.target.value)}
+                    className="bg-gradient-to-r from-blue-600 to-blue-700 border border-blue-400/50 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-blue-500/25 backdrop-blur-sm transition-all duration-300 hover:from-blue-500 hover:to-blue-600 hover:shadow-blue-400/30 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-300/70 focus:ring-offset-2 focus:ring-offset-blue-900/50 cursor-pointer"
+                  >
+                    <option value="todos" className="bg-gray-900 text-gray-100">Todos</option>
+                    <option value="semanal" className="bg-gray-900 text-gray-100">Semanal</option>
+                    <option value="quincenal" className="bg-gray-900 text-gray-100">Quincenal</option>
+                    <option value="mensual" className="bg-gray-900 text-gray-100">Mensual</option>
+                  </select>
                 </div>
               </div>
+              {cobrosPorCartera.K1.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                  <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg">No hay cobros para K1 en esta fecha</p>
+                </div>
+              ) : (
+                <TablaCobrosLista
+                  items={cobrosPorCartera.K1}
+                  onCambioOrden={handleActualizarOrdenManual}
+                  ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
+                  onProrrogaDias={handleProrrogaDias}
+                  onProrrogaFecha={handleProrrogaFecha}
+                  actualizarCliente={actualizarCliente}
+                  toggleReportado={handleMarcarComoNoEncontrado}
+                />
+              )}
             </div>
-            {cobrosPorCartera.NoReportados.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
-                <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No hay clientes no encontrados para esta fecha</p>
-              </div>
-            ) : (
-              <TablaCobrosLista
-                items={cobrosPorCartera.NoReportados}
-                onCambioOrden={handleActualizarOrdenManual}
-                ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
-                onProrrogaDias={handleProrrogaDias}
-                onProrrogaFecha={handleProrrogaFecha}
-                actualizarCliente={actualizarCliente}
-                toggleReportado={handleMarcarComoNoEncontrado}
-              />
-            )}
-          </div>
 
-          {/* Sección K2 */}
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="bg-green-600 text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-lg">
-                  <Users className="h-6 w-6" />
+            {/* Clientes No Reportados */}
+            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+              <div className="bg-red-600 text-white px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-2 rounded-lg">
+                    <AlertCircle className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Clientes no encontrados - no dieron razón</h3>
+                    <p className="text-red-100 text-sm">{cobrosPorCartera.NoReportados.length} {cobrosPorCartera.NoReportados.length === 1 ? 'cliente' : 'clientes'}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold">Cartera K2</h3>
-                  <p className="text-green-100 text-sm">
-                    {cobrosPorCartera.K2.length} {cobrosPorCartera.K2.length === 1 ? 'cliente' : 'clientes'}
-                    {filtroK2 !== 'todos' && ` (${filtroK2})`}
-                  </p>
-                </div>
-                <select
-                  value={filtroK2}
-                  onChange={(e) => setFiltroK2(e.target.value)}
-                  className="bg-gradient-to-r from-green-600 to-green-700 border border-green-400/50 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-green-500/25 backdrop-blur-sm transition-all duration-300 hover:from-green-500 hover:to-green-600 hover:shadow-green-400/30 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-green-300/70 focus:ring-offset-2 focus:ring-offset-green-900/50 cursor-pointer"
-                >
-                  <option value="todos" className="bg-gray-900 text-gray-100">Todos</option>
-                  <option value="quincenal" className="bg-gray-900 text-gray-100">Quincenal</option>
-                  <option value="mensual" className="bg-gray-900 text-gray-100">Mensual</option>
-                </select>
               </div>
+              {cobrosPorCartera.NoReportados.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                  <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg">No hay clientes no encontrados para esta fecha</p>
+                </div>
+              ) : (
+                <TablaCobrosLista
+                  items={cobrosPorCartera.NoReportados}
+                  onCambioOrden={handleActualizarOrdenManual}
+                  ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
+                  onProrrogaDias={handleProrrogaDias}
+                  onProrrogaFecha={handleProrrogaFecha}
+                  actualizarCliente={actualizarCliente}
+                  toggleReportado={handleMarcarComoNoEncontrado}
+                />
+              )}
             </div>
-            {cobrosPorCartera.K2.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
-                <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No hay cobros para K2 en esta fecha</p>
+
+            {/* Sección K2 */}
+            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+              <div className="bg-green-600 text-white px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-2 rounded-lg">
+                    <Users className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Cartera K2</h3>
+                    <p className="text-green-100 text-sm">
+                      {cobrosPorCartera.K2.length} {cobrosPorCartera.K2.length === 1 ? 'cliente' : 'clientes'}
+                      {filtroK2 !== 'todos' && ` (${filtroK2})`}
+                    </p>
+                  </div>
+                  <select
+                    value={filtroK2}
+                    onChange={(e) => setFiltroK2(e.target.value)}
+                    className="bg-gradient-to-r from-green-600 to-green-700 border border-green-400/50 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-green-500/25 backdrop-blur-sm transition-all duration-300 hover:from-green-500 hover:to-green-600 hover:shadow-green-400/30 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-green-300/70 focus:ring-offset-2 focus:ring-offset-green-900/50 cursor-pointer"
+                  >
+                    <option value="todos" className="bg-gray-900 text-gray-100">Todos</option>
+                    <option value="quincenal" className="bg-gray-900 text-gray-100">Quincenal</option>
+                    <option value="mensual" className="bg-gray-900 text-gray-100">Mensual</option>
+                  </select>
+                </div>
               </div>
-            ) : (
-              <TablaCobrosLista
-                items={cobrosPorCartera.K2}
-                onCambioOrden={handleActualizarOrdenManual}
-                ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
-                onProrrogaDias={handleProrrogaDias}
-                onProrrogaFecha={handleProrrogaFecha}
-                actualizarCliente={actualizarCliente}
-                toggleReportado={handleMarcarComoNoEncontrado}
-              />
-            )}
+              {cobrosPorCartera.K2.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                  <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg">No hay cobros para K2 en esta fecha</p>
+                </div>
+              ) : (
+                <TablaCobrosLista
+                  items={cobrosPorCartera.K2}
+                  onCambioOrden={handleActualizarOrdenManual}
+                  ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}}
+                  onProrrogaDias={handleProrrogaDias}
+                  onProrrogaFecha={handleProrrogaFecha}
+                  actualizarCliente={actualizarCliente}
+                  toggleReportado={handleMarcarComoNoEncontrado}
+                />
+              )}
+            </div>
           </div>
-        </div>
         )}
 
-      {multasPagadasDia.length > 0 && (
-        <div className="space-y-4 mt-10 pt-6 border-t-2 border-dashed border-gray-300">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-red-600" />
-              <h2 className="text-xl font-bold text-gray-900">Multas pagadas</h2>
+        {multasPagadasDia.length > 0 && (
+          <div className="space-y-4 mt-10 pt-6 border-t-2 border-dashed border-gray-300">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+                <h2 className="text-xl font-bold text-gray-900">Multas pagadas</h2>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-500">Total multas</p>
+                <p className="text-xl font-bold text-red-600">
+                  {formatearMoneda(multasPagadasDia.reduce((sum, item) => sum + item.montoPagadoMulta, 0))}
+                </p>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-500">Total multas</p>
-              <p className="text-xl font-bold text-red-600">
-                {formatearMoneda(multasPagadasDia.reduce((sum, item) => sum + item.montoPagadoMulta, 0))}
-              </p>
-            </div>
-          </div>
 
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left text-gray-500">
-                <thead className="text-xs text-white uppercase bg-slate-800">
-                  <tr>
-                    <th scope="col" className="px-4 py-3 w-12 text-center">#</th>
-                    <th scope="col" className="px-4 py-3 text-center">N° Cartera</th>
-                    <th scope="col" className="px-4 py-3">Cliente</th>
-                    <th scope="col" className="px-4 py-3 text-center">Tipo de pago</th>
-                    <th scope="col" className="px-4 py-3 text-center">Cartera</th>
-                    <th scope="col" className="px-4 py-3 text-right text-red-500">Valor multa</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {multasPagadasDia
-                    .filter(item => item.clienteRF !== 'RF')
-                    .map((item, index) => (
-                      <tr key={`${item.clienteNombre}-${index}`} className="bg-white hover:bg-gray-50">
-                        <td className="px-4 py-3 text-center font-bold text-gray-800">{index + 1}</td>
-                        <td className="px-4 py-3 text-center font-bold text-gray-800">
-                          {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
-                        </td>
-                        <td className="px-4 py-3 font-medium text-gray-900">{item.clienteNombre}</td>
-                        <td className="px-4 py-3 text-center capitalize">{item.creditoTipo}</td>
-                        <td className="px-4 py-3 text-center font-semibold">
-                          {item.cartera}
-                        </td>
-                        <td className="px-4 py-3 text-right font-bold text-red-600">
-                          {formatearMoneda(item.montoPagadoMulta)}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-gray-500">
+                  <thead className="text-xs text-white uppercase bg-slate-800">
+                    <tr>
+                      <th scope="col" className="px-4 py-3 w-12 text-center">#</th>
+                      <th scope="col" className="px-4 py-3 text-center">N° Cartera</th>
+                      <th scope="col" className="px-4 py-3">Cliente</th>
+                      <th scope="col" className="px-4 py-3 text-center">Tipo de pago</th>
+                      <th scope="col" className="px-4 py-3 text-center">Cartera</th>
+                      <th scope="col" className="px-4 py-3 text-right text-red-500">Valor multa</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {multasPagadasDia
+                      .filter(item => item.clienteRF !== 'RF')
+                      .map((item, index) => (
+                        <tr key={`${item.clienteNombre}-${index}`} className="bg-white hover:bg-gray-50">
+                          <td className="px-4 py-3 text-center font-bold text-gray-800">{index + 1}</td>
+                          <td className="px-4 py-3 text-center font-bold text-gray-800">
+                            {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-gray-900">{item.clienteNombre}</td>
+                          <td className="px-4 py-3 text-center capitalize">{item.creditoTipo}</td>
+                          <td className="px-4 py-3 text-center font-semibold">
+                            {item.cartera}
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-red-600">
+                            {formatearMoneda(item.montoPagadoMulta)}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
         )}
 
         {/* SECCIÓN BUGA */}
@@ -2115,19 +2125,18 @@ const DiaDeCobro = () => {
                             {formatearMoneda(item.montoPagado)}
                           </td>
                           <td className="px-4 py-4 font-bold text-green-600 text-base text-center">
-                            #{item.numeroCuota || 'N/A'}
+                            #{item.nroCuota || 'N/A'}
                           </td>
                           <td className="px-4 py-4 text-center">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              item.tipoPago === 'completo' 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-yellow-100 text-yellow-800'
-                            }`}>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${item.tipoPago === 'completo'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                              }`}>
                               {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
                             </span>
                           </td>
                           <td className="px-4 py-4 text-center">
-                            {item.multa ? (
+                            {item.tieneMulta ? (
                               <span className="text-red-600 font-medium">
                                 {item.multaMotivo || 'Multa'}
                                 {item.multaFecha && (
@@ -2145,10 +2154,7 @@ const DiaDeCobro = () => {
                           </td>
                           <td className="px-4 py-4 text-center">
                             <button
-                              onClick={() => {
-                                setCreditoSeleccionado(item.credito);
-                                setClienteSeleccionado(item.cliente);
-                              }}
+                              onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
                               className="text-orange-600 hover:text-orange-800 font-medium hover:underline text-sm"
                             >
                               Ver Detalle
@@ -2164,328 +2170,328 @@ const DiaDeCobro = () => {
           </div>
         )}
 
-      {/* Sección Pagados - Solo para Tuluá */}
-      {ciudadSeleccionada === 'tuluá' && (
-      <div className="space-y-6 mt-8 pt-8 border-t-2 border-gray-300">
-        <div className="flex items-center gap-3 mb-4">
-          <CheckCircle className="h-6 w-6 text-green-600" />
-          <h1 className="text-3xl font-bold text-gray-900">Día de Cobro Tuluá</h1>
-        </div>
-
-        {/* Card K1 - Mostrar para administradores, CEO y domiciliarios de Tuluá */}
-        {!esDomiciliarioBuga && (
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-lg">
-                  <Users className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold">Pagos K1</h3>
-                  <p className="text-blue-100 text-sm">{clientesPagados.K1.items.length} {clientesPagados.K1.items.length === 1 ? 'pago' : 'pagos'}</p>
-                </div>
-                <select
-                  value={filtroPagosK1}
-                  onChange={(e) => setFiltroPagosK1(e.target.value)}
-                  className="bg-gradient-to-r from-blue-600 to-blue-700 border border-blue-400/50 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-blue-500/25 backdrop-blur-sm transition-all duration-300 hover:from-blue-500 hover:to-blue-600 hover:shadow-blue-400/30 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-300/70 focus:ring-offset-2 focus:ring-offset-blue-900/50 cursor-pointer"
-                >
-                  <option value="todos" className="bg-gray-900 text-gray-100">Todos</option>
-                  <option value="semanal" className="bg-gray-900 text-gray-100">Semanal</option>
-                  <option value="quincenal" className="bg-gray-900 text-gray-100">Quincenal</option>
-                  <option value="mensual" className="bg-gray-900 text-gray-100">Mensual</option>
-                </select>
-              </div>
-              <div className="text-right">
-                <p className="text-blue-100 text-sm">Total Recogido</p>
-                <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K1.total)}</p>
-              </div>
+        {/* Sección Pagados - Solo para Tuluá */}
+        {ciudadSeleccionada === 'tuluá' && (
+          <div className="space-y-6 mt-8 pt-8 border-t-2 border-gray-300">
+            <div className="flex items-center gap-3 mb-4">
+              <CheckCircle className="h-6 w-6 text-green-600" />
+              <h1 className="text-3xl font-bold text-gray-900">Día de Cobro Tuluá</h1>
             </div>
-            {clientesPagados.K1.items.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
-                <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No hay pagos para K1 registrados</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left text-gray-500">
-                  <thead className="text-xs text-white uppercase bg-slate-800">
-                    <tr>
-                      <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
-                      <th scope="col" className="px-4 py-3">Cliente</th>
-                      <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
-                      <th scope="col" className="px-4 py-3 text-center">Cuota</th>
-                      <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
-                      <th scope="col" className="px-4 py-3 text-center">Multa</th>
-                      <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
-                      <th scope="col" className="px-4 py-3 text-center">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {clientesPagados.K1.items.map((item, index) => (
-                      <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-blue-50 hover:bg-blue-100">
-                        <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
-                          {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
-                            <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
-                            <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
-                              <Phone className="h-3 w-3" />
-                              <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono || 'N/A'}</span>
-                            </div>
-                            <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
-                              <MapPin className="h-3 w-3" />
-                              {item.clienteBarrio || 'Sin barrio'}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 font-bold text-green-600 text-base">
-                          {item.montoPagado > 0 ? formatearMoneda(item.montoPagado) : <span className="text-gray-400">-</span>}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.nroCuota ? (
-                            <span className="bg-blue-200 text-blue-800 px-2 py-1 rounded font-medium">
-                              #{item.nroCuota}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.tipoPago ? (
-                            <span className={`px-2 py-1 rounded font-medium ${item.tipoPago === 'completo'
-                              ? 'bg-green-200 text-green-800'
-                              : 'bg-yellow-200 text-yellow-800'
-                              }`}>
-                              {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.tieneMulta ? (
-                            <span className="bg-red-200 text-red-800 px-2 py-1 rounded font-medium text-xs">
-                              {item.multaMotivo || 'Multa'}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center font-bold">
-                          {item.montoPagadoMulta > 0 ? (
-                            <span className="text-orange-600">{formatearMoneda(item.montoPagadoMulta)}</span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <button
-                            onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
-                            className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
-                          >
-                            Ver Detalle
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+            {/* Card K1 - Mostrar para administradores, CEO y domiciliarios de Tuluá */}
+            {!esDomiciliarioBuga && (
+              <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+                <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-white/20 p-2 rounded-lg">
+                      <Users className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold">Pagos K1</h3>
+                      <p className="text-blue-100 text-sm">{clientesPagados.K1.items.length} {clientesPagados.K1.items.length === 1 ? 'pago' : 'pagos'}</p>
+                    </div>
+                    <select
+                      value={filtroPagosK1}
+                      onChange={(e) => setFiltroPagosK1(e.target.value)}
+                      className="bg-gradient-to-r from-blue-600 to-blue-700 border border-blue-400/50 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-blue-500/25 backdrop-blur-sm transition-all duration-300 hover:from-blue-500 hover:to-blue-600 hover:shadow-blue-400/30 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-300/70 focus:ring-offset-2 focus:ring-offset-blue-900/50 cursor-pointer"
+                    >
+                      <option value="todos" className="bg-gray-900 text-gray-100">Todos</option>
+                      <option value="semanal" className="bg-gray-900 text-gray-100">Semanal</option>
+                      <option value="quincenal" className="bg-gray-900 text-gray-100">Quincenal</option>
+                      <option value="mensual" className="bg-gray-900 text-gray-100">Mensual</option>
+                    </select>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-blue-100 text-sm">Total Recogido</p>
+                    <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K1.total)}</p>
+                  </div>
+                </div>
+                {clientesPagados.K1.items.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                    <p className="text-lg">No hay pagos para K1 registrados</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left text-gray-500">
+                      <thead className="text-xs text-white uppercase bg-slate-800">
+                        <tr>
+                          <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
+                          <th scope="col" className="px-4 py-3">Cliente</th>
+                          <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
+                          <th scope="col" className="px-4 py-3 text-center">Cuota</th>
+                          <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                          <th scope="col" className="px-4 py-3 text-center">Multa</th>
+                          <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
+                          <th scope="col" className="px-4 py-3 text-center">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {clientesPagados.K1.items.map((item, index) => (
+                          <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-blue-50 hover:bg-blue-100">
+                            <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
+                              {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
+                                <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
+                                <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
+                                  <Phone className="h-3 w-3" />
+                                  <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono || 'N/A'}</span>
+                                </div>
+                                <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
+                                  <MapPin className="h-3 w-3" />
+                                  {item.clienteBarrio || 'Sin barrio'}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 font-bold text-green-600 text-base">
+                              {item.montoPagado > 0 ? formatearMoneda(item.montoPagado) : <span className="text-gray-400">-</span>}
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              {item.nroCuota ? (
+                                <span className="bg-blue-200 text-blue-800 px-2 py-1 rounded font-medium">
+                                  #{item.nroCuota}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              {item.tipoPago ? (
+                                <span className={`px-2 py-1 rounded font-medium ${item.tipoPago === 'completo'
+                                  ? 'bg-green-200 text-green-800'
+                                  : 'bg-yellow-200 text-yellow-800'
+                                  }`}>
+                                  {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              {item.tieneMulta ? (
+                                <span className="bg-red-200 text-red-800 px-2 py-1 rounded font-medium text-xs">
+                                  {item.multaMotivo || 'Multa'}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-center font-bold">
+                              {item.montoPagadoMulta > 0 ? (
+                                <span className="text-orange-600">{formatearMoneda(item.montoPagadoMulta)}</span>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <button
+                                onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
+                                className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
+                              >
+                                Ver Detalle
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        {/* Card K2 - Mostrar para administradores, CEO y domiciliarios de Tuluá */}
-        {!esDomiciliarioBuga && (
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="bg-green-600 text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-lg">
-                  <Users className="h-6 w-6" />
+            {/* Card K2 - Mostrar para administradores, CEO y domiciliarios de Tuluá */}
+            {!esDomiciliarioBuga && (
+              <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+                <div className="bg-green-600 text-white px-6 py-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-white/20 p-2 rounded-lg">
+                      <Users className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold">Pagos K2</h3>
+                      <p className="text-green-100 text-sm">{clientesPagados.K2.items.length} {clientesPagados.K2.items.length === 1 ? 'pago' : 'pagos'}</p>
+                    </div>
+                    <select
+                      value={filtroPagosK2}
+                      onChange={(e) => setFiltroPagosK2(e.target.value)}
+                      className="bg-gradient-to-r from-green-600 to-green-700 border border-green-400/50 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-green-500/25 backdrop-blur-sm transition-all duration-300 hover:from-green-500 hover:to-green-600 hover:shadow-green-400/30 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-green-300/70 focus:ring-offset-2 focus:ring-offset-green-900/50 cursor-pointer"
+                    >
+                      <option value="todos" className="bg-gray-900 text-gray-100">Todos</option>
+                      <option value="quincenal" className="bg-gray-900 text-gray-100">Quincenal</option>
+                      <option value="mensual" className="bg-gray-900 text-gray-100">Mensual</option>
+                    </select>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-green-100 text-sm">Total Recogido</p>
+                    <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K2.total)}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold">Pagos K2</h3>
-                  <p className="text-green-100 text-sm">{clientesPagados.K2.items.length} {clientesPagados.K2.items.length === 1 ? 'pago' : 'pagos'}</p>
-                </div>
-                <select
-                  value={filtroPagosK2}
-                  onChange={(e) => setFiltroPagosK2(e.target.value)}
-                  className="bg-gradient-to-r from-green-600 to-green-700 border border-green-400/50 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-green-500/25 backdrop-blur-sm transition-all duration-300 hover:from-green-500 hover:to-green-600 hover:shadow-green-400/30 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-green-300/70 focus:ring-offset-2 focus:ring-offset-green-900/50 cursor-pointer"
-                >
-                  <option value="todos" className="bg-gray-900 text-gray-100">Todos</option>
-                  <option value="quincenal" className="bg-gray-900 text-gray-100">Quincenal</option>
-                  <option value="mensual" className="bg-gray-900 text-gray-100">Mensual</option>
-                </select>
-              </div>
-              <div className="text-right">
-                <p className="text-green-100 text-sm">Total Recogido</p>
-                <p className="text-2xl font-bold">{formatearMoneda(clientesPagados.K2.total)}</p>
-              </div>
-            </div>
-            {clientesPagados.K2.items.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
-                <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No hay pagos para K2 registrados</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left text-gray-500">
-                  <thead className="text-xs text-white uppercase bg-slate-800">
-                    <tr>
-                      <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
-                      <th scope="col" className="px-4 py-3">Cliente</th>
-                      <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
-                      <th scope="col" className="px-4 py-3 text-center">Cuota</th>
-                      <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
-                      <th scope="col" className="px-4 py-3 text-center">Multa</th>
-                      <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
-                      <th scope="col" className="px-4 py-3 text-center">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {clientesPagados.K2.items.map((item, index) => (
-                      <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-green-50 hover:bg-green-100">
-                        <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
-                          {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
-                            <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
-                            <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
-                              <Phone className="h-3 w-3" />
-                              <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono || 'N/A'}</span>
-                            </div>
-                            <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
-                              <MapPin className="h-3 w-3" />
-                              {item.clienteBarrio || 'Sin barrio'}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 font-bold text-green-600 text-base">
-                          {item.montoPagado > 0 ? formatearMoneda(item.montoPagado) : <span className="text-gray-400">-</span>}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.nroCuota ? (
-                            <span className="bg-green-200 text-green-800 px-2 py-1 rounded font-medium">
-                              #{item.nroCuota}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.tipoPago ? (
-                            <span className={`px-2 py-1 rounded font-medium ${item.tipoPago === 'completo'
-                              ? 'bg-green-200 text-green-800'
-                              : 'bg-yellow-200 text-yellow-800'
-                              }`}>
-                              {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          {item.tieneMulta ? (
-                            <span className="bg-red-200 text-red-800 px-2 py-1 rounded font-medium text-xs">
-                              {item.multaMotivo || 'Multa'}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center font-bold">
-                          {item.montoPagadoMulta > 0 ? (
-                            <span className="text-orange-600">{formatearMoneda(item.montoPagadoMulta)}</span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <button
-                            onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
-                            className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
-                          >
-                            Ver Detalle
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {clientesPagados.K2.items.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                    <p className="text-lg">No hay pagos para K2 registrados</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left text-gray-500">
+                      <thead className="text-xs text-white uppercase bg-slate-800">
+                        <tr>
+                          <th scope="col" className="px-4 py-3 w-20 text-center">Ref. Crédito</th>
+                          <th scope="col" className="px-4 py-3">Cliente</th>
+                          <th scope="col" className="px-4 py-3 text-green-400">Monto Pagado</th>
+                          <th scope="col" className="px-4 py-3 text-center">Cuota</th>
+                          <th scope="col" className="px-4 py-3 text-center">Tipo de Pago</th>
+                          <th scope="col" className="px-4 py-3 text-center">Multa</th>
+                          <th scope="col" className="px-4 py-3 text-center">Monto Pagado Multa</th>
+                          <th scope="col" className="px-4 py-3 text-center">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {clientesPagados.K2.items.map((item, index) => (
+                          <tr key={`${item.clienteId}-${item.creditoId}-${item.nroCuota || 'general'}-${index}`} className="bg-green-50 hover:bg-green-100">
+                            <td className="px-4 py-4 font-bold text-gray-900 text-center text-lg">
+                              {item.clientePosicion ? `#${item.clientePosicion}` : '-'}
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-gray-900 text-base">{item.clienteNombre}</span>
+                                <span className="text-gray-500 text-xs">CC: {item.clienteDocumento || 'N/A'}</span>
+                                <div className="flex items-center gap-1 text-gray-600 text-xs mt-1 font-medium">
+                                  <Phone className="h-3 w-3" />
+                                  <span className="bg-yellow-100 text-yellow-800 px-1 rounded">{item.clienteTelefono || 'N/A'}</span>
+                                </div>
+                                <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
+                                  <MapPin className="h-3 w-3" />
+                                  {item.clienteBarrio || 'Sin barrio'}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 font-bold text-green-600 text-base">
+                              {item.montoPagado > 0 ? formatearMoneda(item.montoPagado) : <span className="text-gray-400">-</span>}
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              {item.nroCuota ? (
+                                <span className="bg-green-200 text-green-800 px-2 py-1 rounded font-medium">
+                                  #{item.nroCuota}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              {item.tipoPago ? (
+                                <span className={`px-2 py-1 rounded font-medium ${item.tipoPago === 'completo'
+                                  ? 'bg-green-200 text-green-800'
+                                  : 'bg-yellow-200 text-yellow-800'
+                                  }`}>
+                                  {item.tipoPago === 'completo' ? 'Completo' : 'Parcial'}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              {item.tieneMulta ? (
+                                <span className="bg-red-200 text-red-800 px-2 py-1 rounded font-medium text-xs">
+                                  {item.multaMotivo || 'Multa'}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-center font-bold">
+                              {item.montoPagadoMulta > 0 ? (
+                                <span className="text-orange-600">{formatearMoneda(item.montoPagadoMulta)}</span>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <button
+                                onClick={() => abrirDetalle(item.clienteId, item.creditoId)}
+                                className="text-blue-600 hover:text-blue-800 font-medium hover:underline text-sm"
+                              >
+                                Ver Detalle
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
 
         {/* Modal Detalle */}
-      {creditoSeleccionado && clienteSeleccionado && (
-        <CreditoDetalle
-          credito={creditoSeleccionado}
-          clienteId={clienteSeleccionado.id}
-          clienteNombre={clienteSeleccionado.nombre}
-          cliente={clienteSeleccionado}
+        {creditoSeleccionado && clienteSeleccionado && (
+          <CreditoDetalle
+            credito={creditoSeleccionado}
+            clienteId={clienteSeleccionado.id}
+            clienteNombre={clienteSeleccionado.nombre}
+            cliente={clienteSeleccionado}
+            onClose={() => {
+              setCreditoSeleccionado(null);
+              setClienteSeleccionado(null);
+            }}
+          />
+        )}
+
+        <MotivoProrrogaModal
+          isOpen={modalProrrogaOpen}
+          initialDate={fechaSeleccionadaStr}
           onClose={() => {
-            setCreditoSeleccionado(null);
-            setClienteSeleccionado(null);
+            setModalProrrogaOpen(false);
+            setDatosProrrogaPendiente(null);
           }}
+          onConfirm={handleConfirmarProrroga}
         />
-      )}
 
-      <MotivoProrrogaModal
-        isOpen={modalProrrogaOpen}
-        initialDate={fechaSeleccionadaStr}
-        onClose={() => {
-          setModalProrrogaOpen(false);
-          setDatosProrrogaPendiente(null);
-        }}
-        onConfirm={handleConfirmarProrroga}
-      />
-
-      {/* Pantalla de Carga para Prórroga Global */}
-      {procesandoProrrogaGlobal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md transition-all">
-          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center transform scale-100 transition-transform">
-            <div className="mb-8 relative flex justify-center">
-              {/* Spinner animado premium */}
-              <div className="w-28 h-28 border-[6px] border-slate-100 border-t-blue-600 rounded-full animate-spin"></div>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-2xl font-black text-slate-800">
-                  {Math.round((progresoProrroga.actual / (progresoProrroga.total || 1)) * 100)}%
-                </span>
-                <span className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Completado</span>
+        {/* Pantalla de Carga para Prórroga Global */}
+        {procesandoProrrogaGlobal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md transition-all">
+            <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center transform scale-100 transition-transform">
+              <div className="mb-8 relative flex justify-center">
+                {/* Spinner animado premium */}
+                <div className="w-28 h-28 border-[6px] border-slate-100 border-t-blue-600 rounded-full animate-spin"></div>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-2xl font-black text-slate-800">
+                    {Math.round((progresoProrroga.actual / (progresoProrroga.total || 1)) * 100)}%
+                  </span>
+                  <span className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Completado</span>
+                </div>
               </div>
-            </div>
 
-            <h3 className="text-2xl font-extrabold text-slate-800 mb-2">Prorrogando Clientes</h3>
-            <p className="text-slate-500 font-medium mb-6">
-              Procesando: <span className="text-blue-600 font-bold">{progresoProrroga.actual}</span> de <span className="text-slate-700 font-bold">{progresoProrroga.total}</span>
-            </p>
+              <h3 className="text-2xl font-extrabold text-slate-800 mb-2">Prorrogando Clientes</h3>
+              <p className="text-slate-500 font-medium mb-6">
+                Procesando: <span className="text-blue-600 font-bold">{progresoProrroga.actual}</span> de <span className="text-slate-700 font-bold">{progresoProrroga.total}</span>
+              </p>
 
-            {/* Barra de progreso */}
-            <div className="w-full bg-slate-100 rounded-full h-4 mb-4 overflow-hidden border border-slate-50">
-              <div
-                className="bg-gradient-to-r from-blue-500 to-blue-600 h-full transition-all duration-300 ease-out shadow-inner"
-                style={{ width: `${(progresoProrroga.actual / (progresoProrroga.total || 1)) * 100}%` }}
-              ></div>
-            </div>
-
-            <div className="flex items-center justify-center gap-2 text-slate-400">
-              <div className="flex space-x-1">
-                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
-                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+              {/* Barra de progreso */}
+              <div className="w-full bg-slate-100 rounded-full h-4 mb-4 overflow-hidden border border-slate-50">
+                <div
+                  className="bg-gradient-to-r from-blue-500 to-blue-600 h-full transition-all duration-300 ease-out shadow-inner"
+                  style={{ width: `${(progresoProrroga.actual / (progresoProrroga.total || 1)) * 100}%` }}
+                ></div>
               </div>
-              <p className="text-xs font-semibold uppercase tracking-tighter">Sincronizando con el servidor...</p>
+
+              <div className="flex items-center justify-center gap-2 text-slate-400">
+                <div className="flex space-x-1">
+                  <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+                  <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+                <p className="text-xs font-semibold uppercase tracking-tighter">Sincronizando con el servidor...</p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-      </div>
-      )}
+        )}
       </div>
     </div>
   );

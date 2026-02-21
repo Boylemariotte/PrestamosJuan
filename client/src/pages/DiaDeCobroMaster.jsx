@@ -49,7 +49,7 @@ const TablaCobrosLista = ({ items, onCambioOrden, ordenFecha, setCreditoSeleccio
       button: "text-blue-600 hover:text-blue-800"
     },
     green: {
-      header: "bg-green-600", 
+      header: "bg-green-600",
       row: "bg-green-50 hover:bg-green-100",
       button: "text-green-600 hover:text-green-800"
     }
@@ -61,13 +61,13 @@ const TablaCobrosLista = ({ items, onCambioOrden, ordenFecha, setCreditoSeleccio
   const itemsOrdenados = [...items].sort((a, b) => {
     const ordenA = ordenFecha[a.clienteId] || '';
     const ordenB = ordenFecha[b.clienteId] || '';
-    
+
     if (ordenA && ordenB) {
       return parseInt(ordenA) - parseInt(ordenB);
     }
     if (ordenA) return -1;
     if (ordenB) return 1;
-    
+
     // Si no hay orden manual, ordenar por posición
     const posA = a.clientePosicion || '999';
     const posB = b.clientePosicion || '999';
@@ -148,7 +148,7 @@ const TablaCobrosLista = ({ items, onCambioOrden, ordenFecha, setCreditoSeleccio
 
 const DiaDeCobroMaster = () => {
   const { user } = useAuth();
-  
+
   // Estados principales
   const [ciudadSeleccionada, setCiudadSeleccionada] = useState('tuluá'); // 'tuluá' o 'buga'
   const [clientes, setClientes] = useState([]);
@@ -171,8 +171,8 @@ const DiaDeCobroMaster = () => {
 
   // Verificar permisos
   const puedeVerDiaDeCobro = user && (
-    user.role === 'ceo' || 
-    user.role === 'administrador' || 
+    user.role === 'ceo' ||
+    user.role === 'administrador' ||
     user.role === 'secretario'
   );
 

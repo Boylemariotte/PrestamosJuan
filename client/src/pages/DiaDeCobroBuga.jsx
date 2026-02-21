@@ -115,14 +115,14 @@ const DiaDeCobroBuga = () => {
       cliente.creditos.forEach(credito => {
         // Validar que el crédito tenga cuotas
         if (!credito.cuotas || !Array.isArray(credito.cuotas)) return;
-        
+
         const estado = determinarEstadoCredito(credito.cuotas, credito);
-        
+
         if (estado === 'activo' || estado === 'mora') {
           credito.cuotas.forEach(cuota => {
             if (cuota.pagada) return;
 
-            const fechaCuota = typeof cuota.fechaProgramada === 'string' 
+            const fechaCuota = typeof cuota.fechaProgramada === 'string'
               ? cuota.fechaProgramada.split('T')[0]
               : format(cuota.fechaProgramada, 'yyyy-MM-dd');
 
@@ -160,7 +160,9 @@ const DiaDeCobroBuga = () => {
                 tipo,
                 reportado: true,
                 key: `${cliente.id}-${credito.id}-${cuota.nroCuota}`,
-                orden: ordenCobro[fechaStr]?.[`${cliente.id}-${credito.id}-${cuota.nroCuota}`] || cliente.posicion || 999
+                orden: ordenCobro[fechaStr]?.[`${cliente.id}-${credito.id}-${cuota.nroCuota}`] || cliente.posicion || 999,
+                cliente,
+                credito
               };
 
               itemsK3.push(item);
@@ -186,9 +188,9 @@ const DiaDeCobroBuga = () => {
   // Filtrar por búsqueda
   const itemsK3Filtrados = useMemo(() => {
     const searchTermLower = searchTerm.toLowerCase().trim();
-    
+
     if (!searchTermLower) return datosCobroK3?.itemsK3 || [];
-    
+
     return datosCobroK3.itemsK3.filter(item => {
       const refCredito = item.clientePosicion ? `#${item.clientePosicion}` : '';
       if (refCredito.toLowerCase().includes(searchTermLower)) return true;
@@ -201,16 +203,108 @@ const DiaDeCobroBuga = () => {
   }, [datosCobroK3.itemsK3, searchTerm]);
 
   // Calcular estadísticas K3
-  const estadisticasK3 = useMemo(() => {
-    const porCobrarK3 = itemsK3Filtrados.reduce((sum, item) => sum + item.valorRealACobrar, 0);
-    const totalClientesK3 = itemsK3Filtrados.length;
+  const estadisticasGlobales = useMemo(() => {
+    let porCobrarTotal = 0;
+    let recogidoTotal = 0;
+    let totalClientesBuga = 0;
+
+    clientes.forEach(cliente => {
+      if (!cliente.creditos || cliente.creditos.length === 0) return;
+
+      // Contar clientes específicos de Buga (para la métrica de clientes)
+      const esDeBuga = cliente.cartera === 'K3';
+
+      cliente.creditos.forEach(credito => {
+        if (!credito.cuotas || !Array.isArray(credito.cuotas)) return;
+        if (credito.renovado) return;
+
+        // 1. Calcular Por Cobrar Global (Pendientes hoy o vencidos)
+        const creditoConAbonos = aplicarAbonosAutomaticamente(credito);
+        let tieneActividadBugaHoy = false;
+
+        creditoConAbonos.cuotasActualizadas.forEach((cuota, index) => {
+          const cuotaOriginal = credito.cuotas[index];
+          if (cuotaOriginal.pagado) return;
+
+          const fechaCuota = typeof cuotaOriginal.fechaProgramada === 'string'
+            ? cuotaOriginal.fechaProgramada.split('T')[0]
+            : format(new Date(cuotaOriginal.fechaProgramada), 'yyyy-MM-dd');
+
+          const esVencidaOActual = fechaCuota <= fechaSeleccionadaStr;
+          const abonoAplicado = cuota.abonoAplicado || 0;
+          const valorPendiente = (credito.valorCuota - abonoAplicado) + calcularTotalMultasCuota(cuota, credito);
+
+          if (esVencidaOActual && valorPendiente > 0) {
+            porCobrarTotal += valorPendiente;
+            if (esDeBuga) tieneActividadBugaHoy = true;
+          }
+        });
+
+        // 2. Calcular Recogido Global (Pagado hoy)
+        credito.cuotas.forEach(cuota => {
+          // Normalizar fecha de pago
+          let fechaPagoNormalizada = null;
+          if (cuota.pagada && cuota.fechaPago) {
+            fechaPagoNormalizada = typeof cuota.fechaPago === 'string'
+              ? cuota.fechaPago.split('T')[0]
+              : format(new Date(cuota.fechaPago), 'yyyy-MM-dd');
+          }
+
+          // Sumar abonos realizados hoy
+          const abonosHoy = (cuota.abonosCuota || []).filter(a => {
+            const f = typeof a.fecha === 'string' ? a.fecha.split('T')[0] : format(new Date(a.fecha), 'yyyy-MM-dd');
+            return f === fechaSeleccionadaStr;
+          });
+          const montoAbonosHoy = abonosHoy.reduce((s, a) => s + (a.valor || 0), 0);
+          recogidoTotal += montoAbonosHoy;
+
+          // Si la cuota se pagó completa hoy y no tiene abonos registrados hoy (pago único)
+          if (fechaPagoNormalizada === fechaSeleccionadaStr && montoAbonosHoy === 0) {
+            recogidoTotal += (cuota.valorCuota || credito.valorCuota);
+          }
+        });
+
+        // Sumar abonos generales hoy
+        const abonosGeneralesHoy = (credito.abonos || []).filter(a => {
+          const f = typeof a.fecha === 'string' ? a.fecha.split('T')[0] : format(new Date(a.fecha), 'yyyy-MM-dd');
+          return f === fechaSeleccionadaStr;
+        });
+        recogidoTotal += abonosGeneralesHoy.reduce((s, a) => s + (a.valor || 0), 0);
+
+        // Sumar abonos multas hoy
+        const abonosMultaHoy = (credito.abonosMulta || []).filter(a => {
+          const f = typeof a.fecha === 'string' ? a.fecha.split('T')[0] : format(new Date(a.fecha), 'yyyy-MM-dd');
+          return f === fechaSeleccionadaStr;
+        });
+        recogidoTotal += abonosMultaHoy.reduce((s, a) => s + (a.valor || 0), 0);
+
+        if (esDeBuga && tieneActividadBugaHoy) {
+          totalClientesBuga++;
+        }
+      });
+
+      // Si el cliente no tiene créditos pero está en los cobros de hoy (por otros motivos o reportado)
+      // Ajuste simplificado: sumamos los que están pagados hoy también
+      const tienePagoHoyBuga = cliente.cartera === 'K3' && cliente.creditos.some(cr =>
+        cr.cuotas.some(cu => {
+          const fPago = cu.pagada && cu.fechaPago ? (typeof cu.fechaPago === 'string' ? cu.fechaPago.split('T')[0] : format(new Date(cu.fechaPago), 'yyyy-MM-dd')) : null;
+          return fPago === fechaSeleccionadaStr;
+        })
+      );
+
+      // Si no fue contado por pendiente pero tiene pago
+      // (Buscamos simplificar para que coincida con la lista visible)
+    });
+
+    // Ajustar clientes para que coincida con la lógica de la vista
+    const clisBuga = itemsK3Filtrados.length + (clientesPagadosK3?.K3?.items?.length || 0);
 
     return {
-      porCobrar: porCobrarK3,
-      recogido: 0,
-      clientes: totalClientesK3
+      porCobrar: porCobrarTotal,
+      recogido: recogidoTotal,
+      clientes: clisBuga
     };
-  }, [itemsK3Filtrados]);
+  }, [clientes, itemsK3Filtrados, clientesPagadosK3, fechaSeleccionadaStr]);
 
   // Obtener clientes pagados K3
   const clientesPagadosK3 = useMemo(() => {
@@ -225,11 +319,11 @@ const DiaDeCobroBuga = () => {
       cliente.creditos.forEach(credito => {
         // Validar que el crédito tenga cuotas
         if (!credito.cuotas || !Array.isArray(credito.cuotas)) return;
-        
+
         credito.cuotas.forEach(cuota => {
           if (!cuota.pagada) return;
 
-          const fechaPago = typeof cuota.fechaPago === 'string' 
+          const fechaPago = typeof cuota.fechaPago === 'string'
             ? cuota.fechaPago.split('T')[0]
             : format(cuota.fechaPago, 'yyyy-MM-dd');
 
@@ -249,7 +343,9 @@ const DiaDeCobroBuga = () => {
               montoPagadoMulta: 0,
               tipoPago: cuota.tipoPago || 'completo',
               tieneMulta: cuota.tieneMulta || false,
-              multaMotivo: cuota.multaMotivo
+              multaMotivo: cuota.multaMotivo,
+              cliente,
+              credito
             };
 
             pagosK3.push(pagoItem);
@@ -259,8 +355,8 @@ const DiaDeCobroBuga = () => {
     });
 
     // Filtrar por tipo de pago si es necesario
-    const pagosFiltrados = filtroK3 === 'todos' 
-      ? pagosK3 
+    const pagosFiltrados = filtroK3 === 'todos'
+      ? pagosK3
       : pagosK3.filter(item => item.creditoTipo === filtroK3);
 
     const calcularTotal = (items) => items.reduce((sum, item) => sum + item.montoPagado + (item.montoPagadoMulta || 0), 0);
@@ -271,17 +367,70 @@ const DiaDeCobroBuga = () => {
   }, [clientes, fechaSeleccionadaStr, filtroK3]);
 
   // Actualizar estadísticas para incluir lo recogido
-  const estadisticasK3ConRecogido = useMemo(() => {
-    const porCobrarK3 = itemsK3Filtrados.reduce((sum, item) => sum + item.valorRealACobrar, 0);
-    const recogidoK3 = clientesPagadosK3.K3.total;
-    const totalClientesK3 = itemsK3Filtrados.length + (clientesPagadosK3?.K3?.items?.length || 0);
+  const estadisticasGlobales = useMemo(() => {
+    let porCobrarTotal = 0;
+    let recogidoTotal = 0;
+
+    clientes.forEach(cliente => {
+      if (!cliente.creditos || cliente.creditos.length === 0) return;
+
+      cliente.creditos.forEach(credito => {
+        if (!credito.cuotas || !Array.isArray(credito.cuotas)) return;
+        if (credito.renovado) return;
+
+        // 1. Por Cobrar Global
+        const creditoConAbonos = aplicarAbonosAutomaticamente(credito);
+        creditoConAbonos.cuotasActualizadas.forEach((cuota, index) => {
+          const cuotaOriginal = credito.cuotas[index];
+          if (cuotaOriginal.pagado) return;
+
+          const fechaCuota = typeof cuotaOriginal.fechaProgramada === 'string'
+            ? cuotaOriginal.fechaProgramada.split('T')[0]
+            : format(new Date(cuotaOriginal.fechaProgramada), 'yyyy-MM-dd');
+
+          if (fechaCuota <= fechaSeleccionadaStr) {
+            porCobrarTotal += (credito.valorCuota - (cuota.abonoAplicado || 0)) + calcularTotalMultasCuota(cuota, credito);
+          }
+        });
+
+        // 2. Recogido Global
+        credito.cuotas.forEach(cuota => {
+          let fechaPagoNormalizada = null;
+          if (cuota.pagada && cuota.fechaPago) {
+            fechaPagoNormalizada = typeof cuota.fechaPago === 'string'
+              ? cuota.fechaPago.split('T')[0]
+              : format(new Date(cuota.fechaPago), 'yyyy-MM-dd');
+          }
+
+          const abonosHoy = (cuota.abonosCuota || []).filter(a => {
+            const f = typeof a.fecha === 'string' ? a.fecha.split('T')[0] : format(new Date(a.fecha), 'yyyy-MM-dd');
+            return f === fechaSeleccionadaStr;
+          });
+          const montoAbonosHoy = abonosHoy.reduce((s, a) => s + (a.valor || 0), 0);
+          recogidoTotal += montoAbonosHoy;
+
+          if (fechaPagoNormalizada === fechaSeleccionadaStr && montoAbonosHoy === 0) {
+            recogidoTotal += (cuota.valorCuota || credito.valorCuota);
+          }
+        });
+
+        // Abonos generales, multas, etc.
+        const abonosHoyGenerales = (credito.abonos || []).filter(a => (a.fecha?.split('T')[0] || a.fecha) === fechaSeleccionadaStr);
+        recogidoTotal += abonosHoyGenerales.reduce((s, a) => s + a.valor, 0);
+
+        const abonosMultaHoy = (credito.abonosMulta || []).filter(a => (a.fecha?.split('T')[0] || a.fecha) === fechaSeleccionadaStr);
+        recogidoTotal += abonosMultaHoy.reduce((s, a) => s + a.valor, 0);
+      });
+    });
+
+    const clisBuga = itemsK3Filtrados.length + (clientesPagadosK3?.K3?.items?.length || 0);
 
     return {
-      porCobrar: porCobrarK3,
-      recogido: recogidoK3,
-      clientes: totalClientesK3
+      porCobrar: porCobrarTotal,
+      recogido: recogidoTotal,
+      clientes: clisBuga
     };
-  }, [itemsK3Filtrados, clientesPagadosK3]);
+  }, [clientes, itemsK3Filtrados, clientesPagadosK3, fechaSeleccionadaStr]);
 
   if (loading) {
     return (
@@ -347,21 +496,21 @@ const DiaDeCobroBuga = () => {
         {/* Stats Cards */}
         <div className="grid grid-cols-3 gap-2 md:gap-4 text-center">
           <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0 overflow-hidden">
-            <p className="text-xs text-slate-400 uppercase font-bold mb-1">Por Cobrar</p>
+            <p className="text-xs text-slate-400 uppercase font-bold mb-1">Por Cobrar (Global)</p>
             <p className="text-[10px] sm:text-xs md:text-xl lg:text-2xl font-bold text-orange-300 wrap-break-word leading-tight">
-              {formatearMoneda(estadisticasK3ConRecogido.porCobrar)}
+              {formatearMoneda(estadisticasGlobales.porCobrar)}
             </p>
           </div>
           <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0 overflow-hidden">
-            <p className="text-xs text-slate-400 uppercase font-bold mb-1">Recogido</p>
+            <p className="text-xs text-slate-400 uppercase font-bold mb-1">Recogido (Global)</p>
             <p className="text-[10px] sm:text-xs md:text-xl lg:text-2xl font-bold text-green-300 wrap-break-word leading-tight">
-              {formatearMoneda(estadisticasK3ConRecogido.recogido)}
+              {formatearMoneda(estadisticasGlobales.recogido)}
             </p>
           </div>
           <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0">
-            <p className="text-xs text-slate-400 uppercase font-bold mb-1">Clientes</p>
+            <p className="text-xs text-slate-400 uppercase font-bold mb-1">Clientes Buga</p>
             <p className="sm md:text-xl lg:text-2xl font-bold text-orange-300">
-              {estadisticasK3ConRecogido.clientes}
+              {estadisticasGlobales.clientes}
             </p>
           </div>
         </div>
@@ -596,13 +745,8 @@ const DiaDeCobroBuga = () => {
                       <td className="px-4 py-4 text-center">
                         <button
                           onClick={() => {
-                            // Buscar el cliente y crédito completos para el modal
-                            const clienteCompleto = clientes.find(c => c.id === item.clienteId);
-                            const creditoCompleto = clienteCompleto?.creditos?.find(cr => cr.id === item.creditoId);
-                            if (clienteCompleto && creditoCompleto) {
-                              setCreditoSeleccionado(creditoCompleto);
-                              setClienteSeleccionado(clienteCompleto);
-                            }
+                            setCreditoSeleccionado(item.credito);
+                            setClienteSeleccionado(item.cliente);
                           }}
                           className="text-orange-600 hover:text-orange-800 font-medium hover:underline text-sm"
                         >
