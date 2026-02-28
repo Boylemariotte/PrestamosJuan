@@ -26,6 +26,26 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
     mensual: 'Mensual'
   };
 
+  // Determinar opciones disponibles según la cartera
+  const getOpcionesDisponibles = () => {
+    const cartera = cliente?.cartera || 'K1';
+    
+    switch (cartera) {
+      case 'K2':
+        // K2 maneja todos los tipos (general, quincenal, mensual)
+        return ['quincenal', 'mensual'];
+      case 'K1':
+      case 'K3':
+        // K1 y K3 manejan semanal, quincenal y mensual
+        return ['semanal', 'quincenal', 'mensual'];
+      default:
+        // Por defecto, mostrar todas las opciones
+        return ['semanal', 'quincenal', 'mensual'];
+    }
+  };
+
+  const opcionesDisponibles = getOpcionesDisponibles();
+
   // Calcular deuda pendiente del crédito anterior
   const cuotasPendientes = creditoAnterior.cuotas.filter(c => !c.pagado);
 
@@ -165,50 +185,56 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
           <div>
             <label className="label block text-sm font-medium text-gray-700 mb-1 font-bold">Tipo de Pago *</label>
             <div className="space-y-2">
-              <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                <input
-                  type="radio"
-                  name="tipo"
-                  value="semanal"
-                  checked={formData.tipo === 'semanal'}
-                  onChange={handleChange}
-                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
-                />
-                <div className="ml-3 text-left">
-                  <span className="font-medium text-gray-900">Semanal</span>
-                  <p className="text-sm text-gray-500">10 cuotas - Cada sábado</p>
-                </div>
-              </label>
+              {opcionesDisponibles.includes('semanal') && (
+                <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                  <input
+                    type="radio"
+                    name="tipo"
+                    value="semanal"
+                    checked={formData.tipo === 'semanal'}
+                    onChange={handleChange}
+                    className="h-4 w-4 text-purple-600 focus:ring-purple-500"
+                  />
+                  <div className="ml-3 text-left">
+                    <span className="font-medium text-gray-900">Semanal</span>
+                    <p className="text-sm text-gray-500">10 cuotas - Cada sábado</p>
+                  </div>
+                </label>
+              )}
 
-              <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                <input
-                  type="radio"
-                  name="tipo"
-                  value="quincenal"
-                  checked={formData.tipo === 'quincenal'}
-                  onChange={handleChange}
-                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
-                />
-                <div className="ml-3 text-left">
-                  <span className="font-medium text-gray-900">Quincenal</span>
-                  <p className="text-sm text-gray-500">5 cuotas</p>
-                </div>
-              </label>
+              {opcionesDisponibles.includes('quincenal') && (
+                <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                  <input
+                    type="radio"
+                    name="tipo"
+                    value="quincenal"
+                    checked={formData.tipo === 'quincenal'}
+                    onChange={handleChange}
+                    className="h-4 w-4 text-purple-600 focus:ring-purple-500"
+                  />
+                  <div className="ml-3 text-left">
+                    <span className="font-medium text-gray-900">Quincenal</span>
+                    <p className="text-sm text-gray-500">5 cuotas</p>
+                  </div>
+                </label>
+              )}
 
-              <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                <input
-                  type="radio"
-                  name="tipo"
-                  value="mensual"
-                  checked={formData.tipo === 'mensual'}
-                  onChange={handleChange}
-                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
-                />
-                <div className="ml-3 text-left">
-                  <span className="font-medium text-gray-900">Mensual</span>
-                  <p className="text-sm text-gray-500">3 cuotas - Cada mes</p>
-                </div>
-              </label>
+              {opcionesDisponibles.includes('mensual') && (
+                <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                  <input
+                    type="radio"
+                    name="tipo"
+                    value="mensual"
+                    checked={formData.tipo === 'mensual'}
+                    onChange={handleChange}
+                    className="h-4 w-4 text-purple-600 focus:ring-purple-500"
+                  />
+                  <div className="ml-3 text-left">
+                    <span className="font-medium text-gray-900">Mensual</span>
+                    <p className="text-sm text-gray-500">3 cuotas - Cada mes</p>
+                  </div>
+                </label>
+              )}
             </div>
           </div>
 
