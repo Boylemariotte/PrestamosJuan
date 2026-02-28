@@ -3,7 +3,7 @@ import { Bell, Plus, Trash2, Clock, CheckCircle, AlertCircle, X, Tag } from 'luc
 import { useApp } from '../context/AppContext';
 import { formatearFecha } from '../utils/creditCalculations';
 import { obtenerFechaLocal } from '../utils/dateUtils';
-
+//commit de prueba
 const Alertas = () => {
   const { 
     alertas, 
