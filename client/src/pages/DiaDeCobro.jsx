@@ -46,7 +46,7 @@ const OrdenInput = ({ valorInicial, onGuardar }) => {
 
 const DiaDeCobro = () => {
   const navigate = useNavigate();
-  const { clientes, obtenerCliente, obtenerCredito, actualizarCliente, agregarNota, toggleReportado, fetchData } = useApp();
+  const { clientes, obtenerCliente, obtenerCredito, actualizarCliente, agregarNota, toggleReportado, fetchData, lastSyncTime } = useApp();
   const { user } = useAuth();
 
   // Estado para selector de ciudad
@@ -205,10 +205,10 @@ const DiaDeCobro = () => {
     cargarProrrogas();
   }, []);
 
-  // Cargar órdenes de cobro cuando cambia la fecha seleccionada
+  // Cargar órdenes de cobro cuando cambia la fecha seleccionada o hay sync
   useEffect(() => {
     cargarOrdenesCobro(fechaSeleccionadaStr);
-  }, [fechaSeleccionadaStr]);
+  }, [fechaSeleccionadaStr, lastSyncTime]);
 
   // Filtrar clientes por búsqueda y excluir renovaciones activadas (RF)
   const clientesFiltrados = useMemo(() => {

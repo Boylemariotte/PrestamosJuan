@@ -16,7 +16,7 @@ import {
   agregarDescuento,
   eliminarNota
 } from '../controllers/creditoController.js';
-import { protect, authorize } from '../middleware/auth.js';
+import { protect, authorize, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -30,7 +30,7 @@ router.route('/')
 router.route('/:id')
   .get(authorize('verCreditosActivos', 'verCreditosFinalizados'), getCredito)
   .put(authorize('editarCreditos'), updateCredito)
-  .delete(authorize('eliminarCreditos'), deleteCredito);
+  .delete(requireRole('CEO'), deleteCredito);
 
 router.route('/:id/pagos')
   .put(authorize('registrarPagos'), registrarPago);
@@ -40,21 +40,21 @@ router.route('/:id/notas')
   .post(authorize('agregarNotas'), agregarNota);
 
 router.route('/:id/notas/:notaId')
-  .delete(authorize('agregarNotas'), eliminarNota);
+  .delete(requireRole('CEO'), eliminarNota);
 
 router.route('/:id/abonos')
   .post(authorize('registrarPagos'), agregarAbono);
 
 router.route('/:id/abonos/:abonoId')
   .put(authorize('registrarPagos'), editarAbono)
-  .delete(authorize('registrarPagos'), eliminarAbono);
+  .delete(requireRole('CEO'), eliminarAbono);
 
 router.route('/:id/multas')
   .post(authorize('registrarPagos'), agregarMulta);
 
 router.route('/:id/multas/:multaId')
   .put(authorize('registrarPagos'), editarMulta)
-  .delete(authorize('registrarPagos'), eliminarMulta);
+  .delete(requireRole('CEO'), eliminarMulta);
 
 router.route('/:id/descuentos')
   .post(authorize('registrarPagos'), agregarDescuento);

@@ -11,7 +11,7 @@ import {
   getPosicionesDisponibles,
   getHistorialDocumento
 } from '../controllers/clienteController.js';
-import { protect, authorize } from '../middleware/auth.js';
+import { protect, authorize, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -42,7 +42,7 @@ router.route('/:id/coordenadas')
 router.route('/:id')
   .get(authorize('verClientes'), getCliente)
   .put(authorize('editarClientes'), updateCliente)
-  .delete(authorize('eliminarClientes'), deleteCliente);
+  .delete(requireRole('CEO'), deleteCliente);
 
 export default router;
 

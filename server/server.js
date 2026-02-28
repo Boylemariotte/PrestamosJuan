@@ -5,6 +5,8 @@ import { connectDB } from './config/database.js';
 import { applySecurityMiddleware } from './middleware/security.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import routes from './routes/index.js';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 
 // Cargar variables de entorno
 dotenv.config();
@@ -14,6 +16,46 @@ connectDB();
 
 // Inicializar Express
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE']
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log('⚡ Nuevo cliente conectado:', socket.id);
+
+  socket.on('disconnect', () => {
+    console.log('🔌 Cliente desconectado:', socket.id);
+  });
+});
+
+// Middleware para inyectar io
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
+// Middleware para emitir eventos de cambio automáticamente
+app.use((req, res, next) => {
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+    res.on('finish', () => {
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        // Ignorar login u operaciones de auth
+        if (!req.originalUrl.includes('/auth/')) {
+          io.emit('updateRouteEvent', {
+            method: req.method,
+            path: req.originalUrl,
+            timestamp: Date.now()
+          });
+        }
+      }
+    });
+  }
+  next();
+});
 
 // Middleware de seguridad
 applySecurityMiddleware(app);
@@ -53,8 +95,8 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 
 // Iniciar servidor
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+httpServer.listen(PORT, () => {
+  console.log(`🚀 Servidor HTTP y Socket.io corriendo en puerto ${PORT}`);
   console.log(`📝 Entorno: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🌐 API disponible en: http://localhost:${PORT}/api`);
 });

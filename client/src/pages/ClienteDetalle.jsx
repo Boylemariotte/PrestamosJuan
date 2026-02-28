@@ -297,13 +297,15 @@ const ClienteDetalle = ({ soloLectura = false }) => {
                   Archivar
                 </button>
               )}
-              <button
-                onClick={handleEliminarCliente}
-                className="btn-danger flex items-center justify-center flex-1 md:flex-none"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Eliminar
-              </button>
+              {user?.role === 'ceo' && (
+                <button
+                  onClick={handleEliminarCliente}
+                  className="btn-danger flex items-center justify-center flex-1 md:flex-none"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Eliminar
+                </button>
+              )}
             </div>
           )}
         </div>

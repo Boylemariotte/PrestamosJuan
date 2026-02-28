@@ -1088,7 +1088,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
                   onNuevaMulta={soloLectura ? null : () => setMostrarModalNuevaMulta(true)}
                   onEditDate={soloLectura ? null : handleEditarFecha}
                   onEditarAbono={soloLectura ? null : handleEditarAbono}
-                  onEliminarAbono={soloLectura ? null : handleEliminarAbono}
+                  onEliminarAbono={!soloLectura && user?.role === 'ceo' ? handleEliminarAbono : null}
                   onPagarMulta={soloLectura ? null : (multa) => handlePagarMulta(multa)}
                   onEditarMulta={soloLectura ? null : (multa) => handleEditarMulta(multa)}
                   sinContenedor={true}
@@ -1140,13 +1140,13 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
               nuevaNota={nuevaNota}
               onNotaChange={soloLectura ? null : (value) => setNuevaNota(value)}
               onAgregarNota={soloLectura ? null : handleAgregarNota}
-              onEliminarNota={soloLectura ? null : handleEliminarNota}
+              onEliminarNota={!soloLectura && user?.role === 'ceo' ? handleEliminarNota : null}
               soloLectura={soloLectura}
             />
           </div>
 
           {/* Zona de Peligro */}
-          {!soloLectura && (
+          {!soloLectura && user?.role === 'ceo' && (
             <div className="border-t pt-6 mt-6 print:hidden">
               <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-red-900 mb-2 flex items-center">
@@ -1203,7 +1203,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
               multa={multaParaEditar}
               onClose={() => setMultaParaEditar(null)}
               onGuardar={handleGuardarEdicionMulta}
-              onEliminar={handleEliminarMulta}
+              onEliminar={user?.role === 'ceo' ? handleEliminarMulta : null}
               procesando={procesandoPago}
             />
           )}
@@ -1243,10 +1243,10 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
               maxCuotas={obtenerNumeroCuotas(formData.tipoPago)}
               onClose={() => setAbonoEnEdicion(null)}
               onConfirm={handleGuardarEdicionAbono}
-              onDelete={() => {
+              onDelete={user?.role === 'ceo' ? () => {
                 handleEliminarAbono(abonoEnEdicion.id);
                 setAbonoEnEdicion(null);
-              }}
+              } : null}
             />
           )}
         </>

@@ -14,7 +14,7 @@ import api, { prorrogaService, ordenCobroService } from '../services/api';
 
 const Rutas = () => {
   const navigate = useNavigate();
-  const { clientes, obtenerCliente, obtenerCredito, agregarNota } = useApp();
+  const { clientes, obtenerCliente, obtenerCredito, agregarNota, lastSyncTime } = useApp();
   const { user } = useAuth();
   const hoy = startOfDay(new Date());
 
@@ -40,6 +40,10 @@ const Rutas = () => {
   // Estado para rastrear créditos inválidos (que no existen en el backend)
   // Estructura: Set de strings con formato "clienteId-creditoId"
   const [creditosInvalidos, setCreditosInvalidos] = useState(new Set());
+
+  // Estado para rastrear cambios sin guardar en el ordenamiento
+  const [unsavedChanges, setUnsavedChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Estado para prórrogas de cuotas, sin modificar la fecha original del crédito
   // Estructura: { [`clienteId-creditoId-nroCuota`]: 'YYYY-MM-DD' }
@@ -107,8 +111,11 @@ const Rutas = () => {
       }
     };
 
-    cargarOrden();
-  }, [fechaSeleccionadaStr]);
+    // Solo recargar si no hay cambios sin guardar, para no sobreescribir edición actual
+    if (!unsavedChanges) {
+      cargarOrden();
+    }
+  }, [fechaSeleccionadaStr, lastSyncTime, unsavedChanges]);
 
   // Cargar prórrogas desde el BACKEND al iniciar
   useEffect(() => {
@@ -146,6 +153,19 @@ const Rutas = () => {
     cargarProrrogas();
   }, []);
 
+  // Prevenir que el usuario cierre o recargue la pestaña con cambios sin guardar
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (unsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [unsavedChanges]);
+
   // Filtrar visitas para el día seleccionado
   const visitasDelDia = useMemo(() => {
     return visitas.filter(visita => {
@@ -170,6 +190,8 @@ const Rutas = () => {
 
   // Manejar cambio de número de orden para un cliente en la fecha seleccionada
   const handleCambioOrdenCliente = async (clienteId, nuevoOrden) => {
+    setUnsavedChanges(true);
+
     // Permitir estado vacío mientras el usuario borra y escribe
     if (nuevoOrden === '') {
       setOrdenCobro(prev => {
@@ -180,11 +202,6 @@ const Rutas = () => {
           ...ordenFechaActual,
           [clienteId]: '',
         };
-
-        // Eliminar de la base de datos
-        ordenCobroService.eliminar(fechaSeleccionadaStr, clienteId).catch(err => {
-          console.error('Error al eliminar orden de cobro:', err);
-        });
 
         return {
           ...prev,
@@ -206,16 +223,33 @@ const Rutas = () => {
         [clienteId]: numero,
       };
 
-      // Persistir en la base de datos
-      ordenCobroService.guardar(fechaSeleccionadaStr, nuevoOrdenFecha).catch(err => {
-        console.error('Error al guardar orden en el servidor:', err);
-      });
-
       return {
         ...prev,
         [fechaKey]: nuevoOrdenFecha,
       };
     });
+  };
+
+  // Función para guardar los cambios a la DB explícitamente
+  const handleGuardarCambios = async () => {
+    try {
+      setIsSaving(true);
+      const ordenFechaActual = ordenCobro[fechaSeleccionadaStr] || {};
+
+      const response = await ordenCobroService.guardar(fechaSeleccionadaStr, ordenFechaActual);
+
+      if (response && response.success) {
+        toast.success('Ruta guardada correctamente');
+        setUnsavedChanges(false);
+      } else {
+        toast.error('Error al guardar la ruta en el servidor');
+      }
+    } catch (err) {
+      console.error('Error al guardar orden en el servidor:', err);
+      toast.error('Error de conexión al guardar rutero');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Procesar cobros agrupados por BARRIO
@@ -1190,28 +1224,50 @@ const Rutas = () => {
             </div>
           </div>
 
-          {/* Navegación Fecha */}
-          <div className="flex bg-slate-700/50 rounded-lg p-1">
-            <button onClick={irAyer} className="p-2 hover:bg-white/10 rounded-md transition-colors">
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <div className="relative">
-              <input
-                type="date"
-                value={fechaSeleccionadaStr}
-                onChange={cambiarFecha}
-                className="bg-transparent text-center font-bold w-32 focus:outline-none cursor-pointer h-full"
-              />
+          <div className="flex flex-col md:flex-row items-center gap-4">
+            {/* Botón guardar cambios */}
+            {unsavedChanges && (
+              <div className="animate-pulse">
+                <button
+                  onClick={handleGuardarCambios}
+                  disabled={isSaving}
+                  className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors shadow-lg shadow-orange-500/30"
+                >
+                  {isSaving ? (
+                    <span>Guardando...</span>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-5 w-5" />
+                      <span>Guardar Cambios</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {/* Navegación Fecha */}
+            <div className="flex bg-slate-700/50 rounded-lg p-1">
+              <button onClick={irAyer} className="p-2 hover:bg-white/10 rounded-md transition-colors">
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <div className="relative">
+                <input
+                  type="date"
+                  value={fechaSeleccionadaStr}
+                  onChange={cambiarFecha}
+                  className="bg-transparent text-center font-bold w-32 focus:outline-none cursor-pointer h-full"
+                />
+              </div>
+              <button onClick={irMañana} className="p-2 hover:bg-white/10 rounded-md transition-colors">
+                <ChevronRight className="h-5 w-5" />
+              </button>
+              <button
+                onClick={irHoy}
+                className={`ml-2 px-3 text-sm font-bold rounded-md transition-colors ${esHoy ? 'bg-blue-600 text-white' : 'hover:bg-white/10 text-slate-300'}`}
+              >
+                Hoy
+              </button>
             </div>
-            <button onClick={irMañana} className="p-2 hover:bg-white/10 rounded-md transition-colors">
-              <ChevronRight className="h-5 w-5" />
-            </button>
-            <button
-              onClick={irHoy}
-              className={`ml-2 px-3 text-sm font-bold rounded-md transition-colors ${esHoy ? 'bg-blue-600 text-white' : 'hover:bg-white/10 text-slate-300'}`}
-            >
-              Hoy
-            </button>
           </div>
         </div>
 

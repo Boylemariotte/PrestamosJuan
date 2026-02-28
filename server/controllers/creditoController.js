@@ -97,7 +97,7 @@ export const getCredito = async (req, res, next) => {
  */
 export const createCredito = async (req, res, next) => {
   try {
-    const { clienteId, ...creditoData } = req.body;
+    const { clienteId, ...creditoDataRaw } = req.body;
 
     // Verificar que el cliente existe
     const cliente = await Cliente.findById(clienteId);
@@ -109,13 +109,40 @@ export const createCredito = async (req, res, next) => {
     }
 
     // Generar ID único para el crédito (más robusto que Date.now())
-    const creditoId = creditoData.id || `CRED-${new mongoose.Types.ObjectId().toString()}`;
+    const creditoId = creditoDataRaw.id || `CRED-${new mongoose.Types.ObjectId().toString()}`;
 
-    // Validar y preparar cuotas
-    const cuotasProcesadas = creditoData.cuotas.map(c => ({
-      ...c,
-      saldoPendiente: c.saldoPendiente !== undefined ? c.saldoPendiente : creditoData.valorCuota,
-      pagado: c.pagado || false
+    // SANITIZACIÓN Y VALIDACIÓN (Evitar vulnerabilidades JSON y Mass-Assignment)
+    const creditoData = {
+      monto: creditoDataRaw.monto,
+      papeleria: creditoDataRaw.papeleria || 0,
+      montoEntregado: creditoDataRaw.montoEntregado,
+      tipo: creditoDataRaw.tipo,
+      tipoQuincenal: creditoDataRaw.tipoQuincenal || null,
+      fechaInicio: creditoDataRaw.fechaInicio,
+      totalAPagar: creditoDataRaw.totalAPagar,
+      valorCuota: creditoDataRaw.valorCuota,
+      numCuotas: creditoDataRaw.numCuotas,
+      esRenovacion: creditoDataRaw.esRenovacion || false,
+      creditoAnteriorId: creditoDataRaw.creditoAnteriorId || null,
+      etiqueta: creditoDataRaw.etiqueta || null,
+      cuotas: creditoDataRaw.cuotas || []
+    };
+
+    // Forzar 3 cuotas máximo si el crédito es mensual
+    if (creditoData.tipo === 'mensual' && creditoData.cuotas.length > 3) {
+      creditoData.cuotas = creditoData.cuotas.slice(0, 3);
+      creditoData.numCuotas = 3;
+    }
+
+    // Validar y preparar cuotas sanitizadas
+    const cuotasProcesadas = creditoData.cuotas.map((c, index) => ({
+      nroCuota: c.nroCuota || (index + 1),
+      fechaProgramada: c.fechaProgramada,
+      saldoPendiente: creditoData.valorCuota, // Siempre inicia debiendo todo
+      pagado: false, // Forzar a false para prevenir inyección
+      fechaPago: null,
+      tieneAbono: false,
+      abonosCuota: []
     }));
 
     // 1. Guardar en la colección Creditos

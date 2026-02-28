@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { io } from 'socket.io-client';
 import api from '../services/api';
 import { useAuth } from './AuthContext';
 import { obtenerFechaHoraLocal, obtenerFechaLocal } from '../utils/dateUtils';
@@ -30,6 +31,7 @@ export const AppProvider = ({ children }) => {
   const [movimientosCaja, setMovimientosCaja] = useState([]);
   const [alertas, setAlertas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [lastSyncTime, setLastSyncTime] = useState(Date.now());
 
   // Función para cargar todos los datos
   const fetchData = useCallback(async () => {
@@ -80,6 +82,33 @@ export const AppProvider = ({ children }) => {
 
     fetchData();
   }, [fetchData, authLoading]);
+
+  // Hook de Sockets para sincronización en tiempo real
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // Conectar a la misma URL del backend
+    const backendUrl = import.meta.env.VITE_API_URL
+      ? import.meta.env.VITE_API_URL.replace('/api', '')
+      : 'http://localhost:5000';
+
+    const socket = io(backendUrl);
+
+    socket.on('connect', () => {
+      console.log('🔗 Sockets Conectado: Sincronización en tiempo real activa');
+    });
+
+    socket.on('updateRouteEvent', (data) => {
+      console.log('🔄 Sincronización recibida (Actualización de otro rol):', data);
+      // Recargar datos para mantener coherencia
+      fetchData();
+      setLastSyncTime(Date.now());
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [isAuthenticated, fetchData]);
 
   // --- CLIENTES ---
 
@@ -774,7 +803,8 @@ export const AppProvider = ({ children }) => {
     desactivarAlerta,
     exportarDatos,
     importarDatos,
-    limpiarDatos
+    limpiarDatos,
+    lastSyncTime
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
