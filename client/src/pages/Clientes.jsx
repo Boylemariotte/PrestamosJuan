@@ -276,27 +276,32 @@ const Clientes = () => {
 
   // Conteos por tipo de pago para los botones de filtrado
   const conteosTipoPago = useMemo(() => {
-    const counts = { todos: totalClientesCalculado, diario: 0, semanal: 0, quincenal: 0, mensual: 0 };
+    const counts = { todos: 0, diario: 0, semanal: 0, quincenal: 0, mensual: 0 };
 
     todasLasCards.forEach(card => {
-      if (card.cliente) {
-        // Para el conteo por tipo, verificamos qué tipo de crédito tiene el cliente en esa card específica
-        // En K2 el tipo es 'general', pero el cliente tiene un tipo real (usualmente quincenal o mensual)
-        const tipos = getTiposPagoActivos(card.cliente);
-        const tipoBase = tipos.length > 0 ? tipos[0] : card.cliente.tipoPagoEsperado;
+      // Solo contar cards que coincidan con el filtro de cartera actual
+      if (filtroCartera === 'todas' || card.cartera === filtroCartera) {
+        if (card.cliente) {
+          counts.todos++; // Contar para el total de la cartera seleccionada
+          
+          // Para el conteo por tipo, verificamos qué tipo de crédito tiene el cliente en esa card específica
+          // En K2 el tipo es 'general', pero el cliente tiene un tipo real (usualmente quincenal o mensual)
+          const tipos = getTiposPagoActivos(card.cliente);
+          const tipoBase = tipos.length > 0 ? tipos[0] : card.cliente.tipoPagoEsperado;
 
-        // Mapeo para asegurar que quincenal y mensual se cuenten correctamente incluso si vienen de pools compartidos
-        if (tipoBase && counts[tipoBase] !== undefined) {
-          counts[tipoBase]++;
-        } else if (!tipoBase) {
-          // Si no tiene tipo definido, lo sumamos a quincenal por defecto si es K1/K3 o dejamos en 0
-          if (card.cartera !== 'K2') counts.quincenal++;
+          // Mapeo para asegurar que quincenal y mensual se cuenten correctamente incluso si vienen de pools compartidos
+          if (tipoBase && counts[tipoBase] !== undefined) {
+            counts[tipoBase]++;
+          } else if (!tipoBase) {
+            // Si no tiene tipo definido, lo sumamos a quincenal por defecto si es K1/K3 o dejamos en 0
+            if (card.cartera !== 'K2') counts.quincenal++;
+          }
         }
       }
     });
 
     return counts;
-  }, [todasLasCards, totalClientesCalculado]);
+  }, [todasLasCards, filtroCartera]);
 
   // Filtrar cards según búsqueda, cartera y tipo de pago
   const cardsFiltradas = todasLasCards.filter(card => {
