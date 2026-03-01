@@ -298,7 +298,8 @@ const Clientes = () => {
             }
           }
         }
-      });
+      }
+    });
 
     return counts;
   }, [todasLasCards, filtroCartera]);
@@ -400,36 +401,91 @@ const Clientes = () => {
 
   // Helper para gradientes
   const getGradientClass = (color) => {
-    switch (color) {
-      case 'blue': return 'bg-gradient-to-br from-blue-500 to-blue-600';
-      case 'green': return 'bg-gradient-to-br from-green-500 to-green-600';
-      case 'orange': return 'bg-gradient-to-br from-orange-500 to-orange-600';
-      case 'purple': return 'bg-gradient-to-br from-purple-500 to-purple-600';
-      case 'red': return 'bg-gradient-to-br from-red-500 to-red-600';
-      default: return 'bg-gradient-to-br from-gray-500 to-gray-600';
-    }
+    const gradients = {
+      slate: 'bg-gradient-to-br from-slate-500 to-slate-600',
+      gray: 'bg-gradient-to-br from-gray-500 to-gray-600',
+      red: 'bg-gradient-to-br from-red-500 to-red-600',
+      orange: 'bg-gradient-to-br from-orange-500 to-orange-600',
+      amber: 'bg-gradient-to-br from-amber-500 to-amber-600',
+      yellow: 'bg-gradient-to-br from-yellow-500 to-yellow-600',
+      lime: 'bg-gradient-to-br from-lime-500 to-lime-600',
+      green: 'bg-gradient-to-br from-green-500 to-green-600',
+      emerald: 'bg-gradient-to-br from-emerald-500 to-emerald-600',
+      teal: 'bg-gradient-to-br from-teal-500 to-teal-600',
+      cyan: 'bg-gradient-to-br from-cyan-500 to-cyan-600',
+      sky: 'bg-gradient-to-br from-sky-500 to-sky-600',
+      blue: 'bg-gradient-to-br from-blue-500 to-blue-600',
+      indigo: 'bg-gradient-to-br from-indigo-500 to-indigo-600',
+      violet: 'bg-gradient-to-br from-violet-500 to-violet-600',
+      purple: 'bg-gradient-to-br from-purple-500 to-purple-600',
+      fuchsia: 'bg-gradient-to-br from-fuchsia-500 to-fuchsia-600',
+      pink: 'bg-gradient-to-br from-pink-500 to-pink-600',
+      rose: 'bg-gradient-to-br from-rose-500 to-rose-600',
+    };
+    return gradients[color] || 'bg-gradient-to-br from-gray-500 to-gray-600';
   };
 
   const getColorTextClass = (color) => {
-    switch (color) {
-      case 'blue': return 'text-blue-100';
-      case 'green': return 'text-green-100';
-      case 'orange': return 'text-orange-100';
-      case 'purple': return 'text-purple-100';
-      case 'red': return 'text-red-100';
-      default: return 'text-gray-100';
-    }
+    const textColors = {
+      slate: 'text-slate-100', gray: 'text-gray-100', red: 'text-red-100',
+      orange: 'text-orange-100', amber: 'text-amber-100', yellow: 'text-yellow-100',
+      lime: 'text-lime-100', green: 'text-green-100', emerald: 'text-emerald-100',
+      teal: 'text-teal-100', cyan: 'text-cyan-100', sky: 'text-sky-100',
+      blue: 'text-blue-100', indigo: 'text-indigo-100', violet: 'text-violet-100',
+      purple: 'text-purple-100', fuchsia: 'text-fuchsia-100', pink: 'text-pink-100',
+      rose: 'text-rose-100',
+    };
+    return textColors[color] || 'text-gray-100';
   };
 
   const getColorTextDarkClass = (color) => {
-    switch (color) {
-      case 'blue': return 'text-blue-800 border-blue-300 ring-blue-400 bg-blue-100';
-      case 'green': return 'text-green-800 border-green-300 ring-green-400 bg-green-100';
-      case 'orange': return 'text-orange-800 border-orange-300 ring-orange-400 bg-orange-100';
-      case 'purple': return 'text-purple-800 border-purple-300 ring-purple-400 bg-purple-100';
-      case 'red': return 'text-red-800 border-red-300 ring-red-400 bg-red-100';
-      default: return 'text-gray-800 border-gray-300 ring-gray-400 bg-gray-100';
-    }
+    const darkColors = {
+      slate: 'text-slate-800 border-slate-300 ring-slate-400 bg-slate-100',
+      gray: 'text-gray-800 border-gray-300 ring-gray-400 bg-gray-100',
+      red: 'text-red-800 border-red-300 ring-red-400 bg-red-100',
+      orange: 'text-orange-800 border-orange-300 ring-orange-400 bg-orange-100',
+      amber: 'text-amber-800 border-amber-300 ring-amber-400 bg-amber-100',
+      yellow: 'text-yellow-800 border-yellow-300 ring-yellow-400 bg-yellow-100',
+      lime: 'text-lime-800 border-lime-300 ring-lime-400 bg-lime-100',
+      green: 'text-green-800 border-green-300 ring-green-400 bg-green-100',
+      emerald: 'text-emerald-800 border-emerald-300 ring-emerald-400 bg-emerald-100',
+      teal: 'text-teal-800 border-teal-300 ring-teal-400 bg-teal-100',
+      cyan: 'text-cyan-800 border-cyan-300 ring-cyan-400 bg-cyan-100',
+      sky: 'text-sky-800 border-sky-300 ring-sky-400 bg-sky-100',
+      blue: 'text-blue-800 border-blue-300 ring-blue-400 bg-blue-100',
+      indigo: 'text-indigo-800 border-indigo-300 ring-indigo-400 bg-indigo-100',
+      violet: 'text-violet-800 border-violet-300 ring-violet-400 bg-violet-100',
+      purple: 'text-purple-800 border-purple-300 ring-purple-400 bg-purple-100',
+      fuchsia: 'text-fuchsia-800 border-fuchsia-300 ring-fuchsia-400 bg-fuchsia-100',
+      pink: 'text-pink-800 border-pink-300 ring-pink-400 bg-pink-100',
+      rose: 'text-rose-800 border-rose-300 ring-rose-400 bg-rose-100',
+    };
+    return darkColors[color] || 'text-gray-800 border-gray-300 ring-gray-400 bg-gray-100';
+  };
+
+  const getRowColorClass = (color) => {
+    const rowColors = {
+      slate: 'bg-slate-100 hover:bg-slate-200 border-b',
+      gray: 'bg-gray-100 hover:bg-gray-200 border-b',
+      red: 'bg-red-100 hover:bg-red-200 border-b',
+      orange: 'bg-orange-100 hover:bg-orange-200 border-b',
+      amber: 'bg-amber-100 hover:bg-amber-200 border-b',
+      yellow: 'bg-yellow-100 hover:bg-yellow-200 border-b',
+      lime: 'bg-lime-100 hover:bg-lime-200 border-b',
+      green: 'bg-green-100 hover:bg-green-200 border-b',
+      emerald: 'bg-emerald-100 hover:bg-emerald-200 border-b',
+      teal: 'bg-teal-100 hover:bg-teal-200 border-b',
+      cyan: 'bg-cyan-100 hover:bg-cyan-200 border-b',
+      sky: 'bg-sky-100 hover:bg-sky-200 border-b',
+      blue: 'bg-blue-100 hover:bg-blue-200 border-b',
+      indigo: 'bg-indigo-100 hover:bg-indigo-200 border-b',
+      violet: 'bg-violet-100 hover:bg-violet-200 border-b',
+      purple: 'bg-purple-100 hover:bg-purple-200 border-b',
+      fuchsia: 'bg-fuchsia-100 hover:bg-fuchsia-200 border-b',
+      pink: 'bg-pink-100 hover:bg-pink-200 border-b',
+      rose: 'bg-rose-100 hover:bg-rose-200 border-b',
+    };
+    return rowColors[color] || 'hover:bg-gray-50 border-b';
   };
 
   if (loading) {
@@ -629,16 +685,8 @@ const Clientes = () => {
                   // Filas vacías siempre blanco
                   rowColorClass = 'bg-white';
                 } else {
-                  // Determinar clase de color según la cartera del cliente
-                  if (card.cartera === 'K1') {
-                    rowColorClass = 'bg-blue-100 hover:bg-blue-200 border-b';
-                  } else if (card.cartera === 'K2') {
-                    rowColorClass = 'bg-green-100 hover:bg-green-200 border-b';
-                  } else if (card.cartera === 'K3') {
-                    rowColorClass = 'bg-orange-100 hover:bg-orange-200 border-b';
-                  } else {
-                    rowColorClass = 'hover:bg-gray-50 border-b'; // Default for other carteras
-                  }
+                  // Determinar clase de color según el color de la cartera
+                  rowColorClass = getRowColorClass(card.colorCartera);
 
                   // Si el cliente tiene RF activo, sobrescribir con color morado claro
                   if (card.cliente.rf === 'RF') {
