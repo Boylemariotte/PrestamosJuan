@@ -30,6 +30,7 @@ export const AppProvider = ({ children }) => {
   const [clientes, setClientes] = useState([]);
   const [movimientosCaja, setMovimientosCaja] = useState([]);
   const [alertas, setAlertas] = useState([]);
+  const [carteras, setCarteras] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastSyncTime, setLastSyncTime] = useState(Date.now());
 
@@ -47,6 +48,12 @@ export const AppProvider = ({ children }) => {
       const clientesRes = await api.get('/clientes?limit=5000');
       if (clientesRes.success) {
         setClientes(clientesRes.data);
+      }
+
+      // Cargar carteras
+      const carterasRes = await api.get(user?.role === 'ceo' ? '/carteras?all=true' : '/carteras');
+      if (carterasRes.success) {
+        setCarteras(carterasRes.data);
       }
 
       // Cargar movimientos de caja (Solo si tiene permiso o no es domiciliario)
@@ -120,35 +127,42 @@ export const AppProvider = ({ children }) => {
       const tipoPagoEsperado = clienteData.tipoPagoEsperado;
 
       if (!posicion) {
-        if (cartera === 'K2') {
-          const clientesK2 = clientes.filter(c => c.cartera === 'K2');
-          const posicionesOcupadas = clientesK2.map(c => c.posicion).filter(Boolean);
-          const capacidadMaxima = 225;
-          posicion = 1;
-          while (posicionesOcupadas.includes(posicion) && posicion <= capacidadMaxima) {
-            posicion++;
-          }
-          if (posicion > capacidadMaxima) throw new Error('Cupo lleno en K2');
-        } else {
-          const clientesMismoTipo = clientes.filter(c => {
-            if ((c.cartera || 'K1') !== cartera) return false;
-            if (tipoPagoEsperado && c.creditos && c.creditos.length > 0) {
-              return c.creditos.some(cred => {
-                const estado = determinarEstadoCredito(cred.cuotas, cred);
-                return (estado === 'activo' || estado === 'mora') && cred.tipo === tipoPagoEsperado;
-              });
+        // Intentar obtener una posición disponible desde el backend
+        if (tipoPagoEsperado) {
+          try {
+            const resPos = await api.get(`/clientes/posiciones-disponibles/${cartera}?tipoPago=${tipoPagoEsperado}`);
+            if (resPos.success && resPos.data.length > 0) {
+              posicion = resPos.data[0];
             }
-            return c.tipoPagoEsperado === tipoPagoEsperado;
-          });
-          const posicionesOcupadas = clientesMismoTipo.map(c => c.posicion).filter(Boolean);
-          const capacidadMaxima = 150;
-          posicion = 1;
-          while (posicionesOcupadas.includes(posicion) && posicion <= capacidadMaxima) {
-            posicion++;
+          } catch (err) {
+            console.warn('No se pudo obtener posición automática:', err);
+            // Fallback: no asignar posición (quedará pendiente) o lanzar error si es crítico
           }
-          if (posicion > capacidadMaxima) throw new Error('Cupo lleno en K1');
+        } else {
+          // Si no hay tipo de pago, intentar obtener para 'general' (caso K2)
+          // O si la cartera tiene una sola sección
+          const carteraObj = carteras.find(c => c.nombre === cartera);
+          if (carteraObj && carteraObj.secciones.length === 1) {
+            try {
+              // Usar el primer tipo permitido de la única sección como referencia
+              const tipoRef = carteraObj.secciones[0].tiposPagoPermitidos[0];
+              const resPos = await api.get(`/clientes/posiciones-disponibles/${cartera}?tipoPago=${tipoRef}`);
+              if (resPos.success && resPos.data.length > 0) {
+                posicion = resPos.data[0];
+              }
+            } catch (err) {
+              console.warn('No se pudo obtener posición automática (default):', err);
+            }
+          }
         }
-        clienteData.posicion = posicion;
+
+        if (posicion) {
+          clienteData.posicion = posicion;
+        } else {
+          // Si no se asignó posición, el cliente se creará pero no aparecerá en las cards inmediatamente
+          // Esto es aceptable, o podríamos forzar al usuario a elegir posición en la UI.
+          // throw new Error('No se pudo asignar una posición automáticamente. Por favor seleccione una desde el tablero.');
+        }
       }
 
       // 2. Enviar a backend
@@ -634,6 +648,71 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  // --- CARTERAS ---
+
+  const agregarCartera = async (carteraData) => {
+    try {
+      const response = await api.post('/carteras', carteraData);
+      if (response.success) {
+        setCarteras(prev => [...prev, response.data].sort((a, b) => a.orden - b.orden));
+        return response.data;
+      }
+    } catch (error) {
+      console.error('Error creando cartera:', error);
+      throw error;
+    }
+  };
+
+  const actualizarCartera = async (id, carteraData) => {
+    try {
+      const response = await api.put(`/carteras/${id}`, carteraData);
+      if (response.success) {
+        setCarteras(prev => prev.map(c => c.id === id ? response.data : c).sort((a, b) => a.orden - b.orden));
+        return response.data;
+      }
+    } catch (error) {
+      console.error('Error actualizando cartera:', error);
+      throw error;
+    }
+  };
+
+  const eliminarCartera = async (id) => {
+    try {
+      const response = await api.delete(`/carteras/${id}`);
+      if (response.success) {
+        setCarteras(prev => prev.map(c => c.id === id ? { ...c, activa: false } : c));
+        // Si no queremos que aparezcan ni como inactivas en otros roles, se filtran en los componentes
+      }
+    } catch (error) {
+      console.error('Error desactivando cartera:', error);
+      throw error;
+    }
+  };
+
+  const eliminarCarteraPermanente = async (id) => {
+    try {
+      const response = await api.delete(`/carteras/${id}/permanente`);
+      if (response.success) {
+        setCarteras(prev => prev.filter(c => c.id !== id));
+      }
+    } catch (error) {
+      console.error('Error eliminando cartera permanentemente:', error);
+      throw error;
+    }
+  };
+
+  const restaurarCartera = async (id) => {
+    try {
+      const response = await api.put(`/carteras/${id}`, { activa: true });
+      if (response.success) {
+        setCarteras(prev => prev.map(c => c.id === id ? response.data : c).sort((a, b) => a.orden - b.orden));
+      }
+    } catch (error) {
+      console.error('Error restaurando cartera:', error);
+      throw error;
+    }
+  };
+
   // --- CAJA ---
 
   const agregarMovimientoCaja = async (movimientoData) => {
@@ -762,6 +841,7 @@ export const AppProvider = ({ children }) => {
     clientes,
     movimientosCaja,
     alertas,
+    carteras,
     loading,
     fetchData,
     agregarCliente,
@@ -804,7 +884,12 @@ export const AppProvider = ({ children }) => {
     exportarDatos,
     importarDatos,
     limpiarDatos,
-    lastSyncTime
+    lastSyncTime,
+    agregarCartera,
+    actualizarCartera,
+    eliminarCartera,
+    eliminarCarteraPermanente,
+    restaurarCartera
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

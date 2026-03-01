@@ -13,6 +13,7 @@ import ordenCobroRoutes from './ordenCobroRoutes.js';
 import historialBorradoRoutes from './historialBorradoRoutes.js';
 import totalMultasRoutes from './totalMultasRoutes.js';
 import notaRoutes from './notaRoutes.js';
+import carteraRoutes from './carteraRoutes.js';
 
 const router = express.Router();
 
@@ -22,6 +23,7 @@ router.use('/auth', authRoutes);
 // Rutas de la API (protegidas)
 router.use('/personas', personaRoutes);
 router.use('/clientes', clienteRoutes);
+router.use('/carteras', carteraRoutes);
 router.use('/creditos', creditoRoutes);
 router.use('/movimientos-caja', movimientoCajaRoutes);
 router.use('/alertas', alertaRoutes);

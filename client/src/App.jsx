@@ -14,7 +14,6 @@ const CreditosActivos = lazy(() => import('./pages/CreditosActivos'));
 const Estadisticas = lazy(() => import('./pages/Estadisticas'));
 const Configuracion = lazy(() => import('./pages/Configuracion'));
 const DiaDeCobro = lazy(() => import('./pages/DiaDeCobro'));
-const DiaDeCobroBuga = lazy(() => import('./pages/DiaDeCobroBuga'));
 const Rutas = lazy(() => import('./pages/Rutas'));
 const FlujoCajas = lazy(() => import('./pages/FlujoCajas'));
 const Alertas = lazy(() => import('./pages/Alertas'));
@@ -28,6 +27,7 @@ const RF = lazy(() => import('./pages/RF'));
 const TotalMultas = lazy(() => import('./pages/TotalMultas'));
 const Notas = lazy(() => import('./pages/Notas'));
 const BuscarDocumento = lazy(() => import('./pages/BuscarDocumento'));
+const GestionCarteras = lazy(() => import('./pages/GestionCarteras'));
 
 // Componente de carga
 const LoadingFallback = () => (
@@ -65,10 +65,6 @@ const router = createBrowserRouter([
     element: <ProtectedRoute><Layout><Suspense fallback={<LoadingFallback />}><DiaDeCobro /></Suspense></Layout></ProtectedRoute>
   },
   {
-    path: "/dia-de-cobro-buga",
-    element: <ProtectedRoute><Layout><Suspense fallback={<LoadingFallback />}><DiaDeCobroBuga /></Suspense></Layout></ProtectedRoute>
-  },
-  {
     path: "/rutas",
     element: <ProtectedRoute><Layout><Suspense fallback={<LoadingFallback />}><Rutas /></Suspense></Layout></ProtectedRoute>
   },
@@ -83,6 +79,10 @@ const router = createBrowserRouter([
   {
     path: "/usuarios",
     element: <ProtectedRoute requiredRole="ceo"><Layout><Suspense fallback={<LoadingFallback />}><GestionUsuarios /></Suspense></Layout></ProtectedRoute>
+  },
+  {
+    path: "/gestion-carteras",
+    element: <ProtectedRoute><Layout><Suspense fallback={<LoadingFallback />}><GestionCarteras /></Suspense></Layout></ProtectedRoute>
   },
   {
     path: "/historial-borrados",

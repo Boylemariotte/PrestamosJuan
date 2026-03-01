@@ -4,7 +4,7 @@ import {
   Users, TrendingUp, BarChart3, Settings, LogOut, User,
   Calendar, ChevronDown, Wallet, Route, ClipboardList,
   UserPlus, Archive, History, Clock, Menu, X, ChevronRight,
-  FileText, StickyNote, Search
+  FileText, StickyNote, Search, Briefcase
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
@@ -105,6 +105,7 @@ const Navbar = () => {
       icon: Settings,
       items: [
         { path: '/usuarios', label: 'Gestión de usuarios', icon: UserPlus },
+        { path: '/gestion-carteras', label: 'Gestión de carteras', icon: Briefcase },
         { path: '/estadisticas', label: 'Estadísticas', icon: BarChart3 },
         { path: '/historial-borrados', label: 'Historial de borrados', icon: History },
         { path: '/configuracion', label: 'Configuración', icon: Settings }
@@ -142,6 +143,7 @@ const Navbar = () => {
         if (item.path === '/estadisticas') return hasPermission('verEstadisticas');
         if (item.path === '/configuracion') return hasPermission('verConfiguracion');
         if (item.path === '/usuarios') return user?.role === 'ceo';
+        if (item.path === '/gestion-carteras') return user?.role === 'ceo' || user?.role === 'administrador';
         if (item.path === '/historial-borrados') return user?.role === 'ceo' || user?.role === 'administrador';
         if (item.path === '/rf') return user?.role === 'ceo' || user?.role === 'administrador';
 

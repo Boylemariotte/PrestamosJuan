@@ -1,14 +1,23 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, ChevronDown, Search, AlertTriangle, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { BARRIOS_TULUA, BARRIOS_BUGA } from '../../constants/barrios';
 import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
 
 const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoPredefinido, initialData }) => {
   const { user } = useAuth();
+  const { carteras } = useApp();
   const navigate = useNavigate();
   const esAdminOCeo = user && (user.role === 'administrador' || user.role === 'ceo');
+
+  // Filtrar carteras disponibles para selección
+  const carterasDisponibles = carteras ? carteras.filter(c => c.activa && (
+    esAdminOCeo ||
+    (user.role === 'domiciliario' || user.role === 'supervisor' ? (c.ciudad === (user.ciudad || 'Tuluá')) : false)
+  )) : [];
+
   const [formData, setFormData] = useState({
     nombre: '',
     documento: '',
@@ -73,7 +82,13 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
   };
 
   // Seleccionar lista de barrios según la cartera
-  const barriosDisponibles = formData.cartera === 'K3' ? BARRIOS_BUGA : BARRIOS_TULUA;
+  const barriosDisponibles = useMemo(() => {
+    const carteraObj = carteras?.find(c => c.nombre === formData.cartera);
+    if (!carteraObj) return BARRIOS_TULUA; // Default
+    if (carteraObj.ciudad === 'Guadalajara de Buga') return BARRIOS_BUGA;
+    if (carteraObj.ciudad === 'Tuluá') return BARRIOS_TULUA;
+    return BARRIOS_TULUA; // O una lista vacía/combinada si hay otras ciudades
+  }, [formData.cartera, carteras]);
 
   // Filtrar barrios
   const filteredBarrios = barriosDisponibles.filter(barrio =>
@@ -127,7 +142,8 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
       }
     } else if (initialData) {
       // Si vienen datos iniciales (ej. desde Visitas)
-      const barriosCliente = initialData.cartera === 'K3' ? BARRIOS_BUGA : BARRIOS_TULUA;
+      const carteraObj = carteras?.find(c => c.nombre === initialData.cartera);
+      const barriosCliente = carteraObj?.ciudad === 'Guadalajara de Buga' ? BARRIOS_BUGA : BARRIOS_TULUA;
       const barrioCliente = initialData.barrio || '';
       const esOtroBarrio = barrioCliente && !barriosCliente.includes(barrioCliente);
 
@@ -269,26 +285,17 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
   // Actualizar barrios cuando cambia la cartera
   useEffect(() => {
     // Si cambia la cartera, limpiar la búsqueda de barrios para que use la lista correcta
-    if (formData.cartera === 'K3') {
-      // Si el barrio actual no está en BARRIOS_BUGA, marcarlo como "Otro"
-      if (formData.barrio && formData.barrio !== 'Otro' && !BARRIOS_BUGA.includes(formData.barrio)) {
-        setUsarOtroBarrio(true);
-        setOtroBarrio(formData.barrio);
-        setFormData(prev => ({ ...prev, barrio: 'Otro' }));
-      } else if (formData.barrio && formData.barrio !== 'Otro' && BARRIOS_BUGA.includes(formData.barrio)) {
-        setBarrioSearch(formData.barrio);
-      }
-    } else {
-      // Si el barrio actual no está en BARRIOS_TULUA, marcarlo como "Otro"
-      if (formData.barrio && formData.barrio !== 'Otro' && !BARRIOS_TULUA.includes(formData.barrio)) {
-        setUsarOtroBarrio(true);
-        setOtroBarrio(formData.barrio);
-        setFormData(prev => ({ ...prev, barrio: 'Otro' }));
-      } else if (formData.barrio && formData.barrio !== 'Otro' && BARRIOS_TULUA.includes(formData.barrio)) {
-        setBarrioSearch(formData.barrio);
-      }
+    const carteraObj = carteras?.find(c => c.nombre === formData.cartera);
+    const listaBarrios = carteraObj?.ciudad === 'Guadalajara de Buga' ? BARRIOS_BUGA : BARRIOS_TULUA;
+
+    if (formData.barrio && formData.barrio !== 'Otro' && !listaBarrios.includes(formData.barrio)) {
+      setUsarOtroBarrio(true);
+      setOtroBarrio(formData.barrio);
+      setFormData(prev => ({ ...prev, barrio: 'Otro' }));
+    } else if (formData.barrio && formData.barrio !== 'Otro' && listaBarrios.includes(formData.barrio)) {
+      setBarrioSearch(formData.barrio);
     }
-  }, [formData.cartera]);
+  }, [formData.cartera, carteras]);
 
   const handleBarrioSelect = (barrio) => {
     setFormData(prev => ({ ...prev, barrio }));
@@ -564,56 +571,37 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                     <p className="text-xs text-gray-500 mt-2">La cartera está bloqueada según la card seleccionada</p>
                   </div>
                 ) : (
-                  <div className={`grid gap-4 ${esAdminOCeo ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                    <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${formData.cartera === 'K1' ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
-                      }`}>
-                      <input
-                        type="radio"
-                        name="cartera"
-                        value="K1"
-                        checked={formData.cartera === 'K1'}
-                        onChange={handleChange}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div className="ml-3">
-                        <span className="font-semibold text-gray-900">Cartera K1</span>
-                        <p className="text-sm text-gray-500">Cartera principal</p>
-                      </div>
-                    </label>
+                  <div className={`grid gap-4 ${carterasDisponibles.length > 2 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-' + carterasDisponibles.length}`}>
+                    {carterasDisponibles.map(c => {
+                      let colorClass = 'border-gray-300';
+                      let bgClass = '';
+                      if (formData.cartera === c.nombre) {
+                        switch (c.color) {
+                          case 'blue': colorClass = 'border-blue-500'; bgClass = 'bg-blue-50'; break;
+                          case 'green': colorClass = 'border-green-500'; bgClass = 'bg-green-50'; break;
+                          case 'orange': colorClass = 'border-orange-500'; bgClass = 'bg-orange-50'; break;
+                          case 'purple': colorClass = 'border-purple-500'; bgClass = 'bg-purple-50'; break;
+                          default: colorClass = 'border-gray-500'; bgClass = 'bg-gray-50';
+                        }
+                      }
 
-                    <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${formData.cartera === 'K2' ? 'border-green-500 bg-green-50' : 'border-gray-300'
-                      }`}>
-                      <input
-                        type="radio"
-                        name="cartera"
-                        value="K2"
-                        checked={formData.cartera === 'K2'}
-                        onChange={handleChange}
-                        className="h-4 w-4 text-green-600 focus:ring-green-500"
-                      />
-                      <div className="ml-3">
-                        <span className="font-semibold text-gray-900">Cartera K2</span>
-                        <p className="text-sm text-gray-500">Cartera secundaria</p>
-                      </div>
-                    </label>
-
-                    {esAdminOCeo && (
-                      <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${formData.cartera === 'K3' ? 'border-orange-500 bg-orange-50' : 'border-gray-300'
-                        }`}>
-                        <input
-                          type="radio"
-                          name="cartera"
-                          value="K3"
-                          checked={formData.cartera === 'K3'}
-                          onChange={handleChange}
-                          className="h-4 w-4 text-orange-600 focus:ring-orange-500"
-                        />
-                        <div className="ml-3">
-                          <span className="font-semibold text-gray-900">Cartera K3</span>
-                          <p className="text-sm text-gray-500">Cartera Buga</p>
-                        </div>
-                      </label>
-                    )}
+                      return (
+                        <label key={c.nombre} className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${colorClass} ${bgClass}`}>
+                          <input
+                            type="radio"
+                            name="cartera"
+                            value={c.nombre}
+                            checked={formData.cartera === c.nombre}
+                            onChange={handleChange}
+                            className={`h-4 w-4 text-${c.color}-600 focus:ring-${c.color}-500`}
+                          />
+                          <div className="ml-3">
+                            <span className="font-semibold text-gray-900">Cartera {c.nombre}</span>
+                            <p className="text-sm text-gray-500">{c.ciudad}</p>
+                          </div>
+                        </label>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -815,8 +803,8 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 };
 

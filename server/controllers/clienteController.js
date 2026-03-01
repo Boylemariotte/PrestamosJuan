@@ -1,6 +1,7 @@
 import Cliente from '../models/Cliente.js';
 import Credito from '../models/Credito.js';
 import HistorialBorrado from '../models/HistorialBorrado.js';
+import Cartera from '../models/Cartera.js';
 import { registrarBorrado } from './historialBorradoController.js';
 
 /**
@@ -519,90 +520,82 @@ export const desarchivarCliente = async (req, res, next) => {
   }
 };
 
-/**
- * @desc    Obtener posiciones disponibles para una cartera y tipo de pago
- * @route   GET /api/clientes/posiciones-disponibles/:cartera
- * @access  Private
- */
+// @desc    Obtener posiciones disponibles para una cartera y tipo de pago
+// @route   GET /api/clientes/posiciones-disponibles/:cartera
+// @access  Private
 export const getPosicionesDisponibles = async (req, res, next) => {
   try {
-    const { cartera } = req.params;
-    const { tipoPago } = req.query; // Tipo de pago: 'semanal', 'quincenal', 'mensual', 'diario' o null para K2
+    const { cartera: nombreCartera } = req.params;
+    const { tipoPago } = req.query; // 'semanal', 'quincenal', 'mensual', 'diario'
 
-    let capacidadMaxima;
-
-    if (cartera === 'K1') {
-      capacidadMaxima = 150;
-    } else if (cartera === 'K2') {
-      capacidadMaxima = 225;
-    } else if (cartera === 'K3') {
-      capacidadMaxima = 150; // K3 se comporta como K1, con 150 espacios por tipo de pago
-    } else {
-      return res.status(400).json({
+    // 1. Obtener configuración de la cartera
+    const carteraConfig = await Cartera.findOne({ nombre: nombreCartera });
+    if (!carteraConfig) {
+      return res.status(404).json({
         success: false,
-        error: 'Cartera inválida'
+        error: `Cartera ${nombreCartera} no encontrada`
       });
     }
 
-    // Obtener TODOS los clientes de la cartera (no archivados y con posición)
-    const todosLosClientes = await Cliente.find({
-      cartera,
-      esArchivado: { $ne: true },
-      posicion: { $ne: null }
-    });
+    // 2. Determinar a qué sección aplica el tipo de pago
+    let seccionAplicable = null;
 
-    // Filtrar en memoria según el tipo de pago (similar a la lógica del frontend)
-    const clientesOcupando = todosLosClientes.filter(cliente => {
-      // Para K2, todos los clientes cuentan
-      if (cartera === 'K2') {
-        return true;
-      }
-
-      // Para K1 y K3, filtrar por tipo de pago
-      // Para K1 y K3, filtrar por tipo de pago considerando que Quincenal y Mensual comparten posiciones
-      if ((cartera === 'K1' || cartera === 'K3') && tipoPago) {
-        // Validación de tipos soportados
-        const tiposValidos = ['semanal', 'quincenal', 'mensual'];
-        if (!tiposValidos.includes(tipoPago)) {
-          // Si es un tipo raro, asumimos que no hay conflicto o manejamos como error?
-          // Por ahora, si no es válido, no ocupa
-          return false;
-        }
-
-        // Obtener tipos de pago activos del cliente
-        const tiposActivos = new Set();
-        if (cliente.creditos && cliente.creditos.length > 0) {
-          cliente.creditos.forEach(credito => {
-            const tieneCuotasPendientes = credito.cuotas && credito.cuotas.some(cuota => !cuota.pagado);
-            if (tieneCuotasPendientes && credito.tipo) {
-              tiposActivos.add(credito.tipo);
-            }
-          });
-        }
-
-        const tiposDelCliente = tiposActivos.size > 0
-          ? Array.from(tiposActivos)
-          : (cliente.tipoPagoEsperado ? [cliente.tipoPagoEsperado] : []);
-
-        // Lógica de conflicto
-        const esGrupoQuincenalMensual = (t) => t === 'quincenal' || t === 'mensual';
-
-        // El cliente ocupa la posición SI alguno de sus tipos entra en conflicto con el tipo solicitado
-        return tiposDelCliente.some(tipoCliente => {
-          if (tipoCliente === tipoPago) return true; // Mismo tipo
-          if (esGrupoQuincenalMensual(tipoCliente) && esGrupoQuincenalMensual(tipoPago)) return true; // Conflicto Q/M
-          return false;
+    if (carteraConfig.secciones.length === 1) {
+      // Si solo hay una sección (ej: K2), usar esa
+      seccionAplicable = carteraConfig.secciones[0];
+    } else {
+      // Si hay múltiples (ej: K1, K3), buscar la que contiene el tipoPago
+      if (!tipoPago) {
+        return res.status(400).json({
+          success: false,
+          error: 'Debe especificar el tipo de pago para esta cartera'
         });
       }
+      seccionAplicable = carteraConfig.secciones.find(s =>
+        s.tiposPagoPermitidos.includes(tipoPago)
+      );
+    }
 
-      return false;
+    if (!seccionAplicable) {
+      // Caso especial: si el tipo de pago no está explícitamente en ninguna sección,
+      // buscar una sección "default" o retornar error.
+      // Por flexibilidad, si no se encuentra, retornamos error.
+      return res.status(400).json({
+        success: false,
+        error: `El tipo de pago ${tipoPago} no es válido para la cartera ${nombreCartera}`
+      });
+    }
+
+    const { capacidad: capacidadMaxima, tiposPagoPermitidos } = seccionAplicable;
+
+    // 3. Obtener TODOS los clientes de la cartera (no archivados y con posición)
+    // Optimización: podríamos filtrar por tipos en la query de Mongo si fuera simple,
+    // pero como el tipo se deriva de créditos, mejor traerlos y filtrar en memoria (como antes).
+    const todosLosClientes = await Cliente.find({
+      cartera: nombreCartera,
+      esArchivado: { $ne: true },
+      posicion: { $ne: null }
+    }).populate('creditos'); // Necesitamos créditos para saber el tipo real
+
+    // 4. Filtrar clientes que ocupan espacio EN ESTA SECCIÓN
+    const clientesOcupando = todosLosClientes.filter(cliente => {
+      // Obtener el tipo de pago activo del cliente
+      const tipoCliente = obtenerTipoPagoCliente(cliente);
+
+      // Si el cliente no tiene tipo definido, ¿ocupa espacio?
+      // Estrategia conservadora: Si no tiene tipo, no sabemos dónde va.
+      // Pero si fue creado en esta cartera, debe estar en alguna sección.
+      // Asumiremos que si su tipo (o tipoPagoEsperado) coincide con los de la sección, ocupa espacio.
+      if (!tipoCliente) return false;
+
+      return tiposPagoPermitidos.includes(tipoCliente);
     });
 
     const posicionesOcupadas = new Set(
-      clientesOcupando.map(c => c.posicion).filter(Boolean)
+      clientesOcupando.map(c => c.posicion).filter(p => typeof p === 'number')
     );
 
-    // Generar lista de posiciones disponibles
+    // 5. Generar lista de disponibles
     const posicionesDisponibles = [];
     for (let i = 1; i <= capacidadMaxima; i++) {
       if (!posicionesOcupadas.has(i)) {
