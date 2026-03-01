@@ -10,14 +10,15 @@ const PagosSection = ({
     color,
     typeFilter,
     setTypeFilter,
-    abrirDetalle,
-    isK1,
-    isK2,
-    isK3
+    tiposPagoPermitidos,
+    abrirDetalle
 }) => {
+    const showFilter = tiposPagoPermitidos && tiposPagoPermitidos.length > 0;
+    const tiposUnicos = showFilter ? [...new Set(tiposPagoPermitidos)] : [];
+
     return (
         <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className={`${color === 'blue' ? 'bg-blue-600' : color === 'green' ? 'bg-green-600' : 'bg-orange-600'} text-white px-6 py-4 flex items-center justify-between`}>
+            <div className={`${color === 'blue' ? 'bg-blue-600' : color === 'green' ? 'bg-green-600' : color === 'orange' ? 'bg-orange-600' : `bg-${color}-600`} text-white px-6 py-4 flex items-center justify-between`}>
                 <div className="flex items-center gap-3">
                     <div className="bg-white/20 p-2 rounded-lg">
                         <Users className="h-6 w-6" />
@@ -26,16 +27,20 @@ const PagosSection = ({
                         <h3 className="text-xl font-bold">{title}</h3>
                         <p className="text-blue-100 text-sm">{items.length} {items.length === 1 ? 'pago' : 'pagos'}</p>
                     </div>
-                    <select
-                        value={typeFilter}
-                        onChange={(e) => setTypeFilter(e.target.value)}
-                        className={`bg-gradient-to-r ${getFiltroBgClass(color)} text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] focus:outline-none focus:ring-offset-2 cursor-pointer`}
-                    >
-                        <option value="todos" className="bg-gray-900 text-gray-100">Todos</option>
-                        {isK1 || isK3 ? <option value="semanal" className="bg-gray-900 text-gray-100">Semanal</option> : null}
-                        <option value="quincenal" className="bg-gray-900 text-gray-100">Quincenal</option>
-                        <option value="mensual" className="bg-gray-900 text-gray-100">Mensual</option>
-                    </select>
+                    {showFilter && (
+                        <select
+                            value={typeFilter}
+                            onChange={(e) => setTypeFilter(e.target.value)}
+                            className={`bg-gradient-to-r ${getFiltroBgClass(color)} text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] focus:outline-none focus:ring-offset-2 cursor-pointer`}
+                        >
+                            <option value="todos" className="bg-gray-900 text-gray-100">Todos</option>
+                            {tiposUnicos.map(tipo => (
+                                <option key={tipo} value={tipo} className="bg-gray-900 text-gray-100 capitalize">
+                                    {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
+                                </option>
+                            ))}
+                        </select>
+                    )}
                 </div>
                 <div className="text-right">
                     <p className="text-blue-100 text-sm">Total Recogido</p>

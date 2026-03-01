@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, AlertCircle, Users, CheckCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { startOfDay, format, addDays, subDays, parseISO } from 'date-fns';
@@ -22,21 +22,47 @@ import CreditoDetalle from '../../components/Creditos/CreditoDetalle';
 import MotivoProrrogaModal from '../../components/Creditos/MotivoProrrogaModal';
 
 // Utils
-import { getCarteraColor } from './utils/colorHelpers';
+import { getCarteraColor, getBgColorClass } from './utils/colorHelpers';
 
 const DiaDeCobro = () => {
     const { clientes, obtenerCliente, obtenerCredito, actualizarCliente, agregarNota, toggleReportado, fetchData, lastSyncTime, carteras } = useApp();
     const { user } = useAuth();
     const hoy = startOfDay(new Date());
 
+    // Ciudades disponibles derivadas de las carteras activas
+    const ciudadesDisponibles = useMemo(() => {
+        if (!carteras) return [];
+        const ciudadesSet = new Set(
+            carteras.filter(c => c.activa !== false).map(c => c.ciudad)
+        );
+        return [...ciudadesSet];
+    }, [carteras]);
+
     // Estado para selector de ciudad
     const [ciudadSeleccionada, setCiudadSeleccionada] = useState(() =>
-        localStorage.getItem('ultimaCiudadDiaDeCobro') || 'tuluá'
+        localStorage.getItem('ultimaCiudadDiaDeCobro') || ''
     );
 
+    // Auto-seleccionar la primera ciudad si la seleccionada no existe en las disponibles
     useEffect(() => {
-        localStorage.setItem('ultimaCiudadDiaDeCobro', ciudadSeleccionada);
+        if (ciudadesDisponibles.length > 0 && !ciudadesDisponibles.includes(ciudadSeleccionada)) {
+            setCiudadSeleccionada(ciudadesDisponibles[0]);
+        }
+    }, [ciudadesDisponibles, ciudadSeleccionada]);
+
+    useEffect(() => {
+        if (ciudadSeleccionada) {
+            localStorage.setItem('ultimaCiudadDiaDeCobro', ciudadSeleccionada);
+        }
     }, [ciudadSeleccionada]);
+
+    // Carteras de la ciudad seleccionada
+    const carterasDeCiudad = useMemo(() => {
+        if (!carteras) return [];
+        return carteras
+            .filter(c => c.activa !== false && c.ciudad === ciudadSeleccionada)
+            .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+    }, [carteras, ciudadSeleccionada]);
 
     // Roles
     const esDomiciliarioBuga = user?.role === 'domiciliario' && user?.ciudad === 'Guadalajara de Buga';
@@ -71,14 +97,21 @@ const DiaDeCobro = () => {
         visitas.filter(v => !v.completada && (v.fechaVisita === fechaSeleccionadaStr || v.fechaVisita < fechaSeleccionadaStr))
         , [visitas, fechaSeleccionadaStr]);
 
-    // Filtros y Búsqueda
+    // Filtros dinámicos por cartera
+    const [filtrosPorCartera, setFiltrosPorCartera] = useState({});
+    const [filtroPagosPorCartera, setFiltroPagosPorCartera] = useState({});
+
+    // Búsqueda
     const [searchTerm, setSearchTerm] = useState('');
-    const [filtroK1, setFiltroK1] = useState('todos');
-    const [filtroK2, setFiltroK2] = useState('todos');
-    const [filtroK3, setFiltroK3] = useState('todos');
-    const [filtroPagosK1, setFiltroPagosK1] = useState('todos');
-    const [filtroPagosK2, setFiltroPagosK2] = useState('todos');
-    const [filtroPagosK3, setFiltroPagosK3] = useState('todos');
+
+    // Helpers para actualizar filtros individuales
+    const setFiltroCartera = useCallback((nombreCartera, valor) => {
+        setFiltrosPorCartera(prev => ({ ...prev, [nombreCartera]: valor }));
+    }, []);
+
+    const setFiltroPagosCartera = useCallback((nombreCartera, valor) => {
+        setFiltroPagosPorCartera(prev => ({ ...prev, [nombreCartera]: valor }));
+    }, []);
 
     // Orden de cobro
     const [ordenCobro, setOrdenCobro] = useState({});
@@ -128,7 +161,7 @@ const DiaDeCobro = () => {
         const mañana = format(addDays(fechaSeleccionada, 1), 'yyyy-MM-dd');
         const hoyStr = fechaSeleccionadaStr;
 
-        if (current !== false) { // Se marca como NO encontrado
+        if (current !== false) {
             setClientesNoEncontradosPorFecha(prev => {
                 const nuevo = { ...prev };
                 if (!nuevo[mañana]) nuevo[mañana] = new Set();
@@ -138,7 +171,7 @@ const DiaDeCobro = () => {
                 return nuevo;
             });
             toast.success('Cliente marcado como no encontrado. Aparecerá mañana.');
-        } else { // Se marca como reportado
+        } else {
             setClientesNoEncontradosPorFecha(prev => {
                 const nuevo = { ...prev };
                 let mod = false;
@@ -166,13 +199,14 @@ const DiaDeCobro = () => {
         clientesNoEncontradosPorFecha, setClientesNoEncontradosPorFecha
     );
 
-    // Custom Hook: Data Logic
+    // Custom Hook: Data Logic — ahora dinámico
     const {
-        datosCobro, cobrosPorCartera, totalClientesDirecto, clientesPagados, multasPagadasDia
+        datosCobro, cobrosPorCartera, totalClientesDirecto, clientesPagados, multasPagadasDia,
+        carterasDeCiudad: _, nombresCarterasCiudad
     } = useCollectionsData({
         clientes, searchTerm, fechaSeleccionada, fechaSeleccionadaStr, creditosInvalidos,
         prorrogasCuotas, clientesNoEncontradosPorFecha, hoy, ciudadSeleccionada,
-        filtroK1, filtroK2, filtroK3, filtroPagosK1, filtroPagosK2, filtroPagosK3, ordenCobro
+        carteras, filtrosPorCartera, filtroPagosPorCartera, ordenCobro
     });
 
     // Modal Detalle
@@ -202,11 +236,59 @@ const DiaDeCobro = () => {
         cambiarFecha: (e) => setFechaSeleccionada(startOfDay(parseISO(e.target.value)))
     };
 
+    // Helper: obtener todos los tipos de pago permitidos de una cartera
+    const getTiposPago = (cartera) => {
+        if (!cartera.secciones) return [];
+        return cartera.secciones.flatMap(s => s.tiposPagoPermitidos || []);
+    };
+
+    // Props comunes para CarteraSection
+    const carteraSectionCommonProps = {
+        onCambioOrden: handleActualizarOrdenManual,
+        ordenFecha: ordenCobro[fechaSeleccionadaStr] || {},
+        abrirDetalle,
+        actualizarCliente,
+        toggleReportado: handleMarcarComoNoEncontrado,
+        user
+    };
+
+    const handleProrrogaItem = (it) => {
+        setEsProrrogaGlobal(false);
+        setDatosProrrogaPendiente({ clienteId: it.clienteId, creditoId: it.creditoId, nroCuotas: it.nroCuotasPendientes });
+        setModalProrrogaOpen(true);
+    };
+
+    // Agrupar todos los items para prórroga global
+    const handleProrrogaGlobal = () => {
+        setEsProrrogaGlobal(true);
+        const todosItems = [];
+        nombresCarterasCiudad.forEach(nombre => {
+            todosItems.push(...(cobrosPorCartera[nombre] || []));
+        });
+        todosItems.push(...(cobrosPorCartera.NoReportados || []));
+        setDatosProrrogaPendiente({ clientes: todosItems });
+        setModalProrrogaOpen(true);
+    };
+
+    // Determinar color del banner de la ciudad (usar el color de la primera cartera)
+    const colorCiudad = carterasDeCiudad.length > 0 ? carterasDeCiudad[0].color || 'blue' : 'blue';
+
     return (
         <div className="space-y-6 pb-20">
             <CollectionsHeader
-                {...nav} {...{ fechaSeleccionada, ciudadSeleccionada, setCiudadSeleccionada, esHoy, fechaSeleccionadaStr, stats: datosCobro.stats, totalClientesDirecto, clientesPagados, user }}
-                onProrrogaGlobal={() => { setEsProrrogaGlobal(true); setDatosProrrogaPendiente({ clientes: [...cobrosPorCartera.K1, ...cobrosPorCartera.K2, ...cobrosPorCartera.K3, ...cobrosPorCartera.NoReportados] }); setModalProrrogaOpen(true); }}
+                {...nav}
+                fechaSeleccionada={fechaSeleccionada}
+                ciudadSeleccionada={ciudadSeleccionada}
+                setCiudadSeleccionada={setCiudadSeleccionada}
+                ciudadesDisponibles={ciudadesDisponibles}
+                carterasDeCiudad={carterasDeCiudad}
+                esHoy={esHoy}
+                fechaSeleccionadaStr={fechaSeleccionadaStr}
+                stats={datosCobro.stats}
+                totalClientesDirecto={totalClientesDirecto}
+                clientesPagados={clientesPagados}
+                user={user}
+                onProrrogaGlobal={handleProrrogaGlobal}
             />
 
             <VisitasAlert visitasDelDia={visitasDelDia} handleCompletarVisita={handleCompletarVisita} />
@@ -220,29 +302,43 @@ const DiaDeCobro = () => {
             </div>
 
             <div className="space-y-8">
-                {ciudadSeleccionada === 'tuluá' && (
+                {/* Banner de Ciudad */}
+                {carterasDeCiudad.length > 0 && (
                     <div className="space-y-6">
-                        <div className="bg-blue-600 text-white px-6 py-4 rounded-xl shadow-lg flex items-center gap-3">
+                        <div className={`${getBgColorClass(colorCiudad)} text-white px-6 py-4 rounded-xl shadow-lg flex items-center gap-3`}>
                             <Users className="h-8 w-8" />
-                            <h2 className="text-2xl font-bold">Día de Cobro Tuluá</h2>
+                            <h2 className="text-2xl font-bold">Día de Cobro {ciudadSeleccionada}</h2>
                         </div>
-                        <CarteraSection title="Cartera K1" color={getCarteraColor('K1', carteras)} items={cobrosPorCartera.K1} typeFilter={filtroK1} setTypeFilter={setFiltroK1} isK1 onCambioOrden={handleActualizarOrdenManual} ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}} onProrroga={(it) => { setEsProrrogaGlobal(false); setDatosProrrogaPendiente({ clienteId: it.clienteId, creditoId: it.creditoId, nroCuotas: it.nroCuotasPendientes }); setModalProrrogaOpen(true); }} abrirDetalle={abrirDetalle} actualizarCliente={actualizarCliente} toggleReportado={handleMarcarComoNoEncontrado} user={user} />
-                        <CarteraSection title="Clientes no encontrados" isNoReportados items={cobrosPorCartera.NoReportados} onCambioOrden={handleActualizarOrdenManual} ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}} onProrroga={(it) => { setEsProrrogaGlobal(false); setDatosProrrogaPendiente({ clienteId: it.clienteId, creditoId: it.creditoId, nroCuotas: it.nroCuotasPendientes }); setModalProrrogaOpen(true); }} abrirDetalle={abrirDetalle} actualizarCliente={actualizarCliente} toggleReportado={handleMarcarComoNoEncontrado} user={user} />
-                        <CarteraSection title="Cartera K2" color={getCarteraColor('K2', carteras)} items={cobrosPorCartera.K2} typeFilter={filtroK2} setTypeFilter={setFiltroK2} isK2 onCambioOrden={handleActualizarOrdenManual} ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}} onProrroga={(it) => { setEsProrrogaGlobal(false); setDatosProrrogaPendiente({ clienteId: it.clienteId, creditoId: it.creditoId, nroCuotas: it.nroCuotasPendientes }); setModalProrrogaOpen(true); }} abrirDetalle={abrirDetalle} actualizarCliente={actualizarCliente} toggleReportado={handleMarcarComoNoEncontrado} user={user} />
+
+                        {/* Renderizar una CarteraSection por cada cartera de la ciudad */}
+                        {carterasDeCiudad.map(cartera => (
+                            <CarteraSection
+                                key={cartera._id || cartera.nombre}
+                                title={`Cartera ${cartera.nombre}`}
+                                color={cartera.color || 'blue'}
+                                items={cobrosPorCartera[cartera.nombre] || []}
+                                typeFilter={filtrosPorCartera[cartera.nombre] || 'todos'}
+                                setTypeFilter={(val) => setFiltroCartera(cartera.nombre, val)}
+                                tiposPagoPermitidos={getTiposPago(cartera)}
+                                onProrroga={handleProrrogaItem}
+                                {...carteraSectionCommonProps}
+                            />
+                        ))}
+
+                        {/* Clientes no encontrados */}
+                        <CarteraSection
+                            title="Clientes no encontrados"
+                            isNoReportados
+                            items={cobrosPorCartera.NoReportados || []}
+                            onProrroga={handleProrrogaItem}
+                            typeFilter="todos"
+                            setTypeFilter={() => { }}
+                            {...carteraSectionCommonProps}
+                        />
                     </div>
                 )}
 
-                {ciudadSeleccionada === 'buga' && (
-                    <div className="space-y-6">
-                        <div className="bg-orange-600 text-white px-6 py-4 rounded-xl shadow-lg flex items-center gap-3">
-                            <Users className="h-8 w-8" />
-                            <h2 className="text-2xl font-bold">Día de Cobro Buga</h2>
-                        </div>
-                        <CarteraSection title="Cartera K3" color={getCarteraColor('K3', carteras)} items={cobrosPorCartera.K3} typeFilter={filtroK3} setTypeFilter={setFiltroK3} isK3 onCambioOrden={handleActualizarOrdenManual} ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}} onProrroga={(it) => { setEsProrrogaGlobal(false); setDatosProrrogaPendiente({ clienteId: it.clienteId, creditoId: it.creditoId, nroCuotas: it.nroCuotasPendientes }); setModalProrrogaOpen(true); }} abrirDetalle={abrirDetalle} actualizarCliente={actualizarCliente} toggleReportado={handleMarcarComoNoEncontrado} user={user} />
-                        <CarteraSection title="Clientes no encontrados" isNoReportados items={cobrosPorCartera.NoReportados.filter(i => i.clienteCartera === 'K3')} onCambioOrden={handleActualizarOrdenManual} ordenFecha={ordenCobro[fechaSeleccionadaStr] || {}} onProrroga={(it) => { setEsProrrogaGlobal(false); setDatosProrrogaPendiente({ clienteId: it.clienteId, creditoId: it.creditoId, nroCuotas: it.nroCuotasPendientes }); setModalProrrogaOpen(true); }} abrirDetalle={abrirDetalle} actualizarCliente={actualizarCliente} toggleReportado={handleMarcarComoNoEncontrado} user={user} />
-                    </div>
-                )}
-
+                {/* Multas pagadas */}
                 {multasPagadasDia.length > 0 && (
                     <div className="space-y-4 mt-10 pt-6 border-t-2 border-dashed border-gray-300">
                         <div className="flex items-center justify-between">
@@ -284,19 +380,25 @@ const DiaDeCobro = () => {
                     </div>
                 )}
 
-                {ciudadSeleccionada === 'tuluá' && (
+                {/* Pagos Registrados — dinámico por cartera */}
+                {carterasDeCiudad.length > 0 && (
                     <div className="space-y-6 mt-8 pt-8 border-t-2 border-gray-300">
                         <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
                             <CheckCircle className="h-6 w-6 text-green-600" /> Pagos Registrados
                         </h2>
-                        <PagosSection title="Pagos K1" color="blue" items={clientesPagados.K1.items} total={clientesPagados.K1.total} typeFilter={filtroPagosK1} setTypeFilter={setFiltroPagosK1} isK1 abrirDetalle={abrirDetalle} />
-                        <PagosSection title="Pagos K2" color="green" items={clientesPagados.K2.items} total={clientesPagados.K2.total} typeFilter={filtroPagosK2} setTypeFilter={setFiltroPagosK2} isK2 abrirDetalle={abrirDetalle} />
-                    </div>
-                )}
-
-                {ciudadSeleccionada === 'buga' && (
-                    <div className="space-y-6 mt-8 pt-8 border-t-2 border-gray-300">
-                        <PagosSection title="Pagos K3" color="orange" items={clientesPagados.K3.items} total={clientesPagados.K3.total} typeFilter={filtroPagosK3} setTypeFilter={setFiltroPagosK3} isK3 abrirDetalle={abrirDetalle} />
+                        {carterasDeCiudad.map(cartera => (
+                            <PagosSection
+                                key={cartera._id || cartera.nombre}
+                                title={`Pagos ${cartera.nombre}`}
+                                color={cartera.color || 'blue'}
+                                items={clientesPagados[cartera.nombre]?.items || []}
+                                total={clientesPagados[cartera.nombre]?.total || 0}
+                                typeFilter={filtroPagosPorCartera[cartera.nombre] || 'todos'}
+                                setTypeFilter={(val) => setFiltroPagosCartera(cartera.nombre, val)}
+                                tiposPagoPermitidos={getTiposPago(cartera)}
+                                abrirDetalle={abrirDetalle}
+                            />
+                        ))}
                     </div>
                 )}
             </div>

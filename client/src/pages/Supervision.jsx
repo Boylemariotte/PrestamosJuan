@@ -8,7 +8,7 @@ import api from '../services/api';
 
 const Supervision = () => {
     const navigate = useNavigate();
-    const { loading, fetchData, actualizarCliente } = useApp();
+    const { loading, fetchData, actualizarCliente, carteras } = useApp();
     const { user } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
     const [filtroCartera, setFiltroCartera] = useState('todas');
@@ -220,9 +220,9 @@ const Supervision = () => {
                                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                             >
                                 <option value="todas">Todas las carteras</option>
-                                <option value="K1">K1</option>
-                                <option value="K2">K2</option>
-                                <option value="K3">K3</option>
+                                {carteras?.filter(c => c.activa).map(c => (
+                                    <option key={c.id || c._id} value={c.nombre}>{c.nombre}</option>
+                                ))}
                             </select>
                         </div>
 
@@ -277,13 +277,32 @@ const Supervision = () => {
                         <tbody className="bg-white divide-y divide-gray-200">
                             {clientesFiltrados.map((cliente) => {
                                 const creditoInfo = getCreditoInfo(cliente);
-                                const carteraRowClass = cliente.cartera === 'K1'
-                                    ? 'bg-blue-100 hover:bg-blue-200'
-                                    : cliente.cartera === 'K2'
-                                        ? 'bg-green-100 hover:bg-green-200'
-                                        : cliente.cartera === 'K3'
-                                            ? 'bg-orange-100 hover:bg-orange-200'
-                                            : 'hover:bg-gray-50';
+                                const carteraObj = carteras?.find(c => c.nombre === cliente.cartera);
+                                const carteraColor = carteraObj?.color || 'gray';
+
+                                const colorClasses = {
+                                    slate: 'bg-slate-100 hover:bg-slate-200',
+                                    gray: 'bg-gray-100 hover:bg-gray-200',
+                                    red: 'bg-red-100 hover:bg-red-200',
+                                    orange: 'bg-orange-100 hover:bg-orange-200',
+                                    amber: 'bg-amber-100 hover:bg-amber-200',
+                                    yellow: 'bg-yellow-100 hover:bg-yellow-200',
+                                    lime: 'bg-lime-100 hover:bg-lime-200',
+                                    green: 'bg-green-100 hover:bg-green-200',
+                                    emerald: 'bg-emerald-100 hover:bg-emerald-200',
+                                    teal: 'bg-teal-100 hover:bg-teal-200',
+                                    cyan: 'bg-cyan-100 hover:bg-cyan-200',
+                                    sky: 'bg-sky-100 hover:bg-sky-200',
+                                    blue: 'bg-blue-100 hover:bg-blue-200',
+                                    indigo: 'bg-indigo-100 hover:bg-indigo-200',
+                                    violet: 'bg-violet-100 hover:bg-violet-200',
+                                    purple: 'bg-purple-100 hover:bg-purple-200',
+                                    fuchsia: 'bg-fuchsia-100 hover:bg-fuchsia-200',
+                                    pink: 'bg-pink-100 hover:bg-pink-200',
+                                    rose: 'bg-rose-100 hover:bg-rose-200',
+                                };
+
+                                const carteraRowClass = colorClasses[carteraColor] || 'hover:bg-gray-50';
 
                                 return (
                                     <tr

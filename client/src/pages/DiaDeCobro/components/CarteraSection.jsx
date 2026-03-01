@@ -10,9 +10,7 @@ const CarteraSection = ({
     color,
     typeFilter,
     setTypeFilter,
-    isK1,
-    isK2,
-    isK3,
+    tiposPagoPermitidos,
     isNoReportados,
     onCambioOrden,
     ordenFecha,
@@ -22,7 +20,13 @@ const CarteraSection = ({
     toggleReportado,
     user
 }) => {
-    const showFilter = isK1 || isK2 || isK3;
+    // Mostrar filtro si hay tipos de pago definidos
+    const showFilter = tiposPagoPermitidos && tiposPagoPermitidos.length > 0;
+
+    // Extraer tipos únicos de pago de las secciones
+    const tiposUnicos = showFilter
+        ? [...new Set(tiposPagoPermitidos)]
+        : [];
 
     return (
         <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
@@ -45,9 +49,11 @@ const CarteraSection = ({
                             className={`bg-gradient-to-r ${getFiltroBgClass(color)} text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] focus:outline-none focus:ring-offset-2 cursor-pointer`}
                         >
                             <option value="todos" className="bg-gray-900 text-gray-100">Todos</option>
-                            {isK1 || isK3 ? <option value="semanal" className="bg-gray-900 text-gray-100">Semanal</option> : null}
-                            <option value="quincenal" className="bg-gray-900 text-gray-100">Quincenal</option>
-                            <option value="mensual" className="bg-gray-900 text-gray-100">Mensual</option>
+                            {tiposUnicos.map(tipo => (
+                                <option key={tipo} value={tipo} className="bg-gray-900 text-gray-100 capitalize">
+                                    {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
+                                </option>
+                            ))}
                         </select>
                     )}
                 </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X } from 'lucide-react';
 import {
   MONTOS_DISPONIBLES,
@@ -11,12 +11,23 @@ import {
 } from '../../utils/creditCalculations';
 import { obtenerFechaLocal } from '../../utils/dateUtils';
 
-const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefinido = null, tipoPagoPreferido = null }) => {
-  // Para K1 y K3: tipo de pago automático según posición (no se puede seleccionar)
-  // Para K2: tipo de pago seleccionable (quincenal o mensual)
-  const tipoPagoInicial = (carteraCliente === 'K1' || carteraCliente === 'K3')
-    ? (tipoPagoPredefinido || (tipoPagoPreferido && ['semanal', 'quincenal', 'mensual'].includes(tipoPagoPreferido) ? tipoPagoPreferido : 'quincenal'))
-    : (tipoPagoPreferido && ['quincenal', 'mensual'].includes(tipoPagoPreferido) ? tipoPagoPreferido : 'quincenal');
+const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefinido = null, tipoPagoPreferido = null, carteras = [] }) => {
+  // Obtener tipos de pago permitidos de la cartera del cliente
+  const tiposPermitidos = useMemo(() => {
+    const carteraObj = carteras?.find(c => c.nombre === carteraCliente);
+    if (carteraObj?.secciones) {
+      const tipos = [...new Set(carteraObj.secciones.flatMap(s => s.tiposPagoPermitidos || []))];
+      if (tipos.length > 0) return tipos;
+    }
+    // Fallback: si no hay info de secciones, permitir todos
+    return ['semanal', 'quincenal', 'mensual'];
+  }, [carteras, carteraCliente]);
+
+  // Determinar tipo de pago inicial
+  const tipoPagoInicial = tipoPagoPredefinido
+    || (tipoPagoPreferido && tiposPermitidos.includes(tipoPagoPreferido) ? tipoPagoPreferido : null)
+    || tiposPermitidos[0]
+    || 'quincenal';
 
   const [formData, setFormData] = useState({
     monto: MONTOS_DISPONIBLES[0],
@@ -31,23 +42,14 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
     numCuotasManual: ''
   });
 
-  // Para K1 y K3: asegurar que el tipo de pago siempre sea el correcto (no se puede cambiar)
-  // Para K2: solo actualizar si cambia el preferido inicialmente
+  // Asegurar que el tipo de pago sea válido cuando cambian las props
   useEffect(() => {
-    if (carteraCliente === 'K1' || carteraCliente === 'K3') {
-      // Si hay un tipo predefinido (determinado por la card) o preferido, usarlo
-      const tipoFijo = tipoPagoPredefinido ||
-        (tipoPagoPreferido && ['semanal', 'quincenal', 'mensual'].includes(tipoPagoPreferido) ? tipoPagoPreferido : null);
-
-      if (tipoFijo) {
-        setFormData(prev => ({ ...prev, tipo: tipoFijo }));
-      }
-    } else if (carteraCliente === 'K2') {
-      if (tipoPagoPreferido && ['quincenal', 'mensual'].includes(tipoPagoPreferido)) {
-        setFormData(prev => ({ ...prev, tipo: tipoPagoPreferido }));
-      }
+    if (tipoPagoPredefinido && tiposPermitidos.includes(tipoPagoPredefinido)) {
+      setFormData(prev => ({ ...prev, tipo: tipoPagoPredefinido }));
+    } else if (tipoPagoPreferido && tiposPermitidos.includes(tipoPagoPreferido)) {
+      setFormData(prev => ({ ...prev, tipo: tipoPagoPreferido }));
     }
-  }, [carteraCliente, tipoPagoPredefinido, tipoPagoPreferido]);
+  }, [carteraCliente, tipoPagoPredefinido, tipoPagoPreferido, tiposPermitidos]);
 
   // Cálculos dinámicos
   const montoReal = formData.usarMontoManual && formData.montoManual
@@ -210,15 +212,11 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
                   (Cartera {carteraCliente})
                 </span>
               </label>
-              {(tipoPagoPredefinido || (tipoPagoPreferido && ['semanal', 'quincenal', 'mensual'].includes(tipoPagoPreferido))) ? (
+              {(tipoPagoPredefinido || (tipoPagoPreferido && tiposPermitidos.includes(tipoPagoPreferido))) ? (
                 // Si está predefinido por la card o tiene preferencia fija, mostrar solo lectura
-                <div className={`p-4 border-2 rounded-lg ${carteraCliente === 'K3'
-                    ? 'bg-orange-50 border-orange-300'
-                    : 'bg-blue-50 border-blue-300'
-                  }`}>
+                <div className="p-4 border-2 rounded-lg bg-blue-50 border-blue-300">
                   <div className="flex items-center">
-                    <div className={`h-4 w-4 rounded-full flex items-center justify-center ${carteraCliente === 'K3' ? 'bg-orange-600' : 'bg-sky-600'
-                      }`}>
+                    <div className="h-4 w-4 rounded-full flex items-center justify-center bg-sky-600">
                       <div className="h-2 w-2 rounded-full bg-white"></div>
                     </div>
                     <div className="ml-3">
@@ -226,6 +224,7 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
                         {formData.tipo}
                       </span>
                       <p className="text-sm text-gray-500">
+                        {formData.tipo === 'diario' && 'Cuotas diarias'}
                         {formData.tipo === 'semanal' && '10 cuotas - Cada sábado'}
                         {formData.tipo === 'quincenal' && '5 cuotas'}
                         {formData.tipo === 'mensual' && '3 cuotas - Cada mes'}
@@ -237,42 +236,37 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
                   </p>
                 </div>
               ) : (
-                // Si no tiene preferencia (pool mixto o K2), permitir selección
+                // Permitir selección entre los tipos que la cartera permite
                 <div className="space-y-3">
-                  {(carteraCliente === 'K1' || carteraCliente === 'K3') && (
+                  {tiposPermitidos.length > 1 && (
                     <p className="text-xs font-medium text-blue-600 mb-2">
-                      Este cliente está en un cupo compartido. Seleccione la modalidad:
+                      Seleccione la modalidad de pago:
                     </p>
                   )}
-                  <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                    <input
-                      type="radio"
-                      name="tipo"
-                      value="quincenal"
-                      checked={formData.tipo === 'quincenal'}
-                      onChange={handleChange}
-                      className="h-4 w-4 text-sky-600 focus:ring-sky-500"
-                    />
-                    <div className="ml-3">
-                      <span className="font-medium text-gray-900">Quincenal</span>
-                      <p className="text-sm text-gray-500">5 cuotas</p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                    <input
-                      type="radio"
-                      name="tipo"
-                      value="mensual"
-                      checked={formData.tipo === 'mensual'}
-                      onChange={handleChange}
-                      className="h-4 w-4 text-sky-600 focus:ring-sky-500"
-                    />
-                    <div className="ml-3">
-                      <span className="font-medium text-gray-900">Mensual</span>
-                      <p className="text-sm text-gray-500">3 cuotas - Cada mes</p>
-                    </div>
-                  </label>
+                  {tiposPermitidos.map(tipo => {
+                    const descripciones = {
+                      diario: 'Cuotas diarias',
+                      semanal: '10 cuotas - Cada sábado',
+                      quincenal: '5 cuotas',
+                      mensual: '3 cuotas - Cada mes'
+                    };
+                    return (
+                      <label key={tipo} className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                        <input
+                          type="radio"
+                          name="tipo"
+                          value={tipo}
+                          checked={formData.tipo === tipo}
+                          onChange={handleChange}
+                          className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                        />
+                        <div className="ml-3">
+                          <span className="font-medium text-gray-900 capitalize">{tipo}</span>
+                          <p className="text-sm text-gray-500">{descripciones[tipo] || ''}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
                 </div>
               )}
             </div>

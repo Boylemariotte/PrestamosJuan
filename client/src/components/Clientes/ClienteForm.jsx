@@ -629,8 +629,15 @@ const ClienteForm = ({ cliente, onSubmit, onClose, carteraPredefinida, tipoPagoP
                       className="input-field appearance-none pr-10 cursor-pointer"
                     >
                       <option value="">Sin preferencia (Elegir al crear crédito)</option>
-                      <option value="quincenal">Quincenal</option>
-                      <option value="mensual">Mensual</option>
+                      {(() => {
+                        const carteraObj = carteras?.find(c => c.nombre === formData.cartera);
+                        const tiposPermitidos = carteraObj?.secciones
+                          ? [...new Set(carteraObj.secciones.flatMap(s => s.tiposPagoPermitidos || []))]
+                          : ['quincenal', 'mensual'];
+                        return tiposPermitidos.map(tipo => (
+                          <option key={tipo} value={tipo}>{tipo.charAt(0).toUpperCase() + tipo.slice(1)}</option>
+                        ));
+                      })()}
                     </select>
                     <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                       <ChevronDown className="h-5 w-5 text-gray-400" />

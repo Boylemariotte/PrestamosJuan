@@ -8,7 +8,7 @@ import api from '../services/api';
 
 const ClientesArchivados = () => {
   const navigate = useNavigate();
-  const { desarchivarCliente, loading, fetchData, clientes } = useApp();
+  const { desarchivarCliente, loading, fetchData, clientes, carteras } = useApp();
   const { hasPermission } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroCartera, setFiltroCartera] = useState('todas');
@@ -20,8 +20,8 @@ const ClientesArchivados = () => {
   const [posicionesDisponibles, setPosicionesDisponibles] = useState([]);
   const [cargandoPosiciones, setCargandoPosiciones] = useState(false);
   const [posicionSeleccionada, setPosicionSeleccionada] = useState(null);
-  const [carteraSeleccionada, setCarteraSeleccionada] = useState('K1');
-  const [tipoPagoSeleccionado, setTipoPagoSeleccionado] = useState('semanal');
+  const [carteraSeleccionada, setCarteraSeleccionada] = useState('');
+  const [tipoPagoSeleccionado, setTipoPagoSeleccionado] = useState('');
   const [bloquearSelectores, setBloquearSelectores] = useState(false);
 
   // Definición de etiquetas
@@ -190,8 +190,14 @@ const ClientesArchivados = () => {
     setClienteParaDesarchivar(cliente);
 
     // Si tiene deuda, se bloquean los selectores a sus valores actuales
-    const carteraInicial = cliente.cartera || 'K1';
-    const tipoPagoInicial = getTipoPagoCliente(cliente) || (carteraInicial === 'K2' ? 'quincenal' : 'semanal');
+    const carteraInicial = cliente.cartera || carteras[0]?.nombre || 'K1';
+
+    // Obtener tipo de pago inicial (preferir el cliente, luego fallback a la cartera)
+    let tipoPagoInicial = getTipoPagoCliente(cliente);
+    if (!tipoPagoInicial) {
+      const carteraObj = carteras?.find(c => c.nombre === carteraInicial);
+      tipoPagoInicial = carteraObj?.secciones?.[0]?.tiposPagoPermitidos?.[0] || 'quincenal';
+    }
 
     setCarteraSeleccionada(carteraInicial);
     setTipoPagoSeleccionado(tipoPagoInicial);
@@ -207,9 +213,9 @@ const ClientesArchivados = () => {
     const cargarPosiciones = async () => {
       setCargandoPosiciones(true);
       try {
-        // Construir URL con query parameter para tipo de pago (para K1 y K3)
+        // Construir URL con query parameter para tipo de pago
         let url = `/clientes/posiciones-disponibles/${carteraSeleccionada}`;
-        if (carteraSeleccionada !== 'K2' && tipoPagoSeleccionado) {
+        if (tipoPagoSeleccionado) {
           url += `?tipoPago=${tipoPagoSeleccionado}`;
         }
 
@@ -318,9 +324,11 @@ const ClientesArchivados = () => {
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="todas">Todas las carteras</option>
-                <option value="K1">K1</option>
-                <option value="K2">K2</option>
-                <option value="K3">K3</option>
+                {carteras?.filter(c => c.activa).map(c => (
+                  <option key={c.id || c._id} value={c.nombre}>
+                    {c.nombre}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -375,18 +383,31 @@ const ClientesArchivados = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {clientesFiltrados.map((cliente) => {
                 const creditoInfo = getCreditoInfo(cliente);
-                const carteraRowClass = cliente.cartera === 'K1'
-                  ? 'bg-blue-100 hover:bg-blue-200'
-                  : cliente.cartera === 'K2'
-                    ? 'bg-green-100 hover:bg-green-200'
-                    : cliente.cartera === 'K3'
-                      ? 'bg-orange-100 hover:bg-orange-200'
-                      : 'hover:bg-gray-50';
+                const carteraObj = carteras?.find(c => c.nombre === cliente.cartera);
+                let rowBgClass = 'hover:bg-gray-50';
+
+                if (carteraObj) {
+                  switch (carteraObj.color) {
+                    case 'blue': rowBgClass = 'bg-blue-100 hover:bg-blue-200'; break;
+                    case 'green': rowBgClass = 'bg-green-100 hover:bg-green-200'; break;
+                    case 'orange': rowBgClass = 'bg-orange-100 hover:bg-orange-200'; break;
+                    case 'purple': rowBgClass = 'bg-purple-100 hover:bg-purple-200'; break;
+                    case 'red': rowBgClass = 'bg-red-100 hover:bg-red-200'; break;
+                    case 'yellow': rowBgClass = 'bg-yellow-100 hover:bg-yellow-200'; break;
+                    case 'pink': rowBgClass = 'bg-pink-100 hover:bg-pink-200'; break;
+                    case 'indigo': rowBgClass = 'bg-indigo-100 hover:bg-indigo-200'; break;
+                    case 'cyan': rowBgClass = 'bg-cyan-100 hover:bg-cyan-200'; break;
+                    case 'emerald': rowBgClass = 'bg-emerald-100 hover:bg-emerald-200'; break;
+                    case 'rose': rowBgClass = 'bg-rose-100 hover:bg-rose-200'; break;
+                    case 'amber': rowBgClass = 'bg-amber-100 hover:bg-amber-200'; break;
+                    default: rowBgClass = 'bg-gray-100 hover:bg-gray-200'; break;
+                  }
+                }
 
                 return (
                   <tr
                     key={cliente.id || cliente._id}
-                    className={carteraRowClass}
+                    className={rowBgClass}
                   >
                     <td className="px-4 py-4 text-sm text-gray-500">
                       <div className="flex flex-col">
@@ -507,16 +528,22 @@ const ClientesArchivados = () => {
                     onChange={(e) => {
                       const nuevaC = e.target.value;
                       setCarteraSeleccionada(nuevaC);
-                      // Ajustar modalidad si cambia a K2 y la actual no es permitida
-                      if (nuevaC === 'K2' && tipoPagoSeleccionado === 'semanal') {
-                        setTipoPagoSeleccionado('quincenal');
+                      // Ajustar modalidad si la actual no está permitida en la nueva cartera seleccionado
+                      const carteraObj = carteras?.find(c => c.nombre === nuevaC);
+                      const tiposPermitidos = carteraObj?.secciones
+                        ? [...new Set(carteraObj.secciones.flatMap(s => s.tiposPagoPermitidos || []))]
+                        : ['semanal', 'quincenal', 'mensual'];
+                      if (!tiposPermitidos.includes(tipoPagoSeleccionado)) {
+                        setTipoPagoSeleccionado(tiposPermitidos[0]);
                       }
                     }}
                     className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${bloquearSelectores ? 'bg-gray-100 cursor-not-allowed opacity-75' : ''}`}
                   >
-                    <option value="K1">Cartera K1</option>
-                    <option value="K2">Cartera K2</option>
-                    <option value="K3">Cartera K3</option>
+                    {carteras?.filter(c => c.activa).map(c => (
+                      <option key={c.id || c._id} value={c.nombre}>
+                        Cartera {c.nombre}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -529,9 +556,18 @@ const ClientesArchivados = () => {
                     onChange={(e) => setTipoPagoSeleccionado(e.target.value)}
                     className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${bloquearSelectores ? 'bg-gray-100 cursor-not-allowed opacity-75' : ''}`}
                   >
-                    {carteraSeleccionada !== 'K2' && <option value="semanal">Semanal</option>}
-                    <option value="quincenal">Quincenal</option>
-                    <option value="mensual">Mensual</option>
+                    {(() => {
+                      const carteraObj = carteras?.find(c => c.nombre === carteraSeleccionada);
+                      const tiposPermitidos = carteraObj?.secciones
+                        ? [...new Set(carteraObj.secciones.flatMap(s => s.tiposPagoPermitidos || []))]
+                        : ['semanal', 'quincenal', 'mensual'];
+
+                      return tiposPermitidos.map(tipo => (
+                        <option key={tipo} value={tipo}>
+                          {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
+                        </option>
+                      ));
+                    })()}
                   </select>
                 </div>
               </div>

@@ -8,6 +8,8 @@ const CollectionsHeader = ({
     fechaSeleccionada,
     ciudadSeleccionada,
     setCiudadSeleccionada,
+    ciudadesDisponibles,
+    carterasDeCiudad,
     irAyer,
     irHoy,
     irMañana,
@@ -20,6 +22,14 @@ const CollectionsHeader = ({
     user,
     onProrrogaGlobal
 }) => {
+    // Calcular total recogido dinámicamente
+    const totalRecogido = Object.values(clientesPagados || {}).reduce((sum, c) => sum + (c?.total || 0), 0);
+
+    // Generar label de carteras dinámicamente
+    const carterasLabel = carterasDeCiudad && carterasDeCiudad.length > 0
+        ? `Carteras ${carterasDeCiudad.map(c => c.nombre).join(', ')}`
+        : '';
+
     return (
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl shadow-lg p-6 text-white">
             <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
@@ -36,8 +46,11 @@ const CollectionsHeader = ({
                                     onChange={(e) => setCiudadSeleccionada(e.target.value)}
                                     className="appearance-none bg-gradient-to-r from-blue-600 to-purple-600 border border-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg shadow-blue-500/25 backdrop-blur-sm transition-all duration-300 hover:from-blue-500 hover:to-purple-500 hover:shadow-blue-400/30 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-300/70 focus:ring-offset-2 focus:ring-offset-blue-900/50 cursor-pointer pr-8"
                                 >
-                                    <option value="tuluá" className="bg-gray-900 text-gray-100">Tuluá</option>
-                                    <option value="buga" className="bg-gray-900 text-gray-100">Buga</option>
+                                    {(ciudadesDisponibles || []).map(ciudad => (
+                                        <option key={ciudad} value={ciudad} className="bg-gray-900 text-gray-100">
+                                            {ciudad}
+                                        </option>
+                                    ))}
                                 </select>
                                 <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
                                     <ChevronDown className="h-4 w-4 text-white" />
@@ -45,7 +58,7 @@ const CollectionsHeader = ({
                             </div>
                         </div>
                         <p className="text-slate-300 text-sm">
-                            {format(fechaSeleccionada, "EEEE, d 'de' MMMM", { locale: es })} - {ciudadSeleccionada === 'tuluá' ? 'Carteras K1, K2' : 'Carteras K3'}
+                            {format(fechaSeleccionada, "EEEE, d 'de' MMMM", { locale: es })}{carterasLabel ? ` - ${carterasLabel}` : ''}
                         </p>
                     </div>
                 </div>
@@ -99,11 +112,7 @@ const CollectionsHeader = ({
                 <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0 overflow-hidden">
                     <p className="text-xs text-slate-400 uppercase font-bold mb-1">Recogido</p>
                     <p className="text-[10px] sm:text-xs md:text-xl lg:text-2xl font-bold text-green-300 break-words leading-tight">
-                        {formatearMoneda(
-                            (clientesPagados.K1?.total || 0) +
-                            (clientesPagados.K2?.total || 0) +
-                            (clientesPagados.K3?.total || 0)
-                        )}
+                        {formatearMoneda(totalRecogido)}
                     </p>
                 </div>
                 <div className="bg-white/10 rounded-lg p-2 md:p-3 min-w-0">

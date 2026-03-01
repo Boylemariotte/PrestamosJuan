@@ -12,14 +12,21 @@ export const useCollectionsData = ({
     clientesNoEncontradosPorFecha,
     hoy,
     ciudadSeleccionada,
-    filtroK1,
-    filtroK2,
-    filtroK3,
-    filtroPagosK1,
-    filtroPagosK2,
-    filtroPagosK3,
+    carteras,
+    filtrosPorCartera,
+    filtroPagosPorCartera,
     ordenCobro
 }) => {
+    // Carteras activas de la ciudad seleccionada
+    const carterasDeCiudad = useMemo(() => {
+        if (!carteras) return [];
+        return carteras
+            .filter(c => c.activa !== false && c.ciudad === ciudadSeleccionada)
+            .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+    }, [carteras, ciudadSeleccionada]);
+
+    const nombresCarterasCiudad = useMemo(() => carterasDeCiudad.map(c => c.nombre), [carterasDeCiudad]);
+
     // Filtrar clientes por búsqueda y excluir renovaciones activadas (RF)
     const clientesFiltrados = useMemo(() => {
         return clientes.filter(cliente =>
@@ -35,8 +42,6 @@ export const useCollectionsData = ({
             esperado: 0,
             recogido: 0,
             pendiente: 0,
-            pendienteTuluá: 0,
-            pendienteBuga: 0,
             clientesTotal: 0
         };
 
@@ -202,8 +207,6 @@ export const useCollectionsData = ({
 
                 stats.esperado += totalACobrarHoy + totalCobradoHoy + totalAbonadoHoy;
                 stats.pendiente += totalACobrarHoy;
-                if (cliente.cartera === 'K3') stats.pendienteBuga += totalACobrarHoy;
-                else stats.pendienteTuluá += totalACobrarHoy;
                 stats.recogido += (totalCobradoHoy + totalAbonadoHoy);
             });
         });
@@ -220,7 +223,7 @@ export const useCollectionsData = ({
         return { porBarrio: barriosOrdenados, stats };
     }, [clientesFiltrados, fechaSeleccionadaStr, creditosInvalidos, prorrogasCuotas, clientesNoEncontradosPorFecha, hoy]);
 
-    // Construir listas de cobros del día separadas por cartera
+    // Construir listas de cobros del día separadas por cartera — DINÁMICO
     const cobrosPorCartera = useMemo(() => {
         const items = [];
         Object.values(datosCobro.porBarrio).forEach(arr => items.push(...arr));
@@ -283,7 +286,7 @@ export const useCollectionsData = ({
         const ordenarItems = (itemsList) => [...itemsList].sort((a, b) => {
             const rawA = ordenFecha[a.clienteId];
             const rawB = ordenFecha[b.clienteId];
-            const ordenA = rawA === '' || rawB == null ? Number.MAX_SAFE_INTEGER : Number(rawA);
+            const ordenA = rawA === '' || rawA == null ? Number.MAX_SAFE_INTEGER : Number(rawA);
             const ordenB = rawB === '' || rawB == null ? Number.MAX_SAFE_INTEGER : Number(rawB);
             if (ordenA !== ordenB) return ordenA - ordenB;
             return (a.clienteNombre || '').localeCompare(b.clienteNombre || '');
@@ -302,25 +305,34 @@ export const useCollectionsData = ({
             });
         };
 
-        const k1F = filtrarPorBusqueda(ordenarItems(itemsReportados.filter(i => i.clienteCartera === 'K1' && (filtroK1 === 'todos' || i.creditoTipo === filtroK1))));
-        const k2F = filtrarPorBusqueda(ordenarItems(itemsReportados.filter(i => i.clienteCartera === 'K2' && (filtroK2 === 'todos' || i.creditoTipo === filtroK2))));
-        const k3F = filtrarPorBusqueda(ordenarItems(itemsReportados.filter(i => i.clienteCartera === 'K3' && (filtroK3 === 'todos' || i.creditoTipo === filtroK3))));
+        // Construir dinámicamente con las carteras de la ciudad
+        const resultado = {};
+        nombresCarterasCiudad.forEach(nombre => {
+            const filtro = filtrosPorCartera[nombre] || 'todos';
+            resultado[nombre] = filtrarPorBusqueda(
+                ordenarItems(itemsReportados.filter(i => i.clienteCartera === nombre && (filtro === 'todos' || i.creditoTipo === filtro)))
+            );
+        });
 
-        return { K1: k1F, K2: k2F, K3: k3F, NoReportados: filtrarPorBusqueda(todosItemsNoReportados) };
-    }, [datosCobro, ordenCobro, fechaSeleccionadaStr, searchTerm, clientesNoEncontradosPorFecha, fechaSeleccionada, filtroK1, filtroK2, filtroK3, clientesFiltrados]);
+        // No reportados filtrados por carteras de la ciudad
+        resultado.NoReportados = filtrarPorBusqueda(
+            todosItemsNoReportados.filter(i => nombresCarterasCiudad.includes(i.clienteCartera))
+        );
+
+        return resultado;
+    }, [datosCobro, ordenCobro, fechaSeleccionadaStr, searchTerm, clientesNoEncontradosPorFecha, fechaSeleccionada, filtrosPorCartera, clientesFiltrados, nombresCarterasCiudad]);
 
     const totalClientesDirecto = useMemo(() => {
         let total = 0;
-        if (ciudadSeleccionada === 'tuluá') {
-            total = cobrosPorCartera.K1.length + cobrosPorCartera.K2.length + cobrosPorCartera.NoReportados.length;
-        } else {
-            total = cobrosPorCartera.K3.length + cobrosPorCartera.NoReportados.filter(i => i.clienteCartera === 'K3').length;
-        }
+        nombresCarterasCiudad.forEach(nombre => {
+            total += (cobrosPorCartera[nombre] || []).length;
+        });
+        total += (cobrosPorCartera.NoReportados || []).length;
         localStorage.setItem('totalClientesHoy', total.toString());
         return total;
-    }, [cobrosPorCartera, ciudadSeleccionada]);
+    }, [cobrosPorCartera, nombresCarterasCiudad]);
 
-    // Obtener clientes que pagaron ese día
+    // Obtener clientes que pagaron ese día — DINÁMICO
     const clientesPagados = useMemo(() => {
         const itemsMap = new Map();
         clientes.forEach(cliente => {
@@ -373,24 +385,37 @@ export const useCollectionsData = ({
             });
         });
 
-        const res = { K1: { items: [], total: 0 }, K2: { items: [], total: 0 }, K3: { items: [], total: 0 } };
+        // Resultado dinámico por cartera
+        const res = {};
+        nombresCarterasCiudad.forEach(nombre => {
+            res[nombre] = { items: [], total: 0 };
+        });
+
         itemsMap.forEach(item => {
-            const f = item.clienteCartera === 'K1' ? filtroPagosK1 : (item.clienteCartera === 'K2' ? filtroPagosK2 : filtroPagosK3);
-            if (f === 'todos' || item.creditoTipo === f) {
+            // Solo incluir items de carteras de la ciudad seleccionada
+            if (!nombresCarterasCiudad.includes(item.clienteCartera)) return;
+            const filtro = filtroPagosPorCartera[item.clienteCartera] || 'todos';
+            if (filtro === 'todos' || item.creditoTipo === filtro) {
+                if (!res[item.clienteCartera]) res[item.clienteCartera] = { items: [], total: 0 };
                 res[item.clienteCartera].items.push(item);
                 res[item.clienteCartera].total += item.montoPagado + item.montoPagadoMulta;
             }
         });
         return res;
-    }, [clientes, fechaSeleccionadaStr, filtroPagosK1, filtroPagosK2, filtroPagosK3]);
+    }, [clientes, fechaSeleccionadaStr, filtroPagosPorCartera, nombresCarterasCiudad]);
 
     const multasPagadasDia = useMemo(() => {
-        const todas = ciudadSeleccionada === 'tuluá' ? [...clientesPagados.K1.items, ...clientesPagados.K2.items] : clientesPagados.K3.items;
+        const todas = [];
+        nombresCarterasCiudad.forEach(nombre => {
+            if (clientesPagados[nombre]) {
+                todas.push(...clientesPagados[nombre].items);
+            }
+        });
         return todas.filter(i => i.montoPagadoMulta > 0).map(i => ({
             clienteNombre: i.clienteNombre, creditoTipo: i.creditoTipo, cartera: i.clienteCartera,
             clientePosicion: i.clientePosicion, montoPagadoMulta: i.montoPagadoMulta
         }));
-    }, [clientesPagados, ciudadSeleccionada]);
+    }, [clientesPagados, nombresCarterasCiudad]);
 
-    return { clientesFiltrados, datosCobro, cobrosPorCartera, totalClientesDirecto, clientesPagados, multasPagadasDia };
+    return { clientesFiltrados, datosCobro, cobrosPorCartera, totalClientesDirecto, clientesPagados, multasPagadasDia, carterasDeCiudad, nombresCarterasCiudad };
 };

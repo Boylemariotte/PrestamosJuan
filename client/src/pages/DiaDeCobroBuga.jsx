@@ -1,3 +1,4 @@
+//ARCHIVO YA NO UTILIZADO
 import React, { useState, useEffect, useMemo } from 'react';
 import { format, subDays, addDays, startOfDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';

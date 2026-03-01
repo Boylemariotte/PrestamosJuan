@@ -4,7 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import {
     Plus, Search, Edit2, Trash2, Save, X,
     MapPin, Hash, Palette, Layout as LayoutIcon,
-    CheckCircle2, AlertCircle, ChevronDown, MoveUp, MoveDown
+    CheckCircle2, AlertCircle, ChevronDown, MoveUp, MoveDown,
+    Users as UsersIcon
 } from 'lucide-react';
 
 const GestionCarteras = () => {
@@ -34,6 +35,39 @@ const GestionCarteras = () => {
         ]
     });
 
+    const [suggestions, setSuggestions] = useState([]);
+
+    const ciudadesUnicas = useMemo(() => {
+        if (!carteras) return [];
+        const set = new Set(carteras.map(c => c.ciudad));
+        // Add default main cities if not there
+        if (!set.has('Tuluá')) set.add('Tuluá');
+        if (!set.has('Guadalajara de Buga')) set.add('Guadalajara de Buga');
+        return Array.from(set);
+    }, [carteras]);
+
+    const normalize = (val) => {
+        if (!val) return "";
+        const lower = val.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        if (lower === 'buga') return 'guadalajara de buga';
+        return lower;
+    };
+
+    const handleCiudadChange = (val) => {
+        setFormData(prev => ({ ...prev, ciudad: val }));
+        if (!val.trim()) {
+            setSuggestions([]);
+            return;
+        }
+
+        const inputNorm = normalize(val);
+        const filtered = ciudadesUnicas.filter(c => {
+            const cNorm = normalize(c);
+            return cNorm.includes(inputNorm) || inputNorm.includes(cNorm);
+        });
+        setSuggestions(filtered);
+    };
+
     const carterasFiltradas = useMemo(() => {
         if (!carteras) return [];
         return carteras.filter(c => {
@@ -61,7 +95,6 @@ const GestionCarteras = () => {
             setEditingCartera(null);
             setFormData({
                 nombre: '',
-                ciudad: 'Tuluá',
                 orden: carteras.length + 1,
                 color: 'blue',
                 secciones: [
@@ -80,7 +113,11 @@ const GestionCarteras = () => {
 
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        if (name === 'ciudad') {
+            handleCiudadChange(value);
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
     };
 
     const handleSeccionChange = (index, field, value) => {
@@ -102,11 +139,23 @@ const GestionCarteras = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Validación/Normalización de Ciudad
+        const normalizedInput = normalize(formData.ciudad);
+        const canonicalCity = ciudadesUnicas.find(c => normalize(c) === normalizedInput);
+
+        let cityToSave = formData.ciudad;
+        if (canonicalCity && canonicalCity !== formData.ciudad) {
+            if (window.confirm(`La ciudad "${formData.ciudad}" coincide con "${canonicalCity}". ¿Deseas usar el nombre estándar para mantener la consistencia?`)) {
+                cityToSave = canonicalCity;
+            }
+        }
+
         try {
             if (editingCartera) {
-                await actualizarCartera(editingCartera._id, formData);
+                await actualizarCartera(editingCartera._id, { ...formData, ciudad: cityToSave });
             } else {
-                await agregarCartera(formData);
+                await agregarCartera({ ...formData, ciudad: cityToSave });
             }
             handleCloseModal();
         } catch (error) {
@@ -272,7 +321,30 @@ const GestionCarteras = () => {
                         <LayoutIcon className="h-8 w-8" />
                     </div>
                 </div>
-                {/* Agregaremos más stats si es necesario */}
+
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+                    <div>
+                        <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Ciudades</p>
+                        <p className="text-3xl font-black text-slate-800">{ciudadesUnicas.length}</p>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-amber-50 text-amber-500 text-center">
+                        <MapPin className="h-8 w-8" />
+                    </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+                    <div>
+                        <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Capacidad Total</p>
+                        <p className="text-3xl font-black text-slate-800">
+                            {carteras?.filter(c => c.activa !== false).reduce((acc, c) =>
+                                acc + (c.secciones?.reduce((sAcc, s) => sAcc + (s.capacidad || 0), 0) || 0), 0
+                            ) || 0}
+                        </p>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-emerald-50 text-emerald-500">
+                        <UsersIcon className="h-8 w-8" />
+                    </div>
+                </div>
             </div>
 
             {/* Search & List */}
@@ -412,16 +484,36 @@ const GestionCarteras = () => {
                                     <label className="block text-sm font-black text-slate-700 uppercase tracking-wider mb-2">Ciudad</label>
                                     <div className="relative">
                                         <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                                        <select
+                                        <input
+                                            type="text"
                                             name="ciudad"
+                                            required
                                             value={formData.ciudad}
                                             onChange={handleChange}
-                                            className="w-full pl-12 pr-10 py-3 bg-gray-50 border-2 border-transparent focus:border-slate-800 focus:bg-white rounded-2xl transition-all font-bold text-slate-800 appearance-none"
-                                        >
-                                            <option value="Tuluá">Tuluá</option>
-                                            <option value="Guadalajara de Buga">Guadalajara de Buga</option>
-                                        </select>
-                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
+                                            onFocus={(e) => handleCiudadChange(e.target.value)}
+                                            onBlur={() => setTimeout(() => setSuggestions([]), 200)}
+                                            placeholder="Ej: Tuluá, Armenia, Cali..."
+                                            className="w-full pl-12 pr-4 py-3 bg-gray-50 border-2 border-transparent focus:border-slate-800 focus:bg-white rounded-2xl transition-all font-bold text-slate-800"
+                                            autoComplete="off"
+                                        />
+                                        {suggestions.length > 0 && (
+                                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                                                {suggestions.map((s, i) => (
+                                                    <button
+                                                        key={i}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData(p => ({ ...p, ciudad: s }));
+                                                            setSuggestions([]);
+                                                        }}
+                                                        className="w-full text-left px-12 py-3 hover:bg-slate-50 transition-colors font-bold text-slate-700 flex items-center gap-2 border-b border-gray-50 last:border-0"
+                                                    >
+                                                        <MapPin className="h-3 w-3 text-slate-400" />
+                                                        {s}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

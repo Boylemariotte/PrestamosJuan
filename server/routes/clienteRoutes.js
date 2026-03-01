@@ -42,7 +42,7 @@ router.route('/:id/coordenadas')
 router.route('/:id')
   .get(authorize('verClientes'), getCliente)
   .put(authorize('editarClientes'), updateCliente)
-  .delete(requireRole('CEO'), deleteCliente);
+  .delete(requireRole('ceo'), deleteCliente);
 
 export default router;
 

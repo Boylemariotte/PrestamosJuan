@@ -15,7 +15,7 @@ import api from '../services/api';
 const ClienteDetalle = ({ soloLectura = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { obtenerCliente, actualizarCliente, eliminarCliente, archivarCliente, agregarCredito, actualizarCoordenadasGPS, asignarEtiquetaCliente, loading, clientes } = useApp();
+  const { obtenerCliente, actualizarCliente, eliminarCliente, archivarCliente, agregarCredito, actualizarCoordenadasGPS, asignarEtiquetaCliente, loading, clientes, carteras } = useApp();
   const { user } = useAuth();
   const esDomiciliario = user?.role === 'domiciliario';
   const esSupervisor = user?.role === 'supervisor';
@@ -522,6 +522,7 @@ const ClienteDetalle = ({ soloLectura = false }) => {
           carteraCliente={cliente.cartera || 'K1'}
           tipoPagoPredefinido={tipoPagoPredefinido === 'quincenal/mensual' ? null : tipoPagoPredefinido}
           tipoPagoPreferido={cliente.tipoPagoEsperado}
+          carteras={carteras}
         />
       )}
 
