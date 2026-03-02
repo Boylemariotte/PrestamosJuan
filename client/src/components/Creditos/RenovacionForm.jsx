@@ -15,7 +15,11 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
     monto: MONTOS_DISPONIBLES[0],
     tipo: creditoAnterior.tipo, // Mantener el mismo tipo de pago
     tipoQuincenal: creditoAnterior.tipoQuincenal || '1-16',
-    fechaInicio: obtenerFechaLocal()
+    fechaInicio: obtenerFechaLocal(),
+    usarMontoManual: false,
+    montoManual: '',
+    valorCuotaManual: '',
+    numCuotasManual: ''
   });
 
   // Nombres de tipos de pago
@@ -59,34 +63,65 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
 
   const deudaPendiente = valorCuotasPendientes;
 
-  // Cálculos del nuevo crédito
-  const papeleria = calcularPapeleria(formData.monto);
-  const totalAPagar = calcularTotalAPagar(formData.monto, formData.tipo);
-  const numCuotas = obtenerNumCuotas(formData.monto, formData.tipo);
-  const valorCuota = calcularValorCuota(formData.monto, formData.tipo);
+  // Cálculos dinámicos del nuevo crédito
+  const montoReal = formData.usarMontoManual && formData.montoManual
+    ? parseFloat(formData.montoManual)
+    : formData.monto;
+
+  const papeleria = calcularPapeleria(montoReal);
+  
+  const valorCuota = formData.usarMontoManual && formData.valorCuotaManual
+    ? parseFloat(formData.valorCuotaManual)
+    : calcularValorCuota(montoReal, formData.tipo);
+
+  const numCuotas = formData.usarMontoManual && formData.numCuotasManual
+    ? parseInt(formData.numCuotasManual)
+    : obtenerNumCuotas(montoReal, formData.tipo);
+
+  const totalAPagar = formData.usarMontoManual
+    ? (valorCuota * numCuotas)
+    : calcularTotalAPagar(montoReal, formData.tipo);
 
   // Monto a entregar = Nuevo monto - Papelería - Deuda pendiente
-  const montoAEntregar = formData.monto - papeleria - deudaPendiente;
+  const montoAEntregar = montoReal - papeleria - deudaPendiente;
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'monto' ? parseInt(value) : value
+      [name]: type === 'checkbox' ? checked : (name === 'monto' ? parseInt(value) : value)
     }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    
+    // Si es manual, validar que los campos estén llenos
+    if (formData.usarMontoManual) {
+      if (!formData.montoManual || !formData.valorCuotaManual || !formData.numCuotasManual) {
+        alert('Por favor complete todos los campos manuales');
+        return;
+      }
+    }
+    
     if (montoAEntregar < 0) {
       alert('La deuda pendiente es mayor que el monto de renovación. Por favor, selecciona un monto mayor.');
       return;
     }
-    onSubmit({
+    
+    // Preparar datos para enviar
+    const dataToSubmit = {
       ...formData,
+      monto: montoReal, // Enviar el monto real (sea manual o de lista)
+      valorCuota: valorCuota, // Enviar valor cuota calculado o manual
+      numCuotas: numCuotas, // Enviar num cuotas calculado o manual
+      totalAPagar: totalAPagar, // Enviar total calculado
+      esManual: formData.usarMontoManual,
       deudaPendiente,
       montoAEntregar: montoAEntregar
-    });
+    };
+    
+    onSubmit(dataToSubmit);
   };
 
   return (
@@ -163,23 +198,86 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
             </div>
           </div>
 
+          {/* Opción Manual */}
+          <div className="flex items-center mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+            <input
+              type="checkbox"
+              id="usarMontoManual"
+              name="usarMontoManual"
+              checked={formData.usarMontoManual}
+              onChange={handleChange}
+              className="h-5 w-5 text-yellow-600 focus:ring-yellow-500 rounded"
+            />
+            <label htmlFor="usarMontoManual" className="ml-3 text-sm font-medium text-yellow-800 cursor-pointer">
+              Ingresar valores manualmente (Monto, Cuota y Número de Cuotas)
+            </label>
+          </div>
+
           {/* Selección de monto */}
           <div>
             <label className="label block text-sm font-medium text-gray-700 mb-1 font-bold">Monto de Renovación *</label>
-            <select
-              name="monto"
-              value={formData.monto}
-              onChange={handleChange}
-              className="input-field w-full border rounded-md p-2"
-              required
-            >
-              {MONTOS_DISPONIBLES.map(monto => (
-                <option key={monto} value={monto}>
-                  {formatearMoneda(monto)}
-                </option>
-              ))}
-            </select>
+            {formData.usarMontoManual ? (
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                <input
+                  type="number"
+                  name="montoManual"
+                  value={formData.montoManual}
+                  onChange={handleChange}
+                  className="input-field w-full border rounded-md p-2 pl-8"
+                  placeholder="Ej: 1000000"
+                  required={formData.usarMontoManual}
+                />
+              </div>
+            ) : (
+              <select
+                name="monto"
+                value={formData.monto}
+                onChange={handleChange}
+                className="input-field w-full border rounded-md p-2"
+                required
+              >
+                {MONTOS_DISPONIBLES.map(monto => (
+                  <option key={monto} value={monto}>
+                    {formatearMoneda(monto)}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
+
+          {/* Campos adicionales si es manual */}
+          {formData.usarMontoManual && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label block text-sm font-medium text-gray-700 mb-1 font-bold">Valor de Cuota *</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                  <input
+                    type="number"
+                    name="valorCuotaManual"
+                    value={formData.valorCuotaManual}
+                    onChange={handleChange}
+                    className="input-field w-full border rounded-md p-2 pl-8"
+                    placeholder="Ej: 50000"
+                    required={formData.usarMontoManual}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="label block text-sm font-medium text-gray-700 mb-1 font-bold">Número de Cuotas *</label>
+                <input
+                  type="number"
+                  name="numCuotasManual"
+                  value={formData.numCuotasManual}
+                  onChange={handleChange}
+                  className="input-field w-full border rounded-md p-2"
+                  placeholder="Ej: 10"
+                  required={formData.usarMontoManual}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Tipo de pago */}
           <div>
@@ -275,7 +373,7 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Monto de renovación:</span>
               <span className="font-semibold text-gray-900">
-                {formatearMoneda(formData.monto)}
+                {formatearMoneda(montoReal)}
               </span>
             </div>
 
