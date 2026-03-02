@@ -19,7 +19,7 @@ export const useCollectionsData = ({
 }) => {
     // Carteras activas de la ciudad seleccionada
     const carterasDeCiudad = useMemo(() => {
-        if (!carteras) return [];
+        if (!carteras || !ciudadSeleccionada) return [];
         return carteras
             .filter(c => c.activa !== false && c.ciudad === ciudadSeleccionada)
             .sort((a, b) => (a.orden || 0) - (b.orden || 0));
@@ -29,11 +29,19 @@ export const useCollectionsData = ({
 
     // Filtrar clientes por búsqueda y excluir renovaciones activadas (RF)
     const clientesFiltrados = useMemo(() => {
-        return clientes.filter(cliente =>
-            cliente.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) &&
-            !cliente.tieneBotonRenovacion
-        );
-    }, [clientes, searchTerm]);
+        // Si no hay ciudad seleccionada, no mostrar clientes
+        if (!ciudadSeleccionada) return [];
+        
+        return clientes.filter(cliente => {
+            // Filtrar por ciudad usando las carteras disponibles
+            const carteraCliente = carteras.find(c => c.nombre === (cliente.cartera || 'K1'));
+            const coincideCiudad = carteraCliente && carteraCliente.ciudad === ciudadSeleccionada;
+            
+            return coincideCiudad &&
+                   cliente.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) &&
+                   !cliente.tieneBotonRenovacion;
+        });
+    }, [clientes, searchTerm, ciudadSeleccionada, carteras]);
 
     // Procesar cobros agrupados por BARRIO
     const datosCobro = useMemo(() => {

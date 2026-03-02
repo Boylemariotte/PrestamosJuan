@@ -39,13 +39,14 @@ const DiaDeCobro = () => {
     }, [carteras]);
 
     // Estado para selector de ciudad
-    const [ciudadSeleccionada, setCiudadSeleccionada] = useState(() =>
-        localStorage.getItem('ultimaCiudadDiaDeCobro') || ''
-    );
+    const [ciudadSeleccionada, setCiudadSeleccionada] = useState(() => {
+        const guardada = localStorage.getItem('ultimaCiudadDiaDeCobro');
+        return guardada || null; // Cambiar a null en lugar de string vacío
+    });
 
     // Auto-seleccionar la primera ciudad si la seleccionada no existe en las disponibles
     useEffect(() => {
-        if (ciudadesDisponibles.length > 0 && !ciudadesDisponibles.includes(ciudadSeleccionada)) {
+        if (ciudadesDisponibles.length > 0 && (!ciudadSeleccionada || !ciudadesDisponibles.includes(ciudadSeleccionada))) {
             setCiudadSeleccionada(ciudadesDisponibles[0]);
         }
     }, [ciudadesDisponibles, ciudadSeleccionada]);
