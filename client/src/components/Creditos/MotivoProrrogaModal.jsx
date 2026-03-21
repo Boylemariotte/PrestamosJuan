@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, AlertCircle } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { addDays, differenceInDays, parseISO } from 'date-fns';
 
 const MotivoProrrogaModal = ({ isOpen, onClose, onConfirm, initialDate = '', showDatePicker = true }) => {
+    const { user } = useAuth();
     const [motivo, setMotivo] = useState('');
     const [fecha, setFecha] = useState(initialDate);
 
@@ -10,10 +13,47 @@ const MotivoProrrogaModal = ({ isOpen, onClose, onConfirm, initialDate = '', sho
         setFecha(initialDate);
     }, [initialDate]);
 
+    // Validar si el usuario es domiciliario y la fecha excede los 3 días
+    const validarFechaParaDomiciliario = (fechaSeleccionada) => {
+        if (!fechaSeleccionada) return true;
+        
+        // Si no es domiciliario, no hay restricción
+        if (user?.role !== 'domiciliario') return true;
+        
+        const fechaActual = new Date();
+        fechaActual.setHours(0, 0, 0, 0); // Inicio del día
+        
+        const fechaSeleccionadaObj = new Date(fechaSeleccionada);
+        fechaSeleccionadaObj.setHours(0, 0, 0, 0);
+        
+        const diasDiferencia = differenceInDays(fechaSeleccionadaObj, fechaActual);
+        
+        // Permitir máximo 3 días en el futuro
+        return diasDiferencia <= 3;
+    };
+
+    const obtenerMensajeError = () => {
+        if (!fecha) return '';
+        
+        if (user?.role === 'domiciliario' && !validarFechaParaDomiciliario(fecha)) {
+            return 'Los domiciliarios solo pueden dar prórrogas de máximo 3 días.';
+        }
+        
+        return '';
+    };
+
+    const mensajeError = obtenerMensajeError();
+
     if (!isOpen) return null;
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        
+        // Validar restricción de domiciliario antes de enviar
+        if (user?.role === 'domiciliario' && !validarFechaParaDomiciliario(fecha)) {
+            return;
+        }
+        
         if (motivo.trim() && (!showDatePicker || fecha)) {
             onConfirm(motivo, fecha);
             setMotivo('');
@@ -25,13 +65,18 @@ const MotivoProrrogaModal = ({ isOpen, onClose, onConfirm, initialDate = '', sho
         onClose();
     };
 
-    const isReady = motivo.trim() && (!showDatePicker || fecha);
+    const isReady = motivo.trim() && (!showDatePicker || fecha) && !mensajeError;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden">
                 <div className="flex justify-between items-center bg-gray-100 px-6 py-4 border-b">
-                    <h3 className="text-lg font-semibold text-gray-800">Prorrogar Fecha de Cobro</h3>
+                    <h3 className="text-lg font-semibold text-gray-800">
+                        Prorrogar Fecha de Cobro
+                        {user?.role === 'domiciliario' && (
+                            <span className="ml-2 text-sm text-orange-600 font-normal">(Máximo 3 días)</span>
+                        )}
+                    </h3>
                     <button onClick={handleClose} className="text-gray-500 hover:text-gray-700 focus:outline-none">
                         <X className="h-5 w-5" />
                     </button>
@@ -46,11 +91,20 @@ const MotivoProrrogaModal = ({ isOpen, onClose, onConfirm, initialDate = '', sho
                             <input
                                 type="date"
                                 id="fecha"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                    mensajeError ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'
+                                }`}
                                 value={fecha}
                                 onChange={(e) => setFecha(e.target.value)}
+                                min={new Date().toISOString().split('T')[0]} // No permitir fechas pasadas
                                 required
                             />
+                            {mensajeError && (
+                                <div className="mt-2 flex items-center text-red-600 text-sm">
+                                    <AlertCircle className="h-4 w-4 mr-1" />
+                                    {mensajeError}
+                                </div>
+                            )}
                         </div>
                     )}
 
