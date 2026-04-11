@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, User, Mail, Lock, Check, AlertCircle, Briefcase, ChevronDown, Edit2, Trash2, X } from 'lucide-react';
+import { UserPlus, User, Mail, Lock, Check, AlertCircle, Briefcase, ChevronDown, Edit2, Trash2, X, Eye, EyeOff } from 'lucide-react';
 import api from '../services/api';
 
 const GestionUsuarios = () => {
@@ -23,6 +23,11 @@ const GestionUsuarios = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+
+    // Estados para manejo de contraseñas
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [confirmPassword, setConfirmPassword] = useState('');
 
     // Bloquear scroll del cuerpo cuando el modal está abierto
     useEffect(() => {
@@ -113,38 +118,59 @@ const GestionUsuarios = () => {
         setIsEditModalOpen(true);
         setError('');
         setSuccess('');
+        // Limpiar estados de contraseña
+        setShowPassword(false);
+        setShowConfirmPassword(false);
+        setConfirmPassword('');
     };
 
     const handleUpdateUser = async (e) => {
         e.preventDefault();
         setLoading(true);
+        setError('');
 
         try {
+            // Validar contraseñas si se está cambiando
+            if (editingUser.password) {
+                if (!confirmPassword) {
+                    setError('Por favor confirma la nueva contraseña');
+                    setLoading(false);
+                    return;
+                }
+                if (editingUser.password !== confirmPassword) {
+                    setError('Las contraseñas no coinciden');
+                    setLoading(false);
+                    return;
+                }
+                if (editingUser.password.length < 6) {
+                    setError('La contraseña debe tener al menos 6 caracteres');
+                    setLoading(false);
+                    return;
+                }
+            }
+
             // Solo enviamos los campos que se pueden actualizar: nombre, email, role, activo, ciudad
             // Nota: El backend permite actualizar estos campos si eres CEO
             const payload = {
                 nombre: editingUser.nombre,
                 email: editingUser.email,
-                username: editingUser.username,
                 role: editingUser.role,
                 activo: editingUser.activo,
-                ...(editingUser.password && { password: editingUser.password }), // Add password if exists
-                ...((editingUser.role === 'domiciliario' || editingUser.role === 'supervisor') && editingUser.ciudad && { ciudad: editingUser.ciudad }), // Add ciudad if domiciliario/supervisor
-                ...(editingUser.role === 'domiciliario' && { ocultarProrroga: editingUser.ocultarProrroga }) // Add ocultarProrroga if domiciliario
+                ...(editingUser.role === 'domiciliario' || editingUser.role === 'supervisor') && editingUser.ciudad && { ciudad: editingUser.ciudad },
+                ...(editingUser.role === 'domiciliario' && { ocultarProrroga: editingUser.ocultarProrroga }), // Add ocultarProrroga if domiciliario
+                ...(editingUser.password && { password: editingUser.password }) // Solo enviar contraseña si se proporcionó
             };
-
             const response = await api.put(`/personas/${editingUser.id}`, payload);
             if (response.success) {
-                setSuccess('Usuario actualizado correctamente');
+                setSuccess('Usuario actualizado exitosamente');
                 setIsEditModalOpen(false);
                 fetchUsers();
+            } else {
+                setError('Error al actualizar usuario');
             }
         } catch (err) {
-            // Si falla, mostrar error en el modal o general
-            // Para simplificar, lo mostramos en la alerta principal si el modal se cierra, 
-            // o podríamos añadir un estado de error específico para el modal.
-            setError(err.message || 'Error al actualizar usuario');
-            // No cerramos el modal para que el usuario pueda corregir
+            console.error('Error updating user:', err);
+            setError('Error al actualizar usuario');
         } finally {
             setLoading(false);
         }
@@ -423,15 +449,56 @@ const GestionUsuarios = () => {
                                         Nueva Contraseña
                                         <span className="text-xs text-gray-500 font-normal ml-1">(Opcional)</span>
                                     </label>
-                                    <input
-                                        type="password"
-                                        name="password"
-                                        onChange={handleChange}
-                                        className="w-full px-3 py-2 border rounded-lg focus:ring-sky-500"
-                                        placeholder="Solo si deseas cambiarla"
-                                        minLength={6}
-                                    />
+                                    <div className="relative">
+                                        <input
+                                            type={showPassword ? "text" : "password"}
+                                            name="password"
+                                            onChange={handleChange}
+                                            className="w-full px-3 py-2 pr-10 border rounded-lg focus:ring-sky-500"
+                                            placeholder="Solo si deseas cambiarla"
+                                            minLength={6}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                                        >
+                                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        </button>
+                                    </div>
                                 </div>
+
+                                {editingUser.password && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Confirmar Contraseña
+                                            <span className="text-red-500 ml-1">*</span>
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type={showConfirmPassword ? "text" : "password"}
+                                                value={confirmPassword}
+                                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                                className="w-full px-3 py-2 pr-10 border rounded-lg focus:ring-sky-500"
+                                                placeholder="Repite la nueva contraseña"
+                                                minLength={6}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                                            >
+                                                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                            </button>
+                                        </div>
+                                        {confirmPassword && editingUser.password !== confirmPassword && (
+                                            <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                                                <AlertCircle className="h-3 w-3" />
+                                                Las contraseñas no coinciden
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                             </form>
                         </div>
 
