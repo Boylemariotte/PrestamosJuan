@@ -149,11 +149,12 @@ const GestionUsuarios = () => {
                 }
             }
 
-            // Solo enviamos los campos que se pueden actualizar: nombre, email, role, activo, ciudad
+            // Solo enviamos los campos que se pueden actualizar: nombre, email, username, role, activo, ciudad
             // Nota: El backend permite actualizar estos campos si eres CEO
             const payload = {
                 nombre: editingUser.nombre,
                 email: editingUser.email,
+                username: editingUser.username, // Agregado el campo username para inicio de sesión
                 role: editingUser.role,
                 activo: editingUser.activo,
                 ...(editingUser.role === 'domiciliario' || editingUser.role === 'supervisor') && editingUser.ciudad && { ciudad: editingUser.ciudad },
