@@ -5,6 +5,7 @@ import { es } from 'date-fns/locale';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import api from '../services/api';
+import { toast } from 'react-toastify';
 
 const Papeleria = () => {
   const { user } = useAuth();
@@ -27,6 +28,22 @@ const Papeleria = () => {
   // Determinar si es admin o CEO
   const esAdminOCeo = user && (user.role === 'administrador' || user.role === 'ceo');
   const esDomiciliarioBuga = user && user.role === 'domiciliario' && user.ciudad === 'Guadalajara de Buga';
+
+  // Función para resetear papelería (solo CEO)
+  const handleResetPapeleria = async () => {
+    try {
+      const response = await api.delete('/papeleria/reset');
+      if (response.success) {
+        setTransactions([]);
+        toast.success('Conteo de papelería reiniciado exitosamente');
+      } else {
+        toast.error('Error al reiniciar el conteo de papelería');
+      }
+    } catch (error) {
+      console.error('Error al resetear papelería:', error);
+      toast.error('Error al reiniciar el conteo de papelería');
+    }
+  };
 
   // Inicializar estado de expansión según el usuario
   useEffect(() => {
@@ -254,6 +271,21 @@ const Papeleria = () => {
 
   // Función para renderizar tabla de transacciones
   const renderTransactionTable = (transacciones, ciudad, paginaActual, setPaginaActual) => {
+    // Si es administrador, no mostrar la tabla de historial
+    if (user && user.role === 'administrador') {
+      return (
+        <div className="mt-6">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center">
+            <p className="text-yellow-800 font-medium">
+              Como administrador, solo puedes ver los totales y realizar movimientos de papelería.
+              <br />
+              El historial completo está restringido al perfil CEO.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     const filteredAndSorted = transacciones.filter(transaction => {
       const matchesSearch = transaction.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (transaction.prestamoId && transaction.prestamoId.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -465,6 +497,20 @@ const Papeleria = () => {
         </div>
 
         <div className="mt-4 md:mt-0 flex flex-wrap gap-2">
+          {/* Botón de reseteo solo para CEO */}
+          {user && user.role === 'ceo' && (
+            <button
+              onClick={() => {
+                if (window.confirm('¿Está seguro de que desea reiniciar el conteo de papelería? Esta acción eliminará todos los registros y no se puede deshacer.')) {
+                  handleResetPapeleria();
+                }
+              }}
+              className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Reiniciar Conteo
+            </button>
+          )}
           <button
             onClick={() => {
               setShowForm(true);

@@ -35,7 +35,6 @@ const CollectionTable = ({
                 </thead>
                 <tbody>
                     {items
-                        .filter(item => item.clienteRF !== 'RF')
                         .map((item, index) => {
                             const numeroLista = index + 1;
                             const rawOrden = ordenFecha[item.clienteId];

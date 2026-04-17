@@ -76,6 +76,32 @@ export const useCollectionsData = ({
                 let totalCobradoHoy = 0;
                 let totalAbonadoHoy = 0;
 
+                // Para clientes finalizados, verificar si pagaron hoy
+                if (estadoCredito === 'finalizado') {
+                    const cuotasPagadasHoy = credito.cuotas.filter(cuota => {
+                        if (!cuota.pagada || !cuota.fechaPago) return false;
+                        
+                        const fechaPago = typeof cuota.fechaPago === 'string'
+                            ? cuota.fechaPago.split('T')[0]
+                            : format(cuota.fechaPago, 'yyyy-MM-dd');
+                        
+                        return fechaPago === fechaSeleccionadaStr;
+                    });
+
+                    // Depuración: clientes finalizados
+                    if (cuotasPagadasHoy.length > 0) {
+                        console.log(`=== CLIENTE FINALIZADO DETECTADO ===`);
+                        console.log(`Cliente: ${cliente.nombre}`);
+                        console.log(`Crédito ID: ${credito.id}`);
+                        console.log(`Cuotas pagadas hoy: ${cuotasPagadasHoy.length}`);
+                        console.log(`Total cobrado hoy: ${cuotasPagadasHoy.length * credito.valorCuota}`);
+                        console.log('=====================================');
+                        
+                        tieneActividadHoy = true;
+                        totalCobradoHoy = cuotasPagadasHoy.length * credito.valorCuota;
+                    }
+                }
+
                 const cuotasPendientesHoy = cuotasActualizadas.filter((cuota, index) => {
                     const cuotaOriginal = credito.cuotas[index];
                     if (cuotaOriginal.pagado) return false;
@@ -148,7 +174,7 @@ export const useCollectionsData = ({
                     totalAbonadoHoy += abonosGeneralesHoy.reduce((s, a) => s + a.valor, 0);
                 }
 
-                if (!tieneActividadHoy || totalACobrarHoy === 0) return;
+                if (!tieneActividadHoy || (totalACobrarHoy === 0 && totalCobradoHoy === 0 && totalAbonadoHoy === 0)) return;
 
                 let tipoItem = 'cobrado';
                 if (totalACobrarHoy > 0) tipoItem = 'pendiente';
@@ -303,7 +329,7 @@ export const useCollectionsData = ({
         const filtrarPorBusqueda = (itemsList) => {
             if (!searchTerm.trim()) return itemsList;
             const t = searchTerm.toLowerCase().trim();
-            return itemsList.filter(item => {
+            const filtrados = itemsList.filter(item => {
                 const ref = item.clientePosicion ? `#${item.clientePosicion}` : '';
                 return ref.toLowerCase().includes(t) ||
                     item.clienteNombre?.toLowerCase().includes(t) ||
@@ -311,14 +337,46 @@ export const useCollectionsData = ({
                     item.clienteTelefono?.includes(t) ||
                     item.clienteBarrio?.toLowerCase().includes(t);
             });
+            
+            // Depuración: mostrar qué items son filtrados
+            const noFiltrados = itemsList.filter(item => {
+                const ref = item.clientePosicion ? `#${item.clientePosicion}` : '';
+                return !(ref.toLowerCase().includes(t) ||
+                    item.clienteNombre?.toLowerCase().includes(t) ||
+                    item.clienteDocumento?.includes(t) ||
+                    item.clienteTelefono?.includes(t) ||
+                    item.clienteBarrio?.toLowerCase().includes(t));
+            });
+            
+            if (noFiltrados.length > 0) {
+                console.log('=== ITEMS FILTRADOS POR BÚSQUEDA ===');
+                console.log('Término de búsqueda:', t);
+                console.log('Items que NO pasan el filtro:', noFiltrados.map(i => i.clienteNombre));
+                console.log('=====================================');
+            }
+            
+            return filtrados;
         };
 
         // Construir dinámicamente con las carteras de la ciudad
         const resultado = {};
         nombresCarterasCiudad.forEach(nombre => {
             const filtro = filtrosPorCartera[nombre] || 'todos';
+            
+            // Depuración: mostrar filtrado por tipo de pago
+            const itemsPorCartera = itemsReportados.filter(i => i.clienteCartera === nombre);
+            const itemsDespuesDeFiltroTipo = itemsPorCartera.filter(i => filtro === 'todos' || i.creditoTipo === filtro);
+            
+            if (nombre === 'K1' && itemsDespuesDeFiltroTipo.length !== itemsPorCartera.length) {
+                console.log('=== FILTRADO POR TIPO DE PAGO K1 ===');
+                console.log('Filtro aplicado:', filtro);
+                console.log('Items antes del filtro:', itemsPorCartera.map(i => ({nombre: i.clienteNombre, tipo: i.creditoTipo})));
+                console.log('Items después del filtro:', itemsDespuesDeFiltroTipo.map(i => ({nombre: i.clienteNombre, tipo: i.creditoTipo})));
+                console.log('=====================================');
+            }
+            
             resultado[nombre] = filtrarPorBusqueda(
-                ordenarItems(itemsReportados.filter(i => i.clienteCartera === nombre && (filtro === 'todos' || i.creditoTipo === filtro)))
+                ordenarItems(itemsDespuesDeFiltroTipo)
             );
         });
 
@@ -333,9 +391,22 @@ export const useCollectionsData = ({
     const totalClientesDirecto = useMemo(() => {
         let total = 0;
         nombresCarterasCiudad.forEach(nombre => {
-            total += (cobrosPorCartera[nombre] || []).length;
+            const items = cobrosPorCartera[nombre] || [];
+            // Solo contar items que tienen valorRealACobrar > 0 (clientes activos para cobrar hoy)
+            const itemsActivos = items.filter(item => item.valorRealACobrar > 0);
+            total += itemsActivos.length;
+            
+            // Depuración: verificar clienteRF de Guillermo Rodriguez y Norberto Serna
+            itemsActivos.forEach(item => {
+                if (item.clienteNombre === 'Guillermo Rodriguez' || item.clienteNombre === 'Norberto Serna') {
+                    console.log(`=== VERIFICACIÓN ${item.clienteNombre} ===`);
+                    console.log('clienteRF:', item.clienteRF);
+                    console.log('valorRealACobrar:', item.valorRealACobrar);
+                    console.log('=====================================');
+                }
+            });
         });
-        total += (cobrosPorCartera.NoReportados || []).length;
+        
         localStorage.setItem('totalClientesHoy', total.toString());
         return total;
     }, [cobrosPorCartera, nombresCarterasCiudad]);
@@ -347,6 +418,42 @@ export const useCollectionsData = ({
             if (!cliente.creditos || !cliente.id) return;
             cliente.creditos.forEach(credito => {
                 if (!credito || credito.renovado || !credito.cuotas) return;
+
+                // Para clientes finalizados, verificar si pagaron hoy
+                const estadoCredito = determinarEstadoCredito(credito.cuotas, credito);
+                if (estadoCredito === 'finalizado') {
+                    const cuotasPagadasHoy = credito.cuotas.filter(cuota => {
+                        if (!cuota.pagada || !cuota.fechaPago) return false;
+                        
+                        const fechaPago = typeof cuota.fechaPago === 'string'
+                            ? cuota.fechaPago.split('T')[0]
+                            : format(cuota.fechaPago, 'yyyy-MM-dd');
+                        
+                        return fechaPago === fechaSeleccionadaStr;
+                    });
+
+                    // Agregar pagos de clientes finalizados
+                    cuotasPagadasHoy.forEach(cuota => {
+                        const key = `${cliente.id}-${credito.id}-${cuota.nroCuota}`;
+                        
+                        // Depuración: pagos de clientes finalizados
+                        console.log(`=== PAGO DE CLIENTE FINALIZADO ===`);
+                        console.log(`Cliente: ${cliente.nombre} (Finalizado)`);
+                        console.log(`Crédito ID: ${credito.id}`);
+                        console.log(`Cuota: ${cuota.nroCuota}`);
+                        console.log(`Monto: ${credito.valorCuota}`);
+                        console.log('=====================================');
+                        
+                        itemsMap.set(key, {
+                            clienteId: cliente.id, clienteNombre: cliente.nombre, clienteDocumento: cliente.documento,
+                            clienteTelefono: cliente.telefono, clienteBarrio: cliente.barrio, clienteCartera: cliente.cartera || 'K1',
+                            clientePosicion: cliente.posicion, creditoId: credito.id, creditoMonto: credito.monto,
+                            creditoTipo: credito.tipo, valorCuota: credito.valorCuota, nroCuota: cuota.nroCuota,
+                            montoPagado: credito.valorCuota, tipoPago: 'completo',
+                            montoPagadoMulta: 0, tieneMulta: false
+                        });
+                    });
+                }
 
                 credito.cuotas.forEach(cuota => {
                     let fPagoNorm = cuota.fechaPago ? (typeof cuota.fechaPago === 'string' ? cuota.fechaPago.split('T')[0] : format(new Date(cuota.fechaPago), 'yyyy-MM-dd')) : null;

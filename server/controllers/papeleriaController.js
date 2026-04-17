@@ -1,6 +1,37 @@
 import Papeleria from '../models/Papeleria.js';
 
 /**
+ * @desc    Resetear todas las transacciones de papelería (solo CEO)
+ * @route   DELETE /api/papeleria/reset
+ * @access  Private (CEO only)
+ */
+export const resetPapeleria = async (req, res, next) => {
+  try {
+    // Verificar que sea CEO
+    if (req.user.role !== 'ceo') {
+      return res.status(403).json({
+        success: false,
+        message: 'Acceso denegado. Solo el CEO puede resetear la papelería.'
+      });
+    }
+
+    // Eliminar todas las transacciones de papelería
+    await Papeleria.deleteMany({});
+
+    res.status(200).json({
+      success: true,
+      message: 'Papelería reseteada exitosamente'
+    });
+  } catch (error) {
+    console.error('Error al resetear papelería:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al resetear la papelería'
+    });
+  }
+};
+
+/**
  * @desc    Obtener todas las transacciones de papelería
  * @route   GET /api/papeleria
  * @access  Private
