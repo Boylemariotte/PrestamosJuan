@@ -174,6 +174,17 @@ export const useCollectionsData = ({
                     totalAbonadoHoy += abonosGeneralesHoy.reduce((s, a) => s + a.valor, 0);
                 }
 
+                // Si el cliente ya pagó o abonó hoy, no mostrar en día de cobro
+                if ((totalCobradoHoy > 0 && totalACobrarHoy === 0) || totalAbonadoHoy > 0) {
+                    console.log(`=== CLIENTE PAGO/ABONO HOY - NO MOSTRAR EN DÍA DE COBRO ===`);
+                    console.log(`Cliente: ${cliente.nombre}`);
+                    console.log(`Total cobrado hoy: ${totalCobradoHoy}`);
+                    console.log(`Total abonado hoy: ${totalAbonadoHoy}`);
+                    console.log(`Total a cobrar hoy: ${totalACobrarHoy}`);
+                    console.log('================================================');
+                    return; // No mostrar en día de cobro, solo en pagos registrados
+                }
+
                 if (!tieneActividadHoy || (totalACobrarHoy === 0 && totalCobradoHoy === 0 && totalAbonadoHoy === 0)) return;
 
                 let tipoItem = 'cobrado';
