@@ -114,9 +114,7 @@ export const generarFechasPagoSemanales = (fechaInicio, numCuotas) => {
     let fechaCuota = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() + i * 7);
     fechaCuota.setHours(12, 0, 0, 0);
 
-    // Ajuste: sumar 1 día para corregir desfase observado (p.ej. 18 -> 25 en vez de 24)
-    fechaCuota = addDays(fechaCuota, 1);
-
+    
     fechas.push({
       nroCuota: i + 1,
       fechaProgramada: format(fechaCuota, 'yyyy-MM-dd'),
