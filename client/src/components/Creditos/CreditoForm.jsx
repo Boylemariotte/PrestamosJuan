@@ -225,7 +225,7 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
                       </span>
                       <p className="text-sm text-gray-500">
                         {formData.tipo === 'diario' && 'Cuotas diarias'}
-                        {formData.tipo === 'semanal' && '10 cuotas - Cada sábado'}
+                        {formData.tipo === 'semanal' && '10 cuotas - Cada semana'}
                         {formData.tipo === 'quincenal' && '5 cuotas'}
                         {formData.tipo === 'mensual' && '3 cuotas - Cada mes'}
                       </p>
@@ -246,7 +246,7 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
                   {tiposPermitidos.map(tipo => {
                     const descripciones = {
                       diario: 'Cuotas diarias',
-                      semanal: '10 cuotas - Cada sábado',
+                      semanal: '10 cuotas - Cada semana',
                       quincenal: '5 cuotas',
                       mensual: '3 cuotas - Cada mes'
                     };

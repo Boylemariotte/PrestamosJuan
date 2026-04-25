@@ -174,9 +174,9 @@ export const useCollectionsData = ({
                     totalAbonadoHoy += abonosGeneralesHoy.reduce((s, a) => s + a.valor, 0);
                 }
 
-                // Si el cliente ya pagó o abonó hoy, no mostrar en día de cobro
-                if ((totalCobradoHoy > 0 && totalACobrarHoy === 0) || totalAbonadoHoy > 0) {
-                    console.log(`=== CLIENTE PAGO/ABONO HOY - NO MOSTRAR EN DÍA DE COBRO ===`);
+                // Si el cliente ya pagó completamente hoy, no mostrar en día de cobro
+                if (totalACobrarHoy === 0 && (totalCobradoHoy > 0 || totalAbonadoHoy > 0)) {
+                    console.log(`=== CLIENTE PAGO/ABONO COMPLETO HOY - NO MOSTRAR EN DÍA DE COBRO ===`);
                     console.log(`Cliente: ${cliente.nombre}`);
                     console.log(`Total cobrado hoy: ${totalCobradoHoy}`);
                     console.log(`Total abonado hoy: ${totalAbonadoHoy}`);
@@ -239,7 +239,8 @@ export const useCollectionsData = ({
                     primerCuotaVencidaFecha,
                     clienteRF: cliente.rf,
                     nroCuotasPendientes: cuotasPendientesHoy.map(c => c.nroCuota),
-                    reportado: cliente.reportado !== false
+                    reportado: cliente.reportado !== false,
+                    tieneAbonoParcialHoy: totalAbonadoHoy > 0 && totalACobrarHoy > 0
                 };
 
                 const barrio = cliente.barrio || 'Sin Barrio';

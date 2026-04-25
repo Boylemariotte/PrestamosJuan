@@ -77,7 +77,10 @@ export const obtenerNumCuotas = (monto, tipo) => {
 // Generar fechas de pago diarias (60 días consecutivos)
 export const generarFechasPagoDiarias = (fechaInicio, numCuotas) => {
   const fechas = [];
-  let fecha = parseISO(fechaInicio);
+  
+  // Extraer año, mes y día manualmente para evitar problemas de zona horaria
+  let [year, month, day] = fechaInicio.split('-').map(Number);
+  let fecha = new Date(year, month - 1, day, 12, 0, 0, 0);
 
   for (let i = 0; i < numCuotas; i++) {
     fechas.push({
@@ -92,35 +95,22 @@ export const generarFechasPagoDiarias = (fechaInicio, numCuotas) => {
   return fechas;
 };
 
-// Generar fechas de pago semanales (cada sábado)
+// Generar fechas de pago semanales (cada 7 días empezando en la fecha de inicio)
 export const generarFechasPagoSemanales = (fechaInicio, numCuotas) => {
   const fechas = [];
-  let fecha = parseISO(fechaInicio);
+  
+  // Extraer año, mes y día manualmente para evitar problemas de zona horaria
+  let [year, month, day] = fechaInicio.split('-').map(Number);
+  let fecha = new Date(year, month - 1, day, 12, 0, 0, 0);
 
-  // Normalizar a mediodía para evitar problemas de zona horaria/DST
-  fecha.setHours(12, 0, 0, 0);
-
-  // Ajustar al próximo sábado (o mismo día si ya es sábado)
-  const diaSemana = fecha.getDay(); // 0=Dom, 6=Sáb
-  if (diaSemana !== 6) {
-    const diasHastaSabado = (6 - diaSemana + 7) % 7;
-    fecha = addDays(fecha, diasHastaSabado === 0 ? 7 : diasHastaSabado);
-    fecha.setHours(12, 0, 0, 0);
-  }
-
-  // Generar sábados consecutivos (corrigiendo desfase de 1 día)
   for (let i = 0; i < numCuotas; i++) {
-    // Base: sábado calculado + 7 días por cuota
-    let fechaCuota = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() + i * 7);
-    fechaCuota.setHours(12, 0, 0, 0);
-
-    
     fechas.push({
       nroCuota: i + 1,
-      fechaProgramada: format(fechaCuota, 'yyyy-MM-dd'),
+      fechaProgramada: format(fecha, 'yyyy-MM-dd'),
       pagado: false,
       fechaPago: null
     });
+    fecha = addDays(fecha, 7);
   }
 
   return fechas;
@@ -129,7 +119,10 @@ export const generarFechasPagoSemanales = (fechaInicio, numCuotas) => {
 // Generar fechas de pago quincenales
 export const generarFechasPagoQuincenales = (fechaInicio, numCuotas, tipo = '1-16') => {
   const fechas = [];
-  let fecha = parseISO(fechaInicio);
+  
+  // Extraer año, mes y día manualmente para evitar problemas de zona horaria
+  let [yearInit, monthInit, dayInit] = fechaInicio.split('-').map(Number);
+  let fecha = new Date(yearInit, monthInit - 1, dayInit, 12, 0, 0, 0);
 
   const dias = tipo === '1-16' ? [1, 16] : [5, 20];
 
@@ -179,7 +172,10 @@ export const generarFechasPagoQuincenales = (fechaInicio, numCuotas, tipo = '1-1
 // Generar fechas de pago mensuales (3 cuotas)
 export const generarFechasPagoMensuales = (fechaInicio, numCuotas) => {
   const fechas = [];
-  let fecha = parseISO(fechaInicio);
+  
+  // Extraer año, mes y día manualmente para evitar problemas de zona horaria
+  let [year, month, day] = fechaInicio.split('-').map(Number);
+  let fecha = new Date(year, month - 1, day, 12, 0, 0, 0);
 
   for (let i = 0; i < numCuotas; i++) {
     fechas.push({
