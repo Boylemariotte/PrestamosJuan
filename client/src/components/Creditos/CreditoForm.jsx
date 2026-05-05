@@ -49,28 +49,7 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
   const [fechasManuales, setFechasManuales] = useState([]);
   const [erroresFechas, setErroresFechas] = useState([]);
 
-  // Asegurar que el tipo de pago sea válido cuando cambian las props
-  useEffect(() => {
-    if (tipoPagoPredefinido && tiposPermitidos.includes(tipoPagoPredefinido)) {
-      setFormData(prev => ({ ...prev, tipo: tipoPagoPredefinido }));
-    } else if (tipoPagoPreferido && tiposPermitidos.includes(tipoPagoPreferido)) {
-      setFormData(prev => ({ ...prev, tipo: tipoPagoPreferido }));
-    }
-  }, [carteraCliente, tipoPagoPredefinido, tipoPagoPreferido, tiposPermitidos]);
-
-  // Inicializar fechas manuales cuando cambia el número de cuotas o el modo
-  useEffect(() => {
-    if (formData.modoFechas === 'manual') {
-      const nuevasFechas = Array.from({ length: numCuotas }, (_, i) => {
-        // Si ya existe una fecha, mantenerla, si no, dejar vacía
-        return fechasManuales[i] || '';
-      });
-      setFechasManuales(nuevasFechas);
-      setErroresFechas([]);
-    }
-  }, [numCuotas, formData.modoFechas]);
-
-  // Cálculos dinámicos
+  // Cálculos dinámicos (antes de los useEffect que dependen de ellos)
   const montoReal = formData.usarMontoManual && formData.montoManual
     ? parseFloat(formData.montoManual)
     : formData.monto;
@@ -94,6 +73,27 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
   const totalAPagar = formData.usarMontoManual
     ? (valorCuota * numCuotas)
     : calcularTotalAPagar(montoReal, formData.tipo);
+
+  // Asegurar que el tipo de pago sea válido cuando cambian las props
+  useEffect(() => {
+    if (tipoPagoPredefinido && tiposPermitidos.includes(tipoPagoPredefinido)) {
+      setFormData(prev => ({ ...prev, tipo: tipoPagoPredefinido }));
+    } else if (tipoPagoPreferido && tiposPermitidos.includes(tipoPagoPreferido)) {
+      setFormData(prev => ({ ...prev, tipo: tipoPagoPreferido }));
+    }
+  }, [carteraCliente, tipoPagoPredefinido, tipoPagoPreferido, tiposPermitidos]);
+
+  // Inicializar fechas manuales cuando cambia el número de cuotas o el modo
+  useEffect(() => {
+    if (formData.modoFechas === 'manual') {
+      const nuevasFechas = Array.from({ length: numCuotas }, (_, i) => {
+        // Si ya existe una fecha, mantenerla, si no, dejar vacía
+        return fechasManuales[i] || '';
+      });
+      setFechasManuales(nuevasFechas);
+      setErroresFechas([]);
+    }
+  }, [numCuotas, formData.modoFechas]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;

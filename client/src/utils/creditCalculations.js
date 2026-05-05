@@ -255,7 +255,18 @@ export const determinarEstadoCredito = (cuotas, credito = null) => {
   const tieneCuotasVencidas = cuotasActualizadas.some((cuota, index) => {
     const cuotaOriginal = cuotas[index];
     if (!cuotaOriginal.pagado) {
-      const fechaProgramada = startOfDay(parseISO(cuotaOriginal.fechaProgramada));
+      // Parsear fecha sin conversión UTC
+      let fechaProgramada;
+      if (typeof cuotaOriginal.fechaProgramada === 'string') {
+        const fechaLimpia = cuotaOriginal.fechaProgramada.includes('T') ? 
+          cuotaOriginal.fechaProgramada.split('T')[0] : 
+          cuotaOriginal.fechaProgramada;
+        const [year, month, day] = fechaLimpia.split('-').map(Number);
+        fechaProgramada = startOfDay(new Date(year, month - 1, day));
+      } else {
+        fechaProgramada = startOfDay(new Date(cuotaOriginal.fechaProgramada));
+      }
+      
       if (isBefore(fechaProgramada, hoy)) {
         // Verificar si la cuota está completamente cubierta por abonos
         if (credito) {
@@ -298,10 +309,19 @@ export const getColorEstado = (estado) => {
   }
 };
 
-// Calcular días de mora
+// Calcular días de mora (corregido para evitar problemas de zona horaria)
 export const calcularDiasMora = (fechaProgramada) => {
   const hoy = startOfDay(new Date());
-  const fecha = startOfDay(parseISO(fechaProgramada));
+  
+  // Parsear fecha sin conversión UTC
+  let fecha;
+  if (typeof fechaProgramada === 'string') {
+    const fechaLimpia = fechaProgramada.includes('T') ? fechaProgramada.split('T')[0] : fechaProgramada;
+    const [year, month, day] = fechaLimpia.split('-').map(Number);
+    fecha = startOfDay(new Date(year, month - 1, day));
+  } else {
+    fecha = startOfDay(new Date(fechaProgramada));
+  }
 
   if (isBefore(fecha, hoy)) {
     const diffTime = Math.abs(hoy - fecha);
@@ -378,16 +398,54 @@ export const formatearMoneda = (valor) => {
   }).format(valor);
 };
 
-// Formatear fecha
+// Formatear fecha (corregido para evitar problemas de zona horaria)
 export const formatearFecha = (fecha) => {
   if (!fecha) return '-';
-  return format(parseISO(fecha), "d 'de' MMMM, yyyy", { locale: es });
+  
+  // Si ya viene como objeto Date, usarlo directamente
+  if (fecha instanceof Date) {
+    return format(fecha, "d 'de' MMMM, yyyy", { locale: es });
+  }
+  
+  // Si es string YYYY-MM-DD, parsear sin conversión UTC
+  if (typeof fecha === 'string') {
+    // Extraer año, mes y día manualmente para evitar UTC
+    const fechaLimpia = fecha.includes('T') ? fecha.split('T')[0] : fecha;
+    const [year, month, day] = fechaLimpia.split('-').map(Number);
+    
+    // Crear fecha en zona local (no UTC)
+    const fechaLocal = new Date(year, month - 1, day);
+    
+    return format(fechaLocal, "d 'de' MMMM, yyyy", { locale: es });
+  }
+  
+  // Fallback para otros casos
+  return format(new Date(fecha), "d 'de' MMMM, yyyy", { locale: es });
 };
 
-// Formatear fecha corta
+// Formatear fecha corta (corregido para evitar problemas de zona horaria)
 export const formatearFechaCorta = (fecha) => {
   if (!fecha) return '-';
-  return format(parseISO(fecha), 'dd/MM/yyyy');
+  
+  // Si ya viene como objeto Date, usarlo directamente
+  if (fecha instanceof Date) {
+    return format(fecha, 'dd/MM/yyyy');
+  }
+  
+  // Si es string YYYY-MM-DD, parsear sin conversión UTC
+  if (typeof fecha === 'string') {
+    // Extraer año, mes y día manualmente para evitar UTC
+    const fechaLimpia = fecha.includes('T') ? fecha.split('T')[0] : fecha;
+    const [year, month, day] = fechaLimpia.split('-').map(Number);
+    
+    // Crear fecha en zona local (no UTC)
+    const fechaLocal = new Date(year, month - 1, day);
+    
+    return format(fechaLocal, 'dd/MM/yyyy');
+  }
+  
+  // Fallback para otros casos
+  return format(new Date(fecha), 'dd/MM/yyyy');
 };
 
 // Calcular total de multas de una cuota (Deprecado/Fallback)
@@ -416,7 +474,15 @@ export const calcularValorTotalCuota = (valorCuota, cuota) => {
 export const isFechaPasada = (fecha) => {
   if (!fecha) return false;
   try {
-    const fechaObj = typeof fecha === 'string' ? parseISO(fecha) : new Date(fecha);
+    let fechaObj;
+    if (typeof fecha === 'string') {
+      // Parsear sin conversión UTC
+      const fechaLimpia = fecha.includes('T') ? fecha.split('T')[0] : fecha;
+      const [year, month, day] = fechaLimpia.split('-').map(Number);
+      fechaObj = new Date(year, month - 1, day);
+    } else {
+      fechaObj = new Date(fecha);
+    }
     return isPast(startOfDay(fechaObj));
   } catch (error) {
     console.error('Error al verificar fecha:', error);
