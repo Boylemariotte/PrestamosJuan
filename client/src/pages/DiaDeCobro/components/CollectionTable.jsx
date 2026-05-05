@@ -49,6 +49,10 @@ const CollectionTable = ({
                             if (item.clienteRF === 'RF') {
                                 carteraRowClass = 'bg-purple-100 hover:bg-purple-200 border-b';
                             }
+                            
+                            if (item.tieneAbonoParcialHoy) {
+                                carteraRowClass = 'bg-yellow-100 hover:bg-yellow-200 border-b';
+                            }
 
                             return (
                                 <tr key={`${item.clienteId}-${item.creditoId}-${index}`} className={carteraRowClass}>
