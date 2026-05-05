@@ -91,6 +91,62 @@ export const getCredito = async (req, res, next) => {
 };
 
 /**
+ * Validar fechas manuales de cuotas
+ */
+const validarFechasManuales = (cuotas, tipoPago) => {
+  if (!Array.isArray(cuotas) || cuotas.length === 0) {
+    throw new Error('Debe proporcionar al menos una cuota con fecha programada');
+  }
+
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0); // Inicio del día para comparación
+
+  cuotas.forEach((cuota, index) => {
+    const numeroCuota = index + 1;
+
+    // Validar que exista fechaProgramada
+    if (!cuota.fechaProgramada) {
+      throw new Error(`La cuota ${numeroCuota} no tiene fecha programada`);
+    }
+
+    // Validar formato YYYY-MM-DD
+    if (!cuota.fechaProgramada.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      throw new Error(`Formato de fecha inválido en cuota ${numeroCuota}. Use formato AAAA-MM-DD`);
+    }
+
+    // Validar que sea una fecha válida
+    const fecha = new Date(cuota.fechaProgramada);
+    if (isNaN(fecha.getTime())) {
+      throw new Error(`Fecha inválida en cuota ${numeroCuota}`);
+    }
+
+    // Validar que no sea en el pasado
+    if (fecha < hoy) {
+      throw new Error(`La fecha de la cuota ${numeroCuota} (${cuota.fechaProgramada}) no puede ser anterior a hoy`);
+    }
+
+    // Validar secuencia cronológica
+    if (index > 0) {
+      const fechaAnterior = new Date(cuotas[index - 1].fechaProgramada);
+      if (fecha <= fechaAnterior) {
+        throw new Error(`La fecha de la cuota ${numeroCuota} debe ser posterior a la cuota ${index}`);
+      }
+    }
+
+    // Validar consistencia con tipo de pago (opcional, como guía)
+    if (tipoPago === 'semanal' && index > 0) {
+      const fechaAnterior = new Date(cuotas[index - 1].fechaProgramada);
+      const diasDiferencia = Math.floor((fecha - fechaAnterior) / (1000 * 60 * 60 * 24));
+      if (diasDiferencia < 6 || diasDiferencia > 8) {
+        console.warn(`Advertencia: Para pago semanal, la diferencia entre cuotas ${index} y ${numeroCuota} es de ${diasDiferencia} días (se esperan 7 días)`);
+      }
+    }
+  });
+
+  return true;
+};
+
+/**
  * @desc    Crear un nuevo crédito
  * @route   POST /api/creditos
  * @access  Private
@@ -125,8 +181,21 @@ export const createCredito = async (req, res, next) => {
       esRenovacion: creditoDataRaw.esRenovacion || false,
       creditoAnteriorId: creditoDataRaw.creditoAnteriorId || null,
       etiqueta: creditoDataRaw.etiqueta || null,
-      cuotas: creditoDataRaw.cuotas || []
+      cuotas: creditoDataRaw.cuotas || [],
+      modoFechas: creditoDataRaw.modoFechas || 'automatico' // 'automatico' | 'manual'
     };
+
+    // Validar fechas manuales si se usa modo manual
+    if (creditoData.modoFechas === 'manual') {
+      try {
+        validarFechasManuales(creditoData.cuotas, creditoData.tipo);
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          error: error.message
+        });
+      }
+    }
 
     // Forzar 3 cuotas máximo si el crédito es mensual
     if (creditoData.tipo === 'mensual' && creditoData.cuotas.length > 3) {

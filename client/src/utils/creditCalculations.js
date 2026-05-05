@@ -438,3 +438,90 @@ export const calcularValorPendienteCuota = (valorCuota, cuota) => {
 
   return Math.max(0, capitalPendiente);
 };
+
+// Validar fechas manuales de cuotas (frontend)
+export const validarFechasManuales = (fechas, tipoPago) => {
+  const errores = [];
+  const hoy = startOfDay(new Date());
+
+  if (!Array.isArray(fechas) || fechas.length === 0) {
+    errores.push('Debe proporcionar al menos una fecha de cuota');
+    return { valido: false, errores };
+  }
+
+  fechas.forEach((fecha, index) => {
+    const numeroCuota = index + 1;
+
+    // Validar que exista la fecha
+    if (!fecha) {
+      errores.push(`La cuota ${numeroCuota} no tiene fecha programada`);
+      return;
+    }
+
+    // Validar formato YYYY-MM-DD
+    if (!fecha.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      errores.push(`Formato de fecha inválido en cuota ${numeroCuota}. Use formato AAAA-MM-DD`);
+      return;
+    }
+
+    // Validar que sea una fecha válida
+    const fechaObj = new Date(fecha);
+    if (isNaN(fechaObj.getTime())) {
+      errores.push(`Fecha inválida en cuota ${numeroCuota}`);
+      return;
+    }
+
+    // Validar que no sea en el pasado
+    if (isBefore(fechaObj, hoy)) {
+      errores.push(`La fecha de la cuota ${numeroCuota} (${fecha}) no puede ser anterior a hoy`);
+    }
+
+    // Validar secuencia cronológica
+    if (index > 0) {
+      const fechaAnterior = new Date(fechas[index - 1]);
+      if (fechaObj <= fechaAnterior) {
+        errores.push(`La fecha de la cuota ${numeroCuota} debe ser posterior a la cuota ${index}`);
+      }
+    }
+
+    // Validar consistencia con tipo de pago (advertencias)
+    if (tipoPago === 'semanal' && index > 0) {
+      const fechaAnterior = new Date(fechas[index - 1]);
+      const diasDiferencia = Math.floor((fechaObj - fechaAnterior) / (1000 * 60 * 60 * 24));
+      if (diasDiferencia < 6 || diasDiferencia > 8) {
+        console.warn(`Advertencia: Para pago semanal, la diferencia entre cuotas ${index} y ${numeroCuota} es de ${diasDiferencia} días (se esperan 7 días)`);
+      }
+    }
+  });
+
+  return {
+    valido: errores.length === 0,
+    errores
+  };
+};
+
+// Crear cuotas desde fechas manuales
+export const crearCuotasDesdeFechas = (fechas, valorCuota) => {
+  return fechas.map((fecha, index) => ({
+    nroCuota: index + 1,
+    fechaProgramada: fecha,
+    pagado: false,
+    fechaPago: null
+  }));
+};
+
+// Generar fechas automáticas (mantener compatibilidad)
+export const generarFechasAutomaticas = (tipo, fechaInicio, numCuotas, tipoQuincenal = '1-16') => {
+  switch (tipo) {
+    case 'diario':
+      return generarFechasPagoDiarias(fechaInicio, numCuotas);
+    case 'semanal':
+      return generarFechasPagoSemanales(fechaInicio, numCuotas);
+    case 'quincenal':
+      return generarFechasPagoQuincenales(fechaInicio, numCuotas, tipoQuincenal);
+    case 'mensual':
+      return generarFechasPagoMensuales(fechaInicio, numCuotas);
+    default:
+      return generarFechasPagoQuincenales(fechaInicio, numCuotas, tipoQuincenal);
+  }
+};

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X } from 'lucide-react';
+import { X, Calendar, AlertCircle } from 'lucide-react';
 import {
   MONTOS_DISPONIBLES,
   calcularTotalAPagar,
@@ -7,7 +7,9 @@ import {
   obtenerNumCuotas,
   calcularPapeleria,
   calcularMontoEntregado,
-  formatearMoneda
+  formatearMoneda,
+  validarFechasManuales,
+  crearCuotasDesdeFechas
 } from '../../utils/creditCalculations';
 import { obtenerFechaLocal } from '../../utils/dateUtils';
 
@@ -39,8 +41,13 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
     usarMontoManual: false,
     montoManual: '',
     valorCuotaManual: '',
-    numCuotasManual: ''
+    numCuotasManual: '',
+    modoFechas: 'automatico' // 'automatico' | 'manual'
   });
+
+  // Estado para fechas manuales
+  const [fechasManuales, setFechasManuales] = useState([]);
+  const [erroresFechas, setErroresFechas] = useState([]);
 
   // Asegurar que el tipo de pago sea válido cuando cambian las props
   useEffect(() => {
@@ -50,6 +57,18 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
       setFormData(prev => ({ ...prev, tipo: tipoPagoPreferido }));
     }
   }, [carteraCliente, tipoPagoPredefinido, tipoPagoPreferido, tiposPermitidos]);
+
+  // Inicializar fechas manuales cuando cambia el número de cuotas o el modo
+  useEffect(() => {
+    if (formData.modoFechas === 'manual') {
+      const nuevasFechas = Array.from({ length: numCuotas }, (_, i) => {
+        // Si ya existe una fecha, mantenerla, si no, dejar vacía
+        return fechasManuales[i] || '';
+      });
+      setFechasManuales(nuevasFechas);
+      setErroresFechas([]);
+    }
+  }, [numCuotas, formData.modoFechas]);
 
   // Cálculos dinámicos
   const montoReal = formData.usarMontoManual && formData.montoManual
@@ -84,14 +103,94 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
     }));
   };
 
+  // Manejar cambio de fecha manual específica
+  const handleFechaManualChange = (index, fecha) => {
+    const nuevasFechas = [...fechasManuales];
+    nuevasFechas[index] = fecha;
+    setFechasManuales(nuevasFechas);
+
+    // Validar inmediatamente
+    if (fecha) {
+      const validacion = validarFechasManuales(nuevasFechas, formData.tipo);
+      setErroresFechas(validacion.errores);
+    } else {
+      setErroresFechas([]);
+    }
+  };
+
+  // Autocompletar fechas basadas en la primera fecha
+  const autocompletarFechas = () => {
+    if (fechasManuales.length === 0 || !fechasManuales[0]) {
+      alert('Por favor ingrese la primera fecha primero');
+      return;
+    }
+
+    const primeraFecha = new Date(fechasManuales[0]);
+    const nuevasFechas = [fechasManuales[0]];
+
+    for (let i = 1; i < numCuotas; i++) {
+      let fechaSiguiente;
+      
+      switch (formData.tipo) {
+        case 'diario':
+          fechaSiguiente = new Date(primeraFecha);
+          fechaSiguiente.setDate(primeraFecha.getDate() + i);
+          break;
+        case 'semanal':
+          fechaSiguiente = new Date(primeraFecha);
+          fechaSiguiente.setDate(primeraFecha.getDate() + (i * 7));
+          break;
+        case 'quincenal':
+          // Lógica simplificada para quincenal
+          fechaSiguiente = new Date(primeraFecha);
+          fechaSiguiente.setDate(primeraFecha.getDate() + (i * 15));
+          break;
+        case 'mensual':
+          fechaSiguiente = new Date(primeraFecha);
+          fechaSiguiente.setMonth(primeraFecha.getMonth() + i);
+          break;
+        default:
+          fechaSiguiente = new Date(primeraFecha);
+          fechaSiguiente.setDate(primeraFecha.getDate() + (i * 7));
+      }
+
+      nuevasFechas.push(fechaSiguiente.toISOString().split('T')[0]);
+    }
+
+    setFechasManuales(nuevasFechas);
+    
+    // Validar fechas autocompletadas
+    const validacion = validarFechasManuales(nuevasFechas, formData.tipo);
+    setErroresFechas(validacion.errores);
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
+    
     // Si es manual, validar que los campos estén llenos
     if (formData.usarMontoManual) {
       if (!formData.montoManual || !formData.valorCuotaManual || !formData.numCuotasManual) {
         alert('Por favor complete todos los campos manuales');
         return;
       }
+    }
+
+    // Validar fechas manuales si está en modo manual
+    if (formData.modoFechas === 'manual') {
+      const validacion = validarFechasManuales(fechasManuales, formData.tipo);
+      if (!validacion.valido) {
+        alert('Errores en las fechas:\n' + validacion.errores.join('\n'));
+        return;
+      }
+    }
+
+    // Preparar cuotas según el modo
+    let cuotas;
+    if (formData.modoFechas === 'manual') {
+      cuotas = crearCuotasDesdeFechas(fechasManuales, valorCuota);
+    } else {
+      // El backend generará las fechas automáticamente
+      cuotas = [];
     }
 
     // Preparar datos para enviar
@@ -101,7 +200,8 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
       valorCuota: valorCuota, // Enviar valor cuota calculado o manual
       numCuotas: numCuotas, // Enviar num cuotas calculado o manual
       totalAPagar: totalAPagar, // Enviar total calculado
-      esManual: formData.usarMontoManual
+      esManual: formData.usarMontoManual,
+      cuotas: cuotas // Enviar cuotas (vacías si es automático, con fechas si es manual)
     };
 
     onSubmit(dataToSubmit);
@@ -298,8 +398,100 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
                 onChange={handleChange}
                 className="input-field"
                 required
+                disabled={formData.modoFechas === 'manual'}
               />
+              {formData.modoFechas === 'manual' && (
+                <p className="text-xs text-gray-500 mt-1">
+                  La fecha de inicio se ignora en modo manual. Use las fechas específicas de cada cuota abajo.
+                </p>
+              )}
             </div>
+
+            {/* Modo de Fechas */}
+            <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
+              <div className="flex items-center mb-3">
+                <Calendar className="h-5 w-5 text-blue-600 mr-2" />
+                <label className="font-medium text-gray-900">Modo de Fechas de Cuotas</label>
+              </div>
+              <div className="space-y-2">
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="radio"
+                    name="modoFechas"
+                    value="automatico"
+                    checked={formData.modoFechas === 'automatico'}
+                    onChange={handleChange}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="ml-2 text-sm">Automático - Generar fechas según tipo de pago</span>
+                </label>
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="radio"
+                    name="modoFechas"
+                    value="manual"
+                    checked={formData.modoFechas === 'manual'}
+                    onChange={handleChange}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="ml-2 text-sm">Manual - Ingresar cada fecha individualmente</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Selector de Fechas Manuales */}
+            {formData.modoFechas === 'manual' && (
+              <div className="border-2 border-orange-200 rounded-lg p-4 bg-orange-50">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center">
+                    <Calendar className="h-5 w-5 text-orange-600 mr-2" />
+                    <label className="font-medium text-gray-900">Fechas de Cuotas Manuales</label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={autocompletarFechas}
+                    className="px-3 py-1 text-xs bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors"
+                  >
+                    Autocompletar
+                  </button>
+                </div>
+                
+                {erroresFechas.length > 0 && (
+                  <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded">
+                    <div className="flex items-center">
+                      <AlertCircle className="h-4 w-4 text-red-600 mr-2" />
+                      <span className="text-sm text-red-800">Errores encontrados:</span>
+                    </div>
+                    <ul className="mt-1 text-xs text-red-700 list-disc list-inside">
+                      {erroresFechas.map((error, index) => (
+                        <li key={index}>{error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {Array.from({ length: numCuotas }, (_, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <label className="text-sm font-medium text-gray-700 w-16">
+                        Cuota {i + 1}:
+                      </label>
+                      <input
+                        type="date"
+                        value={fechasManuales[i] || ''}
+                        onChange={(e) => handleFechaManualChange(i, e.target.value)}
+                        className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        required
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-xs text-gray-500 mt-2">
+                  Las fechas deben ser secuenciales y no pueden ser anteriores a hoy.
+                </p>
+              </div>
+            )}
 
             {/* Papelería/Ajuste Manual */}
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
