@@ -266,7 +266,11 @@ export const AppProvider = ({ children }) => {
 
   const agregarCredito = async (clienteId, creditoData) => {
     try {
-      const { monto, tipo, fechaInicio, tipoQuincenal, papeleriaManual, usarPapeleriaManual, esManual, valorCuota: valorCuotaManual, numCuotas: numCuotasManual, totalAPagar: totalAPagarManual } = creditoData;
+      const { 
+        monto, tipo, fechaInicio, tipoQuincenal, papeleriaManual, usarPapeleriaManual, 
+        esManual, valorCuota: valorCuotaManual, numCuotas: numCuotasManual, totalAPagar: totalAPagarManual,
+        modoFechas, cuotas: cuotasManuales 
+      } = creditoData;
 
       // Cálculos preliminares (similares al original para asegurar datos correctos)
       const papeleriaAutomatica = calcularPapeleria(monto);
@@ -278,12 +282,18 @@ export const AppProvider = ({ children }) => {
       const valorCuota = esManual ? valorCuotaManual : calcularValorCuota(monto, tipo);
 
       let cuotas;
-      switch (tipo) {
-        case 'diario': cuotas = generarFechasPagoDiarias(fechaInicio, numCuotas); break;
-        case 'semanal': cuotas = generarFechasPagoSemanales(fechaInicio, numCuotas); break;
-        case 'quincenal': cuotas = generarFechasPagoQuincenales(fechaInicio, numCuotas, tipoQuincenal || '1-16'); break;
-        case 'mensual': cuotas = generarFechasPagoMensuales(fechaInicio, numCuotas); break;
-        default: cuotas = generarFechasPagoSemanales(fechaInicio, numCuotas);
+      if (modoFechas === 'manual') {
+        // Usar cuotas manuales del frontend (ya vienen validadas)
+        cuotas = cuotasManuales || [];
+      } else {
+        // Mantener lógica actual automática
+        switch (tipo) {
+          case 'diario': cuotas = generarFechasPagoDiarias(fechaInicio, numCuotas); break;
+          case 'semanal': cuotas = generarFechasPagoSemanales(fechaInicio, numCuotas); break;
+          case 'quincenal': cuotas = generarFechasPagoQuincenales(fechaInicio, numCuotas, tipoQuincenal || '1-16'); break;
+          case 'mensual': cuotas = generarFechasPagoMensuales(fechaInicio, numCuotas); break;
+          default: cuotas = generarFechasPagoSemanales(fechaInicio, numCuotas);
+        }
       }
 
       const payload = {
@@ -298,6 +308,7 @@ export const AppProvider = ({ children }) => {
         valorCuota,
         numCuotas,
         cuotas,
+        modoFechas, // Nuevo campo para indicar modo de fechas
         etiqueta: creditoData.etiqueta,
         esRenovacion: creditoData.esRenovacion || false,
         creditoAnteriorId: creditoData.creditoAnteriorId
