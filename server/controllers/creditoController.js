@@ -243,6 +243,7 @@ export const createCredito = async (req, res, next) => {
       etiqueta: creditoData.etiqueta || null,
       esRenovacion: creditoData.esRenovacion || false,
       creditoAnteriorId: creditoData.creditoAnteriorId || null,
+      modoFechas: creditoData.modoFechas || 'automatico',
       fechaCreacion: new Date()
     };
 
@@ -305,6 +306,7 @@ const syncCreditoToCliente = async (creditoId) => {
         creditoRenovacionId: credito.creditoRenovacionId,
         esRenovacion: credito.esRenovacion,
         creditoAnteriorId: credito.creditoAnteriorId,
+        modoFechas: credito.modoFechas || 'automatico',
         fechaCreacion: credito.fechaCreacion
       };
       await cliente.save();

@@ -194,6 +194,11 @@ const creditoSchema = new mongoose.Schema({
     default: false
   },
   creditoAnteriorId: String,
+  modoFechas: {
+    type: String,
+    enum: ['automatico', 'manual'],
+    default: 'automatico'
+  },
   fechaCreacion: {
     type: Date,
     default: Date.now
