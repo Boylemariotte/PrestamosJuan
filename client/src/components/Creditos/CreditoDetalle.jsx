@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { AlertCircle, Trash2, Award, Check, Calendar, Plus } from 'lucide-react';
+import { AlertCircle, Trash2, Award, Check, Calendar, Plus, Settings } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import RenovacionForm from './RenovacionForm';
 import {
@@ -162,6 +162,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
   const [mostrarFormularioRenovacion, setMostrarFormularioRenovacion] = useState(false);
   const [mostrarEditorFecha, setMostrarEditorFecha] = useState(null);
   const [nuevaFecha, setNuevaFecha] = useState('');
+  const [modoEdicionFechas, setModoEdicionFechas] = useState('automatico'); // 'automatico' | 'manual'
 
   // Estado para edición de abonos (pagos)
   const [abonoEnEdicion, setAbonoEnEdicion] = useState(null);
@@ -283,7 +284,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
       const [year, month, day] = nuevaFecha.split('-').map(Number);
       const fechaLocal = new Date(year, month - 1, day, 12, 0, 0, 0);
 
-      editarFechaCuota(clienteId, credito.id, mostrarEditorFecha, fechaLocal.toISOString());
+      editarFechaCuota(clienteId, credito.id, mostrarEditorFecha, fechaLocal.toISOString(), modoEdicionFechas);
       // Pequeño delay para asegurar que el estado se actualice
       setTimeout(() => {
         setMostrarEditorFecha(null);
@@ -1078,6 +1079,39 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
 
               {/* COLUMNA DERECHA: GRILLA DE CUOTAS */}
               <div className="lg:w-2/3">
+                {/* Modo de Edición de Fechas */}
+                {!soloLectura && (
+                  <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50 mb-4">
+                    <div className="flex items-center mb-3">
+                      <Settings className="h-5 w-5 text-blue-600 mr-2" />
+                      <label className="font-medium text-gray-900">Modo de Edición de Fechas</label>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="flex items-center cursor-pointer">
+                        <input
+                          type="radio"
+                          name="modoEdicionFechas"
+                          value="automatico"
+                          checked={modoEdicionFechas === 'automatico'}
+                          onChange={(e) => setModoEdicionFechas(e.target.value)}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="ml-2 text-sm">Automático - Ajustar cuotas posteriores</span>
+                      </label>
+                      <label className="flex items-center cursor-pointer">
+                        <input
+                          type="radio"
+                          name="modoEdicionFechas"
+                          value="manual"
+                          checked={modoEdicionFechas === 'manual'}
+                          onChange={(e) => setModoEdicionFechas(e.target.value)}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="ml-2 text-sm">Manual - Editar solo esta cuota</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
                 <GrillaCuotas
                   formData={formData}
                   credito={credito}
@@ -1219,6 +1253,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
                   onFechaChange={setNuevaFecha}
                   onGuardar={handleGuardarFecha}
                   onCancelar={handleCancelarEdicionFecha}
+                  modoEdicion={modoEdicionFechas}
                 />
               </div>
             </div>

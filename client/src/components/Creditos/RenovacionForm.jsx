@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
-import { X, RefreshCw, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, RefreshCw, AlertCircle, Calendar } from 'lucide-react';
 import {
   MONTOS_DISPONIBLES,
   calcularTotalAPagar,
   calcularValorCuota,
   obtenerNumCuotas,
   calcularPapeleria,
-  formatearMoneda
+  formatearMoneda,
+  validarFechasManuales,
+  crearCuotasDesdeFechas
 } from '../../utils/creditCalculations';
 import { obtenerFechaLocal } from '../../utils/dateUtils';
 
@@ -19,8 +21,13 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
     usarMontoManual: false,
     montoManual: '',
     valorCuotaManual: '',
-    numCuotasManual: ''
+    numCuotasManual: '',
+    modoFechas: 'automatico' // Nuevo campo para modo híbrido
   });
+
+  // Estado para fechas manuales
+  const [fechasManuales, setFechasManuales] = useState([]);
+  const [erroresFechas, setErroresFechas] = useState([]);
 
   // Nombres de tipos de pago
   const nombresTipos = {
@@ -85,6 +92,64 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
   // Monto a entregar = Nuevo monto - Papelería - Deuda pendiente
   const montoAEntregar = montoReal - papeleria - deudaPendiente;
 
+  // Efecto para inicializar fechas manuales cuando cambia el modo o el número de cuotas
+  useEffect(() => {
+    if (formData.modoFechas === 'manual') {
+      const nuevasFechas = Array.from({ length: numCuotas }, (_, i) => {
+        return fechasManuales[i] || '';
+      });
+      setFechasManuales(nuevasFechas);
+      setErroresFechas([]);
+    }
+  }, [numCuotas, formData.modoFechas]);
+
+  // Función para manejar cambios en fechas manuales
+  const handleFechaManualChange = (index, fecha) => {
+    const nuevasFechas = [...fechasManuales];
+    nuevasFechas[index] = fecha;
+    setFechasManuales(nuevasFechas);
+    
+    // Validar en tiempo real
+    if (fecha) {
+      const validacion = validarFechasManuales(nuevasFechas, formData.tipo);
+      setErroresFechas(validacion.errores);
+    } else {
+      setErroresFechas([]);
+    }
+  };
+
+  // Función para autocompletar fechas
+  const autocompletarFechas = () => {
+    const fechaBase = new Date(formData.fechaInicio);
+    const nuevasFechas = [];
+    
+    for (let i = 0; i < numCuotas; i++) {
+      let fecha = new Date(fechaBase);
+      
+      switch (formData.tipo) {
+        case 'diario':
+          fecha.setDate(fecha.getDate() + i);
+          break;
+        case 'semanal':
+          fecha.setDate(fecha.getDate() + (i * 7));
+          break;
+        case 'quincenal':
+          fecha.setDate(fecha.getDate() + (i * 15));
+          break;
+        case 'mensual':
+          fecha.setMonth(fecha.getMonth() + (i + 1));
+          break;
+        default:
+          fecha.setDate(fecha.getDate() + (i * 7));
+      }
+      
+      nuevasFechas.push(fecha.toISOString().split('T')[0]);
+    }
+    
+    setFechasManuales(nuevasFechas);
+    setErroresFechas([]);
+  };
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
@@ -104,9 +169,27 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
       }
     }
     
+    // Validar fechas manuales si está en modo manual
+    if (formData.modoFechas === 'manual') {
+      const validacion = validarFechasManuales(fechasManuales, formData.tipo);
+      if (!validacion.valido) {
+        alert('Errores en las fechas:\n' + validacion.errores.join('\n'));
+        return;
+      }
+    }
+    
     if (montoAEntregar < 0) {
       alert('La deuda pendiente es mayor que el monto de renovación. Por favor, selecciona un monto mayor.');
       return;
+    }
+    
+    // Preparar cuotas según el modo
+    let cuotas;
+    if (formData.modoFechas === 'manual') {
+      cuotas = crearCuotasDesdeFechas(fechasManuales, valorCuota);
+    } else {
+      // El backend generará las fechas automáticamente
+      cuotas = [];
     }
     
     // Preparar datos para enviar
@@ -118,7 +201,9 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
       totalAPagar: totalAPagar, // Enviar total calculado
       esManual: formData.usarMontoManual,
       deudaPendiente,
-      montoAEntregar: montoAEntregar
+      montoAEntregar: montoAEntregar,
+      cuotas: cuotas, // Enviar cuotas (vacías si es automático, con fechas si es manual)
+      modoFechas: formData.modoFechas // Nuevo campo
     };
     
     onSubmit(dataToSubmit);
@@ -365,6 +450,92 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
               required
             />
           </div>
+
+          {/* Modo de Fechas */}
+          <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
+            <div className="flex items-center mb-3">
+              <Calendar className="h-5 w-5 text-blue-600 mr-2" />
+              <label className="font-medium text-gray-900">Modo de Fechas de Cuotas</label>
+            </div>
+            <div className="space-y-2">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="modoFechas"
+                  value="automatico"
+                  checked={formData.modoFechas === 'automatico'}
+                  onChange={handleChange}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm">Automático - Generar fechas según tipo de pago</span>
+              </label>
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="modoFechas"
+                  value="manual"
+                  checked={formData.modoFechas === 'manual'}
+                  onChange={handleChange}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm">Manual - Ingresar cada fecha individualmente</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Selector de Fechas Manuales */}
+          {formData.modoFechas === 'manual' && (
+            <div className="border-2 border-orange-200 rounded-lg p-4 bg-orange-50">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center">
+                  <Calendar className="h-5 w-5 text-orange-600 mr-2" />
+                  <label className="font-medium text-gray-900">Fechas de Cuotas Manuales</label>
+                </div>
+                <button
+                  type="button"
+                  onClick={autocompletarFechas}
+                  className="px-3 py-1 text-xs bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors"
+                >
+                  Autocompletar
+                </button>
+              </div>
+              
+              {erroresFechas.length > 0 && (
+                <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded">
+                  <div className="flex items-center">
+                    <AlertCircle className="h-4 w-4 text-red-600 mr-2" />
+                    <span className="text-sm text-red-800">Errores encontrados:</span>
+                  </div>
+                  <ul className="mt-1 text-xs text-red-700 list-disc list-inside">
+                    {erroresFechas.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {Array.from({ length: numCuotas }, (_, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-gray-700 w-16">
+                      Cuota {i + 1}:
+                    </label>
+                    <input
+                      type="date"
+                      value={fechasManuales[i] || ''}
+                      onChange={(e) => handleFechaManualChange(i, e.target.value)}
+                      className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      required
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-xs text-gray-500 mt-2">
+                Las fechas deben ser secuenciales y no pueden ser anteriores a hoy.
+              </p>
+            </div>
+          )}
 
           {/* Resumen de la renovación */}
           <div className={`p-4 rounded-lg space-y-2 ${montoAEntregar >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>

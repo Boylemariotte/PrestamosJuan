@@ -8,7 +8,8 @@ const EditorFecha = ({
   nuevaFecha,
   onFechaChange,
   onGuardar,
-  onCancelar
+  onCancelar,
+  modoEdicion = 'automatico'
 }) => {
   return (
     <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
@@ -38,7 +39,10 @@ const EditorFecha = ({
         </div>
         <div className="bg-blue-100 border border-blue-300 rounded-lg p-3">
           <p className="text-sm text-blue-800">
-            <strong>Nota:</strong> Al cambiar esta fecha, todas las cuotas posteriores se ajustarán automáticamente manteniendo el intervalo de {credito.tipo === 'semanal' ? '7' : '15'} días.
+            <strong>Nota:</strong> {modoEdicion === 'automatico' 
+              ? `Al cambiar esta fecha, todas las cuotas posteriores se ajustarán automáticamente manteniendo el intervalo de ${credito.tipo === 'semanal' ? '7' : '15'} días.`
+              : 'Solo se modificará esta cuota. Las demás cuotas permanecerán sin cambios.'
+            }
           </p>
         </div>
       </div>

@@ -518,7 +518,7 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const editarFechaCuota = async (clienteId, creditoId, nroCuota, nuevaFecha) => {
+  const editarFechaCuota = async (clienteId, creditoId, nroCuota, nuevaFecha, modoEdicion = 'automatico') => {
     try {
       const credito = obtenerCredito(clienteId, creditoId);
       if (!credito) return;
@@ -555,8 +555,9 @@ export const AppProvider = ({ children }) => {
       const nuevasCuotas = credito.cuotas.map(cuota => {
         if (cuota.nroCuota === nroCuota) {
           return { ...cuota, fechaProgramada: fechaNuevaISO };
-        } else if (cuota.nroCuota > nroCuota) {
+        } else if (cuota.nroCuota > nroCuota && modoEdicion === 'automatico') {
           // Para las cuotas posteriores, también usar constructor local para evitar desfase
+          // Solo ajustar si está en modo automático
           let fechaCuotaStr = cuota.fechaProgramada;
           if (typeof fechaCuotaStr === 'string' && fechaCuotaStr.includes('T')) {
             fechaCuotaStr = fechaCuotaStr.substring(0, 10); // YYYY-MM-DD
@@ -566,7 +567,7 @@ export const AppProvider = ({ children }) => {
           fechaCuota.setDate(fechaCuota.getDate() + diferenciaDias);
           return { ...cuota, fechaProgramada: fechaCuota.toISOString() };
         }
-        return cuota;
+        return cuota; // En modo manual, las demás cuotas no cambian
       });
 
       await actualizarCredito(clienteId, creditoId, { cuotas: nuevasCuotas });
