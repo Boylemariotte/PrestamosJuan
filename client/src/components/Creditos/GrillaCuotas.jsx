@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { Calendar } from 'lucide-react';
 import { formatearMoneda } from '../../utils/creditCalculations';
 import CuotaCard from './CuotaCard';
 import RecobroCard from './RecobroCard';
@@ -16,6 +17,7 @@ const GrillaCuotas = ({
   onEliminarAbono,
   onPagarMulta,
   onEditarMulta,
+  onAbrirPanelEdicion,
   sinContenedor = false,
   soloLectura = false,
   procesando = false
@@ -85,6 +87,20 @@ const GrillaCuotas = ({
 
   const content = (
     <>
+      {/* Botón de Edición Masiva */}
+      {!soloLectura && onAbrirPanelEdicion && (
+        <div className="mb-4 flex justify-center">
+          <button
+            onClick={onAbrirPanelEdicion}
+            className="px-4 py-2 rounded-lg font-medium bg-purple-100 hover:bg-purple-200 text-purple-700 transition-colors flex items-center gap-2"
+            title="Editar múltiples fechas de cuotas"
+          >
+            <Calendar className="h-4 w-4" />
+            Editar Fechas
+          </button>
+        </div>
+      )}
+      
       <div className={`grid gap-4 mx-auto w-full cuotas-grid ${formData.tipoPago === 'quincenal' ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5'} auto-rows-fr`}>
         {Array.from({ length: obtenerNumeroCuotas(formData.tipoPago) }, (_, index) => {
           const nroCuota = index + 1;

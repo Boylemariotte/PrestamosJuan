@@ -30,6 +30,7 @@ import ListaDescuentos from './ListaDescuentos';
 import ListaAbonos from './ListaAbonos';
 import ListaNotas from './ListaNotas';
 import EditorFecha from './EditorFecha';
+import PanelEdicionFechas from './PanelEdicionFechas';
 
 const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, soloLectura = false }) => {
   const { registrarPago, cancelarPago, editarFechaCuota, agregarNota, eliminarNota, agregarMulta, editarMulta, eliminarMulta, agregarAbono, editarAbono, eliminarAbono, agregarDescuento, eliminarDescuento, asignarEtiquetaCredito, renovarCredito, eliminarCredito, obtenerCredito } = useApp();
@@ -164,6 +165,9 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
   const [nuevaFecha, setNuevaFecha] = useState('');
   const [modoEdicionFechas, setModoEdicionFechas] = useState('automatico'); // 'automatico' | 'manual'
 
+  // Estado para edición masiva de fechas
+  const [mostrarPanelEdicion, setMostrarPanelEdicion] = useState(false);
+
   // Estado para edición de abonos (pagos)
   const [abonoEnEdicion, setAbonoEnEdicion] = useState(null);
 
@@ -296,6 +300,103 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
   const handleCancelarEdicionFecha = () => {
     setMostrarEditorFecha(null);
     setNuevaFecha('');
+  };
+
+  // Handlers para edición masiva de fechas
+  const handleAbrirPanelEdicion = () => {
+    setMostrarPanelEdicion(true);
+  };
+
+  const handleGuardarEdicionMasiva = async (fechasEditadas) => {
+    try {
+      const cuotasNoPagadas = cuotasActualizadas.filter(c => !c.pagado);
+      const cuotasModificadas = [];
+      
+      // Identificar cuotas que realmente cambiaron
+      for (let i = 0; i < cuotasNoPagadas.length; i++) {
+        const cuota = cuotasNoPagadas[i];
+        const nuevaFecha = fechasEditadas[i];
+        
+        if (nuevaFecha && nuevaFecha !== cuota.fechaProgramada.substring(0, 10)) {
+          // Convertir a formato ISO string
+          const [year, month, day] = nuevaFecha.split('-').map(Number);
+          const fechaISO = new Date(year, month - 1, day, 12, 0, 0, 0).toISOString();
+          
+          cuotasModificadas.push({
+            ...cuota,
+            fechaProgramada: fechaISO
+          });
+        }
+      }
+      
+      // Si no hay cambios, cerrar panel
+      if (cuotasModificadas.length === 0) {
+        setMostrarPanelEdicion(false);
+        return;
+      }
+      
+      // Crear array completo de cuotas con los cambios aplicados
+      const cuotasActualizadasCompletas = cuotasActualizadas.map(cuota => {
+        const cuotaModificada = cuotasModificadas.find(cm => cm.nroCuota === cuota.nroCuota);
+        if (cuotaModificada) {
+          return cuotaModificada;
+        }
+        return cuota;
+      });
+      
+      // Si está en modo automático, ajustar cuotas posteriores
+      if (modoEdicionFechas === 'automatico') {
+        // Para cada cuota modificada, ajustar las posteriores
+        for (const cuotaModificada of cuotasModificadas) {
+          const indiceOriginal = cuotasActualizadas.findIndex(c => c.nroCuota === cuotaModificada.nroCuota);
+          const fechaOriginal = cuotasActualizadas[indiceOriginal];
+          
+          // Calcular diferencia en días
+          const [yearN, monthN, dayN] = cuotaModificada.fechaProgramada.substring(0, 10).split('-').map(Number);
+          const [yearO, monthO, dayO] = fechaOriginal.fechaProgramada.substring(0, 10).split('-').map(Number);
+          
+          const fechaNueva = new Date(yearN, monthN - 1, dayN, 12, 0, 0, 0);
+          const fechaOriginalDate = new Date(yearO, monthO - 1, dayO, 12, 0, 0, 0);
+          const diferenciaDias = Math.floor((fechaNueva - fechaOriginalDate) / (1000 * 60 * 60 * 24));
+          
+          // Ajustar cuotas posteriores
+          for (let i = indiceOriginal + 1; i < cuotasActualizadasCompletas.length; i++) {
+            const cuotaPosterior = cuotasActualizadasCompletas[i];
+            if (!cuotaPosterior.pagado) {
+              const [yearP, monthP, dayP] = cuotaPosterior.fechaProgramada.substring(0, 10).split('-').map(Number);
+              const fechaPosterior = new Date(yearP, monthP - 1, dayP, 12, 0, 0, 0);
+              fechaPosterior.setDate(fechaPosterior.getDate() + diferenciaDias);
+              
+              cuotasActualizadasCompletas[i] = {
+                ...cuotaPosterior,
+                fechaProgramada: fechaPosterior.toISOString()
+              };
+            }
+          }
+        }
+      }
+      
+      // Llamada única al backend con todas las cuotas actualizadas
+      await api.put(`/creditos/${credito.id}`, {
+        cuotas: cuotasActualizadasCompletas
+      });
+      
+      // Actualizar estado local
+      setCreditoActualizado(prev => ({
+        ...prev,
+        cuotas: cuotasActualizadasCompletas
+      }));
+      
+      // Cerrar panel
+      setMostrarPanelEdicion(false);
+    } catch (error) {
+      console.error('Error guardando edición masiva:', error);
+      alert('Error al guardar los cambios. Por favor intente nuevamente.');
+    }
+  };
+
+  const handleCancelarEdicionMasiva = () => {
+    setMostrarPanelEdicion(false);
   };
 
   const handleEliminarCredito = async () => {
@@ -1112,6 +1213,17 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
                     </div>
                   </div>
                 )}
+
+                {/* Panel de Edición Masiva de Fechas */}
+                {mostrarPanelEdicion && (
+                  <PanelEdicionFechas
+                    cuotasNoPagadas={cuotasActualizadas.filter(c => !c.pagado)}
+                    onGuardarCambios={handleGuardarEdicionMasiva}
+                    onCancelar={handleCancelarEdicionMasiva}
+                    modoEdicionFechas={modoEdicionFechas}
+                  />
+                )}
+
                 <GrillaCuotas
                   formData={formData}
                   credito={credito}
@@ -1125,6 +1237,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
                   onEliminarAbono={!soloLectura && user?.role === 'ceo' ? handleEliminarAbono : null}
                   onPagarMulta={soloLectura ? null : (multa) => handlePagarMulta(multa)}
                   onEditarMulta={soloLectura ? null : (multa) => handleEditarMulta(multa)}
+                  onAbrirPanelEdicion={soloLectura ? null : handleAbrirPanelEdicion}
                   sinContenedor={true}
                   soloLectura={soloLectura}
                   procesando={procesandoPago}
