@@ -175,6 +175,7 @@ export const createCredito = async (req, res, next) => {
       tipo: creditoDataRaw.tipo,
       tipoQuincenal: creditoDataRaw.tipoQuincenal || null,
       fechaInicio: creditoDataRaw.fechaInicio,
+      fechaCreacion: new Date(),
       totalAPagar: creditoDataRaw.totalAPagar,
       valorCuota: creditoDataRaw.valorCuota,
       numCuotas: creditoDataRaw.numCuotas,
@@ -824,25 +825,6 @@ export const agregarAbono = async (req, res, next) => {
     credito = recalcularCreditoCompleto(credito);
 
     await credito.save();
-
-    // Sincronizar con el embebido en cliente
-    await syncCreditoToCliente(req.params.id);
-
-    const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
-
-    res.status(201).json({ success: true, data: creditoActualizado });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * @desc    Eliminar un abono
- * @route   DELETE /api/creditos/:id/abonos/:abonoId
- * @access  Private
- */
-export const eliminarAbono = async (req, res, next) => {
-  try {
     let credito = await Credito.findById(req.params.id).populate('cliente');
     if (!credito) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
 

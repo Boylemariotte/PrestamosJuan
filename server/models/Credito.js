@@ -157,6 +157,10 @@ const creditoSchema = new mongoose.Schema({
     type: Date,
     required: true
   },
+  fechaCreacion: {
+    type: Date,
+    default: Date.now
+  },
   totalAPagar: {
     type: Number,
     required: true,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { AlertCircle, Trash2, Award, Check, Calendar, Plus, Settings } from 'lucide-react';
+import { AlertCircle, Trash2, Award, Check, Calendar, Plus, Settings, Edit2 } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import RenovacionForm from './RenovacionForm';
 import {
@@ -33,7 +33,7 @@ import EditorFecha from './EditorFecha';
 import PanelEdicionFechas from './PanelEdicionFechas';
 
 const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, soloLectura = false }) => {
-  const { registrarPago, cancelarPago, editarFechaCuota, agregarNota, eliminarNota, agregarMulta, editarMulta, eliminarMulta, agregarAbono, editarAbono, eliminarAbono, agregarDescuento, eliminarDescuento, asignarEtiquetaCredito, renovarCredito, eliminarCredito, obtenerCredito } = useApp();
+  const { registrarPago, cancelarPago, editarFechaCuota, agregarNota, eliminarNota, agregarMulta, editarMulta, eliminarMulta, agregarAbono, editarAbono, eliminarAbono, agregarDescuento, eliminarDescuento, asignarEtiquetaCredito, renovarCredito, eliminarCredito, obtenerCredito, actualizarFechaCreacion } = useApp();
   const { user } = useAuth();
 
   // Obtener el crédito actualizado del contexto
@@ -167,6 +167,10 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
 
   // Estado para edición masiva de fechas
   const [mostrarPanelEdicion, setMostrarPanelEdicion] = useState(false);
+
+  // Estado para edición de fecha de creación
+  const [editandoFechaCreacion, setEditandoFechaCreacion] = useState(false);
+  const [fechaCreacionEditada, setFechaCreacionEditada] = useState('');
 
   // Estado para edición de abonos (pagos)
   const [abonoEnEdicion, setAbonoEnEdicion] = useState(null);
@@ -397,6 +401,46 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
 
   const handleCancelarEdicionMasiva = () => {
     setMostrarPanelEdicion(false);
+  };
+
+  // Funciones para manejar edición de fecha de creación
+  const handleEditarFechaCreacion = () => {
+    let fechaFormateada = credito.fechaCreacion;
+    if (credito.fechaCreacion) {
+      fechaFormateada = new Date(credito.fechaCreacion).toISOString().split('T')[0];
+    }
+    setFechaCreacionEditada(fechaFormateada);
+    setEditandoFechaCreacion(true);
+  };
+
+  const handleGuardarFechaCreacion = async () => {
+    if (fechaCreacionEditada) {
+      const [year, month, day] = fechaCreacionEditada.split('-').map(Number);
+      const fechaLocal = new Date(year, month - 1, day, 12, 0, 0, 0);
+      
+      // Llamar a la función del contexto (se agregará en la FASE 7)
+      try {
+        await api.put(`/creditos/${clienteId}/${credito.id}/fecha-creacion`, {
+          fechaCreacion: fechaLocal.toISOString()
+        });
+        
+        // Actualizar estado local
+        setCreditoActualizado(prev => ({
+          ...prev,
+          fechaCreacion: fechaLocal.toISOString()
+        }));
+        
+        setEditandoFechaCreacion(false);
+      } catch (error) {
+        console.error('Error actualizando fecha de creación:', error);
+        alert('Error al guardar la fecha de creación. Por favor intente nuevamente.');
+      }
+    }
+  };
+
+  const handleCancelarEdicionFechaCreacion = () => {
+    setEditandoFechaCreacion(false);
+    setFechaCreacionEditada('');
   };
 
   const handleEliminarCredito = async () => {
@@ -1133,7 +1177,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
 
             {/* NUEVA CARD HORIZONTAL: DATOS GENERALES */}
             <div className="bg-white border-2 border-blue-500 rounded-lg p-4 mb-6 print-compact-card">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center divide-y-2 md:divide-y-0 md:divide-x-2 divide-blue-200">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center divide-y-2 md:divide-y-0 md:divide-x-2 divide-blue-200">
                 <div className="flex flex-col items-center justify-center">
                   <span className="text-xs font-bold text-blue-600 uppercase mb-1">TIPO DE PAGO</span>
                   <span className="text-lg font-bold text-gray-800 capitalize">{formData.tipoPago}</span>
@@ -1155,6 +1199,49 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
                   <span className="text-lg font-bold text-green-600">
                     {formatearMoneda(formData.valorCuota || 0)}
                   </span>
+                </div>
+                <div className="flex flex-col items-center justify-center">
+                  <span className="text-xs font-bold text-blue-600 uppercase mb-1">FECHA CREACIÓN</span>
+                  {editandoFechaCreacion ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={fechaCreacionEditada}
+                        onChange={(e) => setFechaCreacionEditada(e.target.value)}
+                        className="px-2 py-1 text-sm border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        onClick={handleGuardarFechaCreacion}
+                        className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                        title="Guardar fecha de creación"
+                      >
+                        ✓
+                      </button>
+                      <button
+                        onClick={handleCancelarEdicionFechaCreacion}
+                        className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                        title="Cancelar edición"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold text-gray-800">
+                        {credito.fechaCreacion ? formatearFechaCorta(credito.fechaCreacion) : 
+                         credito._id ? formatearFechaCorta(new Date(parseInt(credito._id.substring(0, 8), 10))) : '-'}
+                      </span>
+                      {!soloLectura && (
+                        <button
+                          onClick={handleEditarFechaCreacion}
+                          className="p-1 text-blue-600 hover:text-blue-800"
+                          title="Editar fecha de creación"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1180,40 +1267,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
 
               {/* COLUMNA DERECHA: GRILLA DE CUOTAS */}
               <div className="lg:w-2/3">
-                {/* Modo de Edición de Fechas */}
-                {!soloLectura && (
-                  <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50 mb-4">
-                    <div className="flex items-center mb-3">
-                      <Settings className="h-5 w-5 text-blue-600 mr-2" />
-                      <label className="font-medium text-gray-900">Modo de Edición de Fechas</label>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="flex items-center cursor-pointer">
-                        <input
-                          type="radio"
-                          name="modoEdicionFechas"
-                          value="automatico"
-                          checked={modoEdicionFechas === 'automatico'}
-                          onChange={(e) => setModoEdicionFechas(e.target.value)}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="ml-2 text-sm">Automático - Ajustar cuotas posteriores</span>
-                      </label>
-                      <label className="flex items-center cursor-pointer">
-                        <input
-                          type="radio"
-                          name="modoEdicionFechas"
-                          value="manual"
-                          checked={modoEdicionFechas === 'manual'}
-                          onChange={(e) => setModoEdicionFechas(e.target.value)}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="ml-2 text-sm">Manual - Editar solo esta cuota</span>
-                      </label>
-                    </div>
-                  </div>
-                )}
-
+                
                 {/* Panel de Edición Masiva de Fechas */}
                 {mostrarPanelEdicion && (
                   <PanelEdicionFechas
@@ -1221,6 +1275,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
                     onGuardarCambios={handleGuardarEdicionMasiva}
                     onCancelar={handleCancelarEdicionMasiva}
                     modoEdicionFechas={modoEdicionFechas}
+                    onModoEdicionChange={setModoEdicionFechas}
                   />
                 )}
 

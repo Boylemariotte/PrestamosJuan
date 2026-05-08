@@ -1,16 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, AlertCircle, X, Check } from 'lucide-react';
+import { Calendar, AlertCircle, X, Check, Settings } from 'lucide-react';
 import { validarFechasManuales } from '../../utils/creditCalculations';
 
 const PanelEdicionFechas = ({ 
   cuotasNoPagadas, 
   onGuardarCambios, 
   onCancelar,
-  modoEdicionFechas 
+  modoEdicionFechas,
+  onModoEdicionChange 
 }) => {
   const [fechasEditadas, setFechasEditadas] = useState([]);
   const [errores, setErrores] = useState([]);
   const [guardando, setGuardando] = useState(false);
+  const [modoEdicionLocal, setModoEdicionLocal] = useState(modoEdicionFechas);
+
+  // Sincronizar modo local con prop externa
+  useEffect(() => {
+    setModoEdicionLocal(modoEdicionFechas);
+  }, [modoEdicionFechas]);
 
   // Inicializar fechas con los valores actuales
   useEffect(() => {
@@ -175,14 +182,42 @@ const PanelEdicionFechas = ({
         </div>
       </div>
 
-      {/* Información sobre el modo de edición */}
-      <div className="mb-3 p-2 bg-purple-100 border border-purple-300 rounded">
-        <p className="text-xs text-purple-800">
-          <strong>Modo:</strong> {modoEdicionFechas === 'automatico' 
-            ? 'Automático - Las cuotas posteriores se ajustarán automáticamente'
-            : 'Manual - Solo se modificarán las fechas seleccionadas'
-          }
-        </p>
+      {/* Toggle de Modo de Edición dentro del panel */}
+      <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50 mb-4">
+        <div className="flex items-center mb-3">
+          <Settings className="h-5 w-5 text-blue-600 mr-2" />
+          <label className="font-medium text-gray-900">Modo de Edición de Fechas</label>
+        </div>
+        <div className="space-y-2">
+          <label className="flex items-center cursor-pointer">
+            <input
+              type="radio"
+              name="modoEdicionFechas"
+              value="automatico"
+              checked={modoEdicionLocal === 'automatico'}
+              onChange={(e) => {
+                setModoEdicionLocal(e.target.value);
+                onModoEdicionChange && onModoEdicionChange(e.target.value);
+              }}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="ml-2 text-sm">Automático - Ajustar cuotas posteriores</span>
+          </label>
+          <label className="flex items-center cursor-pointer">
+            <input
+              type="radio"
+              name="modoEdicionFechas"
+              value="manual"
+              checked={modoEdicionLocal === 'manual'}
+              onChange={(e) => {
+                setModoEdicionLocal(e.target.value);
+                onModoEdicionChange && onModoEdicionChange(e.target.value);
+              }}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="ml-2 text-sm">Manual - Editar solo esta cuota</span>
+          </label>
+        </div>
       </div>
       
       {/* Errores de validación */}

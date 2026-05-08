@@ -577,6 +577,23 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const actualizarFechaCreacion = async (clienteId, creditoId, nuevaFechaCreacion) => {
+    try {
+      await api.put(`/creditos/${creditoId}/fecha-creacion`, {
+        fechaCreacion: nuevaFechaCreacion
+      });
+      
+      // Actualizar estado local
+      const creditoActualizado = obtenerCredito(clienteId, creditoId);
+      if (creditoActualizado) {
+        creditoActualizado.fechaCreacion = nuevaFechaCreacion;
+      }
+    } catch (error) {
+      console.error('Error actualizando fecha de creación:', error);
+      throw error;
+    }
+  };
+
   // --- MULTAS, DESCUENTOS, NOTAS ---
 
   const agregarMulta = async (clienteId, creditoId, valorMulta, motivo, nroCuota = null) => {
@@ -875,6 +892,7 @@ export const AppProvider = ({ children }) => {
     cancelarPago,
     registrarAbonoCuota,
     editarFechaCuota,
+    actualizarFechaCreacion,
     agregarAbono,
     editarAbono,
     eliminarAbono,
