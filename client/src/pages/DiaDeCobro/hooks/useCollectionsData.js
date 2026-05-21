@@ -435,7 +435,7 @@ export const useCollectionsData = ({
                 const estadoCredito = determinarEstadoCredito(credito.cuotas, credito);
                 if (estadoCredito === 'finalizado') {
                     const cuotasPagadasHoy = credito.cuotas.filter(cuota => {
-                        if (!cuota.pagada || !cuota.fechaPago) return false;
+                        if (!cuota.pagado || !cuota.fechaPago) return false;
                         
                         const fechaPago = typeof cuota.fechaPago === 'string'
                             ? cuota.fechaPago.split('T')[0]
@@ -447,14 +447,6 @@ export const useCollectionsData = ({
                     // Agregar pagos de clientes finalizados
                     cuotasPagadasHoy.forEach(cuota => {
                         const key = `${cliente.id}-${credito.id}-${cuota.nroCuota}`;
-                        
-                        // Depuración: pagos de clientes finalizados
-                        console.log(`=== PAGO DE CLIENTE FINALIZADO ===`);
-                        console.log(`Cliente: ${cliente.nombre} (Finalizado)`);
-                        console.log(`Crédito ID: ${credito.id}`);
-                        console.log(`Cuota: ${cuota.nroCuota}`);
-                        console.log(`Monto: ${credito.valorCuota}`);
-                        console.log('=====================================');
                         
                         itemsMap.set(key, {
                             clienteId: cliente.id, clienteNombre: cliente.nombre, clienteDocumento: cliente.documento,
@@ -512,30 +504,46 @@ export const useCollectionsData = ({
             });
         });
 
-        // Resultado dinámico por cartera
+        // Resultado dinámico por cartera y modalidad
         const res = {};
         nombresCarterasCiudad.forEach(nombre => {
-            res[nombre] = { items: [], total: 0 };
+            res[nombre] = {
+                total: 0,
+                modalidades: {
+                    semanal: { items: [], total: 0 },
+                    quincenal: { items: [], total: 0 },
+                    mensual: { items: [], total: 0 },
+                    diario: { items: [], total: 0 }
+                }
+            };
         });
 
         itemsMap.forEach(item => {
             // Solo incluir items de carteras de la ciudad seleccionada
             if (!nombresCarterasCiudad.includes(item.clienteCartera)) return;
-            const filtro = filtroPagosPorCartera[item.clienteCartera] || 'todos';
-            if (filtro === 'todos' || item.creditoTipo === filtro) {
-                if (!res[item.clienteCartera]) res[item.clienteCartera] = { items: [], total: 0 };
-                res[item.clienteCartera].items.push(item);
-                res[item.clienteCartera].total += item.montoPagado + item.montoPagadoMulta;
+            
+            const cartera = res[item.clienteCartera];
+            if (!cartera) return;
+
+            const modalidad = item.creditoTipo?.toLowerCase() || 'diario';
+            const modalidadKey = ['semanal', 'quincenal', 'mensual'].includes(modalidad) ? modalidad : 'diario';
+            
+            if (cartera.modalidades[modalidadKey]) {
+                cartera.modalidades[modalidadKey].items.push(item);
+                cartera.modalidades[modalidadKey].total += item.montoPagado + item.montoPagadoMulta;
+                cartera.total += item.montoPagado + item.montoPagadoMulta;
             }
         });
         return res;
-    }, [clientes, fechaSeleccionadaStr, filtroPagosPorCartera, nombresCarterasCiudad]);
+    }, [clientes, fechaSeleccionadaStr, nombresCarterasCiudad]);
 
     const multasPagadasDia = useMemo(() => {
         const todas = [];
         nombresCarterasCiudad.forEach(nombre => {
             if (clientesPagados[nombre]) {
-                todas.push(...clientesPagados[nombre].items);
+                Object.values(clientesPagados[nombre].modalidades).forEach(modalidad => {
+                    todas.push(...modalidad.items);
+                });
             }
         });
         return todas.filter(i => i.montoPagadoMulta > 0).map(i => ({

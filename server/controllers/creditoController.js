@@ -825,7 +825,7 @@ export const agregarAbono = async (req, res, next) => {
     credito = recalcularCreditoCompleto(credito);
 
     await credito.save();
-    let credito = await Credito.findById(req.params.id).populate('cliente');
+    credito = await Credito.findById(req.params.id).populate('cliente');
     if (!credito) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
 
     const abonoId = req.params.abonoId;
@@ -962,6 +962,63 @@ export const editarAbono = async (req, res, next) => {
     }
 
     // Recalcular todo el estado del crédito tras editar abono
+    credito = recalcularCreditoCompleto(credito);
+
+    await credito.save();
+    await syncCreditoToCliente(req.params.id);
+
+    const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
+    res.status(200).json({ success: true, data: creditoActualizado });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Eliminar un abono
+ * @route   DELETE /api/creditos/:id/abonos/:abonoId
+ * @access  Private
+ */
+export const eliminarAbono = async (req, res, next) => {
+  try {
+    let credito = await Credito.findById(req.params.id).populate('cliente');
+    if (!credito) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
+
+    const abonoId = req.params.abonoId;
+
+    // Buscar en abonos de cuotas
+    const abonoEncontrado = credito.abonos.find(a => a.id === abonoId);
+    let abonoEliminado = null;
+
+    if (abonoEncontrado) {
+      abonoEliminado = { ...abonoEncontrado };
+      credito.abonos = credito.abonos.filter(a => a.id !== abonoId);
+    } else {
+      // Buscar en abonos de multas
+      const abonoMultaEncontrado = (credito.abonosMulta || []).find(a => a.id === abonoId);
+      if (abonoMultaEncontrado) {
+        abonoEliminado = { ...abonoMultaEncontrado };
+        credito.abonosMulta = (credito.abonosMulta || []).filter(a => a.id !== abonoId);
+      }
+    }
+
+    if (abonoEliminado) {
+      // Registrar en historial
+      await registrarBorrado({
+        tipo: 'abono',
+        idOriginal: abonoId,
+        detalles: abonoEliminado,
+        usuario: req.user._id,
+        usuarioNombre: req.user.nombre,
+        metadata: {
+          creditoId: req.params.id,
+          valorAbono: abonoEliminado.valor,
+          nombreCliente: credito.cliente?.nombre || 'Desconocido'
+        }
+      });
+    }
+
+    // Recalcular todo el estado del crédito tras eliminar abono
     credito = recalcularCreditoCompleto(credito);
 
     await credito.save();

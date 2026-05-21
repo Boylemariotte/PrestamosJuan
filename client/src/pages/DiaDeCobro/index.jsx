@@ -17,6 +17,7 @@ import CollectionsHeader from './components/CollectionsHeader';
 import VisitasAlert from './components/VisitasAlert';
 import CarteraSection from './components/CarteraSection';
 import PagosSection from './components/PagosSection';
+import CierreDiario from './components/CierreDiario';
 import GlobalProrrogaLoading from './components/GlobalProrrogaLoading';
 import CreditoDetalle from '../../components/Creditos/CreditoDetalle';
 import MotivoProrrogaModal from '../../components/Creditos/MotivoProrrogaModal';
@@ -392,15 +393,20 @@ const DiaDeCobro = () => {
                                 key={cartera._id || cartera.nombre}
                                 title={`Pagos ${cartera.nombre}`}
                                 color={cartera.color || 'blue'}
-                                items={clientesPagados[cartera.nombre]?.items || []}
+                                modalidades={clientesPagados[cartera.nombre]?.modalidades || {}}
                                 total={clientesPagados[cartera.nombre]?.total || 0}
-                                typeFilter={filtroPagosPorCartera[cartera.nombre] || 'todos'}
-                                setTypeFilter={(val) => setFiltroPagosCartera(cartera.nombre, val)}
-                                tiposPagoPermitidos={getTiposPago(cartera)}
                                 abrirDetalle={abrirDetalle}
                             />
                         ))}
                     </div>
+                )}
+
+                {/* Cierre de Caja Diario al final de la página */}
+                {carterasDeCiudad.length > 0 && (
+                    <CierreDiario 
+                        clientesPagados={clientesPagados} 
+                        fechaSeleccionadaStr={fechaSeleccionadaStr} 
+                    />
                 )}
             </div>
 
