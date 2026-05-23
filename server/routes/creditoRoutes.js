@@ -14,7 +14,8 @@ import {
   editarMulta,
   eliminarMulta,
   agregarDescuento,
-  eliminarNota
+  eliminarNota,
+  actualizarFechaCreacion
 } from '../controllers/creditoController.js';
 import { protect, authorize, requireRole } from '../middleware/auth.js';
 
@@ -58,6 +59,9 @@ router.route('/:id/multas/:multaId')
 
 router.route('/:id/descuentos')
   .post(authorize('registrarPagos'), agregarDescuento);
+
+router.route('/:id/fecha-creacion')
+  .put(authorize('editarCreditos'), actualizarFechaCreacion);
 
 export default router;
 

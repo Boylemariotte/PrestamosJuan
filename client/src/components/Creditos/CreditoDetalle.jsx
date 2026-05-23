@@ -420,7 +420,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
       
       // Llamar a la función del contexto (se agregará en la FASE 7)
       try {
-        await api.put(`/creditos/${clienteId}/${credito.id}/fecha-creacion`, {
+        await api.put(`/creditos/${credito.id}/fecha-creacion`, {
           fechaCreacion: fechaLocal.toISOString()
         });
         

@@ -1186,3 +1186,39 @@ export const agregarDescuento = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Actualizar fecha de creación de un crédito
+ * @route   PUT /api/creditos/:id/fecha-creacion
+ * @access  Private
+ */
+export const actualizarFechaCreacion = async (req, res, next) => {
+  try {
+    const { fechaCreacion } = req.body;
+    const credito = await Credito.findById(req.params.id);
+    
+    if (!credito) {
+      return res.status(404).json({
+        success: false,
+        error: 'Crédito no encontrado'
+      });
+    }
+
+    // Actualizar la fecha de creación
+    credito.fechaCreacion = new Date(fechaCreacion);
+    
+    await credito.save();
+
+    // Sincronizar con el embebido en cliente
+    await syncCreditoToCliente(req.params.id);
+
+    const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
+    
+    res.status(200).json({
+      success: true,
+      data: creditoActualizado
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
