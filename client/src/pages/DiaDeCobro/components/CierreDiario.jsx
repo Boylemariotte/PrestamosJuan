@@ -3,24 +3,34 @@ import { DollarSign, Plus, Trash2, Scale, Wallet, Receipt, CheckCircle } from 'l
 import { formatearMoneda } from '../../../utils/creditCalculations';
 import { toast } from 'react-toastify';
 
-const CierreDiario = ({ clientesPagados, fechaSeleccionadaStr }) => {
-    // 1. Obtener cobros brutos de K1 y K2
-    const totalK1 = clientesPagados?.K1?.total || 0;
-    const totalK2 = clientesPagados?.K2?.total || 0;
+const CierreDiario = ({ clientesPagados, fechaSeleccionadaStr, ciudadSeleccionada }) => {
+    // Determinar qué carteras mostrar según la ciudad
+    const esBuga = ciudadSeleccionada === 'Guadalajara de Buga';
+    
+    // 1. Obtener cobros brutos según la ciudad
+    const totalK1 = esBuga ? 0 : (clientesPagados?.K1?.total || 0);
+    const totalK2 = esBuga ? 0 : (clientesPagados?.K2?.total || 0);
+    const totalK3 = clientesPagados?.K3?.total || 0;
 
-    // Desglose K1
-    const k1Semanal = clientesPagados?.K1?.modalidades?.semanal?.total || 0;
-    const k1Quincenal = clientesPagados?.K1?.modalidades?.quincenal?.total || 0;
-    const k1Mensual = clientesPagados?.K1?.modalidades?.mensual?.total || 0;
-    const k1Diario = clientesPagados?.K1?.modalidades?.diario?.total || 0;
+    // Desglose K1 (solo si no es Buga)
+    const k1Semanal = esBuga ? 0 : (clientesPagados?.K1?.modalidades?.semanal?.total || 0);
+    const k1Quincenal = esBuga ? 0 : (clientesPagados?.K1?.modalidades?.quincenal?.total || 0);
+    const k1Mensual = esBuga ? 0 : (clientesPagados?.K1?.modalidades?.mensual?.total || 0);
+    const k1Diario = esBuga ? 0 : (clientesPagados?.K1?.modalidades?.diario?.total || 0);
 
-    // Desglose K2
-    const k2Quincenal = clientesPagados?.K2?.modalidades?.quincenal?.total || 0;
-    const k2Mensual = clientesPagados?.K2?.modalidades?.mensual?.total || 0;
+    // Desglose K2 (solo si no es Buga)
+    const k2Quincenal = esBuga ? 0 : (clientesPagados?.K2?.modalidades?.quincenal?.total || 0);
+    const k2Mensual = esBuga ? 0 : (clientesPagados?.K2?.modalidades?.mensual?.total || 0);
+
+    // Desglose K3 (solo si es Buga)
+    const k3Semanal = esBuga ? (clientesPagados?.K3?.modalidades?.semanal?.total || 0) : 0;
+    const k3Quincenal = esBuga ? (clientesPagados?.K3?.modalidades?.quincenal?.total || 0) : 0;
+    const k3Mensual = esBuga ? (clientesPagados?.K3?.modalidades?.mensual?.total || 0) : 0;
+    const k3Diario = esBuga ? (clientesPagados?.K3?.modalidades?.diario?.total || 0) : 0;
 
     // 2. Estados para el formulario de Gastos
     const [gastos, setGastos] = useState([]);
-    const [carteraSeleccionada, setCarteraSeleccionada] = useState('K1');
+    const [carteraSeleccionada, setCarteraSeleccionada] = useState(esBuga ? 'K3' : 'K1');
     const [montoGastoStr, setMontoGastoStr] = useState('');
     const [motivoGasto, setMotivoGasto] = useState('');
 
@@ -109,11 +119,16 @@ const CierreDiario = ({ clientesPagados, fechaSeleccionadaStr }) => {
         .filter(g => g.cartera === 'K2')
         .reduce((sum, g) => sum + g.monto, 0);
 
+    const totalGastosK3 = gastos
+        .filter(g => g.cartera === 'K3')
+        .reduce((sum, g) => sum + g.monto, 0);
+
     const totalK1Neto = Math.max(0, totalK1 - totalGastosK1);
     const totalK2Neto = Math.max(0, totalK2 - totalGastosK2);
+    const totalK3Neto = Math.max(0, totalK3 - totalGastosK3);
     
-    // Suma del total K1 neto + K2 neto
-    const totalCobradoNeto = totalK1Neto + totalK2Neto;
+    // Suma del total neto según la ciudad
+    const totalCobradoNeto = esBuga ? totalK3Neto : (totalK1Neto + totalK2Neto);
     
     return (
         <div className="mt-16 border-t-4 border-gray-200 pt-16 pb-12">
@@ -131,7 +146,7 @@ const CierreDiario = ({ clientesPagados, fechaSeleccionadaStr }) => {
                         </div>
                     </div>
                     <div className="text-right">
-                        <p className="text-slate-400 text-sm uppercase font-black tracking-widest">Total Neto K1 + K2</p>
+                        <p className="text-slate-400 text-sm uppercase font-black tracking-widest">{esBuga ? 'Total Neto K3' : 'Total Neto K1 + K2'}</p>
                         <p className="text-4xl sm:text-5xl font-black text-green-400 font-mono mt-1 drop-shadow-md">{formatearMoneda(totalCobradoNeto)}</p>
                     </div>
                 </div>
@@ -141,7 +156,7 @@ const CierreDiario = ({ clientesPagados, fechaSeleccionadaStr }) => {
                     {/* Gran Tarjeta de Cierre Neto Ampliada */}
                     <div className="bg-slate-50 rounded-2xl p-8 border border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-8 shadow-sm">
                         <div className="space-y-2">
-                            <span className="text-sm sm:text-base font-black text-gray-500 uppercase tracking-widest block">Total Cobrado Neto (K1 + K2 - Gastos)</span>
+                            <span className="text-sm sm:text-base font-black text-gray-500 uppercase tracking-widest block">{esBuga ? 'Total Cobrado Neto (K3 - Gastos)' : 'Total Cobrado Neto (K1 + K2 - Gastos)'}</span>
                             <span className="text-5xl sm:text-6xl font-black text-gray-900 font-mono tracking-tight block">
                                 {formatearMoneda(totalCobradoNeto)}
                             </span>
@@ -152,100 +167,154 @@ const CierreDiario = ({ clientesPagados, fechaSeleccionadaStr }) => {
                         </div>
                     </div>
 
-                    {/* Fila 2: K1 y K2 lado a lado */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                        
-                        {/* Cartera K1 (Cabecera Colorizada y Fuentes Grandes) */}
-                        <div className="bg-white rounded-3xl border-2 border-blue-100 shadow-xl overflow-hidden flex flex-col justify-between transform hover:translate-y-[-4px] transition-all duration-300">
-                            <div className="space-y-6 p-8">
-                                {/* Cabecera estilizada con color de cartera */}
-                                <div className="bg-blue-600 text-white rounded-2xl px-6 py-4.5 flex items-center justify-between shadow-lg">
-                                    <span className="text-2xl font-black tracking-widest uppercase">Cartera K1</span>
-                                    <span className="text-sm sm:text-base bg-white/20 text-white font-black px-4 py-2 rounded-full border border-white/30 backdrop-blur-sm shadow-inner">
-                                        Bruto: {formatearMoneda(totalK1)}
-                                    </span>
-                                </div>
-                                
-                                <div className="space-y-5 text-lg sm:text-xl text-gray-800 px-2">
-                                    <div className="flex justify-between items-center py-2 border-b-2 border-gray-50">
-                                        <span className="font-extrabold text-gray-550 uppercase tracking-wide text-sm sm:text-base">K1 Semanal:</span>
-                                        <span className="font-mono font-black text-gray-950 text-xl sm:text-2xl">{formatearMoneda(k1Semanal)}</span>
+                    {/* Fila 2: K1 y K2 lado a lado (solo si no es Buga) o K3 (solo si es Buga) */}
+                    {!esBuga ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                            
+                            {/* Cartera K1 (Cabecera Colorizada y Fuentes Grandes) */}
+                            <div className="bg-white rounded-3xl border-2 border-blue-100 shadow-xl overflow-hidden flex flex-col justify-between transform hover:translate-y-[-4px] transition-all duration-300">
+                                <div className="space-y-6 p-8">
+                                    {/* Cabecera estilizada con color de cartera */}
+                                    <div className="bg-blue-600 text-white rounded-2xl px-6 py-4.5 flex items-center justify-between shadow-lg">
+                                        <span className="text-2xl font-black tracking-widest uppercase">Cartera K1</span>
+                                        <span className="text-sm sm:text-base bg-white/20 text-white font-black px-4 py-2 rounded-full border border-white/30 backdrop-blur-sm shadow-inner">
+                                            Bruto: {formatearMoneda(totalK1)}
+                                        </span>
                                     </div>
-                                    <div className="flex justify-between items-center py-2 border-b-2 border-gray-50">
-                                        <span className="font-extrabold text-gray-550 uppercase tracking-wide text-sm sm:text-base">K1 Quincenal:</span>
-                                        <span className="font-mono font-black text-gray-950 text-xl sm:text-2xl">{formatearMoneda(k1Quincenal)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 border-b-2 border-gray-50">
-                                        <span className="font-extrabold text-gray-550 uppercase tracking-wide text-sm sm:text-base">K1 Mensual:</span>
-                                        <span className="font-mono font-black text-gray-950 text-xl sm:text-2xl">{formatearMoneda(k1Mensual)}</span>
-                                    </div>
-                                    {k1Diario > 0 && (
-                                        <div className="flex justify-between items-center py-2 text-gray-400 border-t border-dashed border-gray-300 pt-3">
-                                            <span className="font-extrabold uppercase tracking-wide text-sm sm:text-base italic">K1 Diario:</span>
-                                            <span className="font-mono font-bold text-lg sm:text-xl">{formatearMoneda(k1Diario)}</span>
+                                    
+                                    <div className="space-y-5 text-lg sm:text-xl text-gray-800 px-2">
+                                        <div className="flex justify-between items-center py-2 border-b-2 border-gray-50">
+                                            <span className="font-extrabold text-gray-550 uppercase tracking-wide text-sm sm:text-base">K1 Semanal:</span>
+                                            <span className="font-mono font-black text-gray-950 text-xl sm:text-2xl">{formatearMoneda(k1Semanal)}</span>
                                         </div>
-                                    )}
-                                </div>
-                            </div>
-                            
-                            {/* Resumen y Deducción Gastos K1 */}
-                            <div className="bg-slate-50 p-8 border-t-2 border-gray-100 space-y-4">
-                                <div className="flex justify-between items-center text-gray-650 text-base font-bold">
-                                    <span>Total Recogido K1:</span>
-                                    <span className="font-mono font-black text-lg">{formatearMoneda(totalK1)}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-red-600 text-base font-bold">
-                                    <span>Gastos K1:</span>
-                                    <span className="font-mono font-black text-lg">-{formatearMoneda(totalGastosK1)}</span>
-                                </div>
-                                <div className="flex justify-between items-center border-t-2 border-gray-200 pt-4 text-gray-900">
-                                    <span className="font-black text-base sm:text-lg tracking-wider">TOTAL K1 NETO:</span>
-                                    <span className="font-mono text-blue-700 text-2xl sm:text-3xl font-black">{formatearMoneda(totalK1Neto)}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Cartera K2 (Cabecera Colorizada y Fuentes Grandes) */}
-                        <div className="bg-white rounded-3xl border-2 border-green-100 shadow-xl overflow-hidden flex flex-col justify-between transform hover:translate-y-[-4px] transition-all duration-300">
-                            <div className="space-y-6 p-8">
-                                {/* Cabecera estilizada con color de cartera */}
-                                <div className="bg-green-600 text-white rounded-2xl px-6 py-4.5 flex items-center justify-between shadow-lg">
-                                    <span className="text-2xl font-black tracking-widest uppercase">Cartera K2</span>
-                                    <span className="text-sm sm:text-base bg-white/20 text-white font-black px-4 py-2 rounded-full border border-white/30 backdrop-blur-sm shadow-inner">
-                                        Bruto: {formatearMoneda(totalK2)}
-                                    </span>
+                                        <div className="flex justify-between items-center py-2 border-b-2 border-gray-50">
+                                            <span className="font-extrabold text-gray-550 uppercase tracking-wide text-sm sm:text-base">K1 Quincenal:</span>
+                                            <span className="font-mono font-black text-gray-950 text-xl sm:text-2xl">{formatearMoneda(k1Quincenal)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center py-2 border-b-2 border-gray-50">
+                                            <span className="font-extrabold text-gray-550 uppercase tracking-wide text-sm sm:text-base">K1 Mensual:</span>
+                                            <span className="font-mono font-black text-gray-950 text-xl sm:text-2xl">{formatearMoneda(k1Mensual)}</span>
+                                        </div>
+                                        {k1Diario > 0 && (
+                                            <div className="flex justify-between items-center py-2 text-gray-400 border-t border-dashed border-gray-300 pt-3">
+                                                <span className="font-extrabold uppercase tracking-wide text-sm sm:text-base italic">K1 Diario:</span>
+                                                <span className="font-mono font-bold text-lg sm:text-xl">{formatearMoneda(k1Diario)}</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 
-                                <div className="space-y-5 text-lg sm:text-xl text-gray-800 px-2">
-                                    <div className="flex justify-between items-center py-2 border-b-2 border-gray-50">
-                                        <span className="font-extrabold text-gray-550 uppercase tracking-wide text-sm sm:text-base">K2 Quincenal:</span>
-                                        <span className="font-mono font-black text-gray-950 text-xl sm:text-2xl">{formatearMoneda(k2Quincenal)}</span>
+                                {/* Resumen y Deducción Gastos K1 */}
+                                <div className="bg-slate-50 p-8 border-t-2 border-gray-100 space-y-4">
+                                    <div className="flex justify-between items-center text-gray-650 text-base font-bold">
+                                        <span>Total Recogido K1:</span>
+                                        <span className="font-mono font-black text-lg">{formatearMoneda(totalK1)}</span>
                                     </div>
-                                    <div className="flex justify-between items-center py-2 border-b-2 border-gray-50">
-                                        <span className="font-extrabold text-gray-550 uppercase tracking-wide text-sm sm:text-base">K2 Mensual:</span>
-                                        <span className="font-mono font-black text-gray-950 text-xl sm:text-2xl">{formatearMoneda(k2Mensual)}</span>
+                                    <div className="flex justify-between items-center text-red-600 text-base font-bold">
+                                        <span>Gastos K1:</span>
+                                        <span className="font-mono font-black text-lg">-{formatearMoneda(totalGastosK1)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center border-t-2 border-gray-200 pt-4 text-gray-900">
+                                        <span className="font-black text-base sm:text-lg tracking-wider">TOTAL K1 NETO:</span>
+                                        <span className="font-mono text-blue-700 text-2xl sm:text-3xl font-black">{formatearMoneda(totalK1Neto)}</span>
                                     </div>
                                 </div>
                             </div>
-                            
-                            {/* Resumen y Deducción Gastos K2 */}
-                            <div className="bg-slate-50 p-8 border-t-2 border-gray-100 space-y-4">
-                                <div className="flex justify-between items-center text-gray-650 text-base font-bold">
-                                    <span>Total Recogido K2:</span>
-                                    <span className="font-mono font-black text-lg">{formatearMoneda(totalK2)}</span>
+
+                            {/* Cartera K2 (Cabecera Colorizada y Fuentes Grandes) */}
+                            <div className="bg-white rounded-3xl border-2 border-green-100 shadow-xl overflow-hidden flex flex-col justify-between transform hover:translate-y-[-4px] transition-all duration-300">
+                                <div className="space-y-6 p-8">
+                                    {/* Cabecera estilizada con color de cartera */}
+                                    <div className="bg-green-600 text-white rounded-2xl px-6 py-4.5 flex items-center justify-between shadow-lg">
+                                        <span className="text-2xl font-black tracking-widest uppercase">Cartera K2</span>
+                                        <span className="text-sm sm:text-base bg-white/20 text-white font-black px-4 py-2 rounded-full border border-white/30 backdrop-blur-sm shadow-inner">
+                                            Bruto: {formatearMoneda(totalK2)}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="space-y-5 text-lg sm:text-xl text-gray-800 px-2">
+                                        <div className="flex justify-between items-center py-2 border-b-2 border-gray-50">
+                                            <span className="font-extrabold text-gray-550 uppercase tracking-wide text-sm sm:text-base">K2 Quincenal:</span>
+                                            <span className="font-mono font-black text-gray-950 text-xl sm:text-2xl">{formatearMoneda(k2Quincenal)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center py-2 border-b-2 border-gray-50">
+                                            <span className="font-extrabold text-gray-550 uppercase tracking-wide text-sm sm:text-base">K2 Mensual:</span>
+                                            <span className="font-mono font-black text-gray-950 text-xl sm:text-2xl">{formatearMoneda(k2Mensual)}</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="flex justify-between items-center text-red-600 text-base font-bold">
-                                    <span>Gastos K2:</span>
-                                    <span className="font-mono font-black text-lg">-{formatearMoneda(totalGastosK2)}</span>
+                                
+                                {/* Resumen y Deducción Gastos K2 */}
+                                <div className="bg-slate-50 p-8 border-t-2 border-gray-100 space-y-4">
+                                    <div className="flex justify-between items-center text-gray-650 text-base font-bold">
+                                        <span>Total Recogido K2:</span>
+                                        <span className="font-mono font-black text-lg">{formatearMoneda(totalK2)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-red-600 text-base font-bold">
+                                        <span>Gastos K2:</span>
+                                        <span className="font-mono font-black text-lg">-{formatearMoneda(totalGastosK2)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center border-t-2 border-gray-200 pt-4 text-gray-900">
+                                        <span className="font-black text-base sm:text-lg tracking-wider">TOTAL K2 NETO:</span>
+                                        <span className="font-mono text-green-700 text-2xl sm:text-3xl font-black">{formatearMoneda(totalK2Neto)}</span>
+                                    </div>
                                 </div>
-                                <div className="flex justify-between items-center border-t-2 border-gray-200 pt-4 text-gray-900">
-                                    <span className="font-black text-base sm:text-lg tracking-wider">TOTAL K2 NETO:</span>
-                                    <span className="font-mono text-green-700 text-2xl sm:text-3xl font-black">{formatearMoneda(totalK2Neto)}</span>
+                            </div>
+
+                        </div>
+                    ) : (
+                        /* Cartera K3 (solo para Buga) */
+                        <div className="grid grid-cols-1 gap-10">
+                            <div className="bg-white rounded-3xl border-2 border-orange-100 shadow-xl overflow-hidden flex flex-col justify-between transform hover:translate-y-[-4px] transition-all duration-300">
+                                <div className="space-y-6 p-8">
+                                    {/* Cabecera estilizada con color de cartera */}
+                                    <div className="bg-orange-600 text-white rounded-2xl px-6 py-4.5 flex items-center justify-between shadow-lg">
+                                        <span className="text-2xl font-black tracking-widest uppercase">Cartera K3</span>
+                                        <span className="text-sm sm:text-base bg-white/20 text-white font-black px-4 py-2 rounded-full border border-white/30 backdrop-blur-sm shadow-inner">
+                                            Bruto: {formatearMoneda(totalK3)}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="space-y-5 text-lg sm:text-xl text-gray-800 px-2">
+                                        <div className="flex justify-between items-center py-2 border-b-2 border-gray-50">
+                                            <span className="font-extrabold text-gray-550 uppercase tracking-wide text-sm sm:text-base">K3 Semanal:</span>
+                                            <span className="font-mono font-black text-gray-950 text-xl sm:text-2xl">{formatearMoneda(k3Semanal)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center py-2 border-b-2 border-gray-50">
+                                            <span className="font-extrabold text-gray-550 uppercase tracking-wide text-sm sm:text-base">K3 Quincenal:</span>
+                                            <span className="font-mono font-black text-gray-950 text-xl sm:text-2xl">{formatearMoneda(k3Quincenal)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center py-2 border-b-2 border-gray-50">
+                                            <span className="font-extrabold text-gray-550 uppercase tracking-wide text-sm sm:text-base">K3 Mensual:</span>
+                                            <span className="font-mono font-black text-gray-950 text-xl sm:text-2xl">{formatearMoneda(k3Mensual)}</span>
+                                        </div>
+                                        {k3Diario > 0 && (
+                                            <div className="flex justify-between items-center py-2 text-gray-400 border-t border-dashed border-gray-300 pt-3">
+                                                <span className="font-extrabold uppercase tracking-wide text-sm sm:text-base italic">K3 Diario:</span>
+                                                <span className="font-mono font-bold text-lg sm:text-xl">{formatearMoneda(k3Diario)}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                {/* Resumen y Deducción Gastos K3 */}
+                                <div className="bg-slate-50 p-8 border-t-2 border-gray-100 space-y-4">
+                                    <div className="flex justify-between items-center text-gray-650 text-base font-bold">
+                                        <span>Total Recogido K3:</span>
+                                        <span className="font-mono font-black text-lg">{formatearMoneda(totalK3)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-red-600 text-base font-bold">
+                                        <span>Gastos K3:</span>
+                                        <span className="font-mono font-black text-lg">-{formatearMoneda(totalGastosK3)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center border-t-2 border-gray-200 pt-4 text-gray-900">
+                                        <span className="font-black text-base sm:text-lg tracking-wider">TOTAL K3 NETO:</span>
+                                        <span className="font-mono text-orange-700 text-2xl sm:text-3xl font-black">{formatearMoneda(totalK3Neto)}</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-
-                    </div>
+                    )}
 
                     {/* Fila 3: Sección de Añadir Gastos y Detalle de Gastos lado a lado */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-stretch">
@@ -259,34 +328,50 @@ const CierreDiario = ({ clientesPagados, fechaSeleccionadaStr }) => {
                                     <h4 className="text-lg font-black text-gray-800 uppercase tracking-wider">Añadir Gastos</h4>
                                 </div>
 
-                                {/* Selector de Cartera K1 o K2 */}
+                                {/* Selector de Cartera */}
                                 <div className="space-y-3">
                                     <label className="block text-xs font-black text-gray-500 uppercase tracking-widest">
                                         Seleccionar Cartera
                                     </label>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <button
-                                            type="button"
-                                            onClick={() => setCarteraSeleccionada('K1')}
-                                            className={`py-4 px-5 rounded-2xl font-black text-base border-2 transition-all duration-200 ${
-                                                carteraSeleccionada === 'K1'
-                                                    ? 'bg-blue-600 border-blue-700 text-white shadow-lg scale-102'
-                                                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
-                                            }`}
-                                        >
-                                            Cartera K1
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setCarteraSeleccionada('K2')}
-                                            className={`py-4 px-5 rounded-2xl font-black text-base border-2 transition-all duration-200 ${
-                                                carteraSeleccionada === 'K2'
-                                                    ? 'bg-green-600 border-green-700 text-white shadow-lg scale-102'
-                                                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
-                                            }`}
-                                        >
-                                            Cartera K2
-                                        </button>
+                                        {!esBuga ? (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCarteraSeleccionada('K1')}
+                                                    className={`py-4 px-5 rounded-2xl font-black text-base border-2 transition-all duration-200 ${
+                                                        carteraSeleccionada === 'K1'
+                                                            ? 'bg-blue-600 border-blue-700 text-white shadow-lg scale-102'
+                                                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                                                    }`}
+                                                >
+                                                    Cartera K1
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCarteraSeleccionada('K2')}
+                                                    className={`py-4 px-5 rounded-2xl font-black text-base border-2 transition-all duration-200 ${
+                                                        carteraSeleccionada === 'K2'
+                                                            ? 'bg-green-600 border-green-700 text-white shadow-lg scale-102'
+                                                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                                                    }`}
+                                                >
+                                                    Cartera K2
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => setCarteraSeleccionada('K3')}
+                                                className={`py-4 px-5 rounded-2xl font-black text-base border-2 transition-all duration-200 ${
+                                                    carteraSeleccionada === 'K3'
+                                                        ? 'bg-orange-600 border-orange-700 text-white shadow-lg scale-102'
+                                                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                Cartera K3
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
 

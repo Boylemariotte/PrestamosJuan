@@ -405,7 +405,8 @@ const DiaDeCobro = () => {
                 {carterasDeCiudad.length > 0 && (
                     <CierreDiario 
                         clientesPagados={clientesPagados} 
-                        fechaSeleccionadaStr={fechaSeleccionadaStr} 
+                        fechaSeleccionadaStr={fechaSeleccionadaStr}
+                        ciudadSeleccionada={ciudadSeleccionada}
                     />
                 )}
             </div>
