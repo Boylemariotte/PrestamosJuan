@@ -14,6 +14,7 @@ import {
 import { obtenerFechaLocal } from '../../utils/dateUtils';
 
 const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefinido = null, tipoPagoPreferido = null, carteras = [] }) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   // Obtener tipos de pago permitidos de la cartera del cliente
   const tiposPermitidos = useMemo(() => {
     const carteraObj = carteras?.find(c => c.nombre === carteraCliente);
@@ -164,9 +165,11 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
     setErroresFechas(validacion.errores);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
+    if (isSubmitting) return;
+
     // Si es manual, validar que los campos estén llenos
     if (formData.usarMontoManual) {
       if (!formData.montoManual || !formData.valorCuotaManual || !formData.numCuotasManual) {
@@ -189,22 +192,25 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
     if (formData.modoFechas === 'manual') {
       cuotas = crearCuotasDesdeFechas(fechasManuales, valorCuota);
     } else {
-      // El backend generará las fechas automáticamente
       cuotas = [];
     }
 
-    // Preparar datos para enviar
     const dataToSubmit = {
       ...formData,
-      monto: montoReal, // Enviar el monto real (sea manual o de lista)
-      valorCuota: valorCuota, // Enviar valor cuota calculado o manual
-      numCuotas: numCuotas, // Enviar num cuotas calculado o manual
-      totalAPagar: totalAPagar, // Enviar total calculado
+      monto: montoReal,
+      valorCuota: valorCuota,
+      numCuotas: numCuotas,
+      totalAPagar: totalAPagar,
       esManual: formData.usarMontoManual,
-      cuotas: cuotas // Enviar cuotas (vacías si es automático, con fechas si es manual)
+      cuotas: cuotas
     };
 
-    onSubmit(dataToSubmit);
+    setIsSubmitting(true);
+    try {
+      await onSubmit(dataToSubmit);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -599,9 +605,10 @@ const CreditoForm = ({ onSubmit, onClose, carteraCliente = 'K1', tipoPagoPredefi
             </button>
             <button
               type="submit"
-              className="btn-primary"
+              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isSubmitting}
             >
-              Crear Crédito
+              {isSubmitting ? 'Creando...' : 'Crear Crédito'}
             </button>
           </div>
         </form>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { io } from 'socket.io-client';
 import api from '../services/api';
 import { useAuth } from './AuthContext';
@@ -33,6 +33,7 @@ export const AppProvider = ({ children }) => {
   const [carteras, setCarteras] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastSyncTime, setLastSyncTime] = useState(Date.now());
+  const isFetchingRef = useRef(false);
 
   // Función para cargar todos los datos
   const fetchData = useCallback(async () => {
@@ -41,6 +42,10 @@ export const AppProvider = ({ children }) => {
       setLoading(false);
       return;
     }
+
+    // Evitar llamadas concurrentes
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
 
     try {
       setLoading(true);
@@ -79,6 +84,7 @@ export const AppProvider = ({ children }) => {
       }
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
   }, [isAuthenticated]);
 

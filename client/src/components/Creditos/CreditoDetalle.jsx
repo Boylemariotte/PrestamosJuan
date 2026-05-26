@@ -606,7 +606,9 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     }
   };
 
-  const handleAgregarAbono = () => {
+  const handleAgregarAbono = async () => {
+    if (procesandoPago) return;
+
     if (!valorAbono || parseFloat(valorAbono) <= 0) {
       alert('Por favor ingresa un valor válido para el abono');
       return;
@@ -617,25 +619,22 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
       return;
     }
 
-    // Simplemente agregar el abono con la fecha especificada
-    // aplicarAbonosAutomaticamente se encargará de calcular cómo se distribuye
-    const processAbono = async () => {
-      try {
-        skipSyncNext.current = true;
-        await agregarAbono(clienteId, credito.id, parseFloat(valorAbono), descripcionAbono, fechaAbono);
-        const response = await api.get(`/creditos/${credito.id}`);
-        if (response.success) setCreditoActualizado(response.data);
-      } catch (err) {
-        skipSyncNext.current = false;
-      }
-    };
-    processAbono();
-
     setMostrarFormularioAbono(false);
     setValorAbono('');
     setDescripcionAbono('');
     setFechaAbono(new Date().toISOString().split('T')[0]);
 
+    try {
+      setProcesandoPago(true);
+      skipSyncNext.current = true;
+      await agregarAbono(clienteId, credito.id, parseFloat(valorAbono), descripcionAbono, fechaAbono);
+      const response = await api.get(`/creditos/${credito.id}`);
+      if (response.success) setCreditoActualizado(response.data);
+    } catch (err) {
+      skipSyncNext.current = false;
+    } finally {
+      setProcesandoPago(false);
+    }
   };
 
   const handleEliminarAbono = async (abonoId) => {
