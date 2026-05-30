@@ -103,7 +103,7 @@ const PagosSection = ({
                                                     {item.tieneMulta ? (
                                                         <span className="text-red-600 font-medium">
                                                             {item.multaMotivo || 'Multa'}
-                                                            {item.multaFecha && <span className="block text-xs text-gray-500">({item.multaFecha})</span>}
+                                                            {item.multaFecha && <span className="block text-xs text-gray-400">Multa del {item.multaFecha}</span>}
                                                         </span>
                                                     ) : '-'}
                                                 </td>

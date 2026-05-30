@@ -82,7 +82,7 @@ const abonoMultaSchema = new mongoose.Schema({
   },
   fecha: {
     type: Date,
-    default: Date.now
+    required: true
   },
   multaId: {
     type: String,

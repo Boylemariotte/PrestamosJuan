@@ -484,19 +484,30 @@ export const useCollectionsData = ({
                 if (credito.abonosMulta) {
                     credito.abonosMulta.filter(am => (am.fecha ? (typeof am.fecha === 'string' ? am.fecha.split('T')[0] : format(new Date(am.fecha), 'yyyy-MM-dd')) : null) === fechaSeleccionadaStr).forEach(am => {
                         const key = Array.from(itemsMap.keys()).find(k => k.startsWith(`${cliente.id}-${credito.id}-`)) || `${cliente.id}-${credito.id}-multa-${am.multaId}`;
+                        const multaObj = credito.multas?.find(m => String(m.id) === String(am.multaId));
+                        const multaFechaStr = multaObj?.fecha
+                            ? (typeof multaObj.fecha === 'string' ? multaObj.fecha.split('T')[0] : format(new Date(multaObj.fecha), 'yyyy-MM-dd'))
+                            : null;
+                        const motivoRaw = multaObj?.motivo || am.descripcion || 'Multa';
+                        const motivoLimpio = motivoRaw.replace(/\s*\(\d{4}-\d{2}-\d{2}\)\s*/g, '').trim() || 'Multa';
+
                         if (itemsMap.has(key)) {
                             const item = itemsMap.get(key);
                             item.montoPagadoMulta += (am.valor || 0);
                             item.tieneMulta = true;
+                            if (!item.multaFecha && multaFechaStr) {
+                                item.multaFecha = multaFechaStr;
+                                item.multaMotivo = motivoLimpio;
+                            }
                         } else {
-                            const multa = credito.multas?.find(m => String(m.id) === String(am.multaId));
                             itemsMap.set(key, {
                                 clienteId: cliente.id, clienteNombre: cliente.nombre, clienteDocumento: cliente.documento,
                                 clienteTelefono: cliente.telefono, clienteBarrio: cliente.barrio, clienteCartera: cliente.cartera || 'K1',
                                 clientePosicion: cliente.posicion, creditoId: credito.id, creditoMonto: credito.monto,
                                 creditoTipo: credito.tipo, valorCuota: credito.valorCuota, nroCuota: null,
                                 montoPagado: 0, tipoPago: null, montoPagadoMulta: am.valor || 0, tieneMulta: true,
-                                multaMotivo: multa?.motivo || am.descripcion || 'Multa'
+                                multaMotivo: motivoLimpio,
+                                multaFecha: multaFechaStr
                             });
                         }
                     });

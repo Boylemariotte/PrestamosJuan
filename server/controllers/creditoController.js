@@ -436,6 +436,12 @@ const recalcularCreditoCompleto = (credito) => {
   // 2. Procesar Abonos de Multas (completamente independientes de abonos de cuotas)
   if (credito.abonosMulta && credito.abonosMulta.length > 0) {
     credito.abonosMulta.forEach(abonoMulta => {
+      // Protección: si fecha es undefined, establecer null explícitamente para que
+      // Mongoose no aplique el default Date.now y corrompa la fecha del pago
+      if (abonoMulta.fecha === undefined) {
+        abonoMulta.fecha = null;
+      }
+
       const multa = credito.multas ? credito.multas.find(m => m.id === abonoMulta.multaId) : null;
       if (multa) {
         // Acumular abonos a esta multa
