@@ -26,7 +26,7 @@ import MotivoProrrogaModal from '../../components/Creditos/MotivoProrrogaModal';
 import { getCarteraColor, getBgColorClass } from './utils/colorHelpers';
 
 const DiaDeCobro = () => {
-    const { clientes, obtenerCliente, obtenerCredito, actualizarCliente, agregarNota, toggleReportado, fetchData, lastSyncTime, carteras } = useApp();
+    const { clientes, clientesArchivados, obtenerCliente, obtenerCredito, actualizarCliente, agregarNota, toggleReportado, fetchData, lastSyncTime, carteras } = useApp();
     const { user } = useAuth();
     const hoy = startOfDay(new Date());
 
@@ -206,9 +206,9 @@ const DiaDeCobro = () => {
         datosCobro, cobrosPorCartera, totalClientesDirecto, clientesPagados, multasPagadasDia,
         carterasDeCiudad: _, nombresCarterasCiudad
     } = useCollectionsData({
-        clientes, searchTerm, fechaSeleccionada, fechaSeleccionadaStr, creditosInvalidos,
-        prorrogasCuotas, clientesNoEncontradosPorFecha, hoy, ciudadSeleccionada,
-        carteras, filtrosPorCartera, filtroPagosPorCartera, ordenCobro
+        clientes, clientesArchivados: clientesArchivados || [], searchTerm, fechaSeleccionada,
+        fechaSeleccionadaStr, creditosInvalidos, prorrogasCuotas, clientesNoEncontradosPorFecha,
+        hoy, ciudadSeleccionada, carteras, filtrosPorCartera, filtroPagosPorCartera, ordenCobro
     });
 
     // Modal Detalle

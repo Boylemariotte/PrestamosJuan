@@ -28,6 +28,7 @@ export const useApp = () => {
 export const AppProvider = ({ children }) => {
   const { isAuthenticated, loading: authLoading, user } = useAuth();
   const [clientes, setClientes] = useState([]);
+  const [clientesArchivados, setClientesArchivados] = useState([]);
   const [movimientosCaja, setMovimientosCaja] = useState([]);
   const [alertas, setAlertas] = useState([]);
   const [carteras, setCarteras] = useState([]);
@@ -53,6 +54,11 @@ export const AppProvider = ({ children }) => {
       const clientesRes = await api.get('/clientes?limit=5000');
       if (clientesRes.success) {
         setClientes(clientesRes.data);
+      }
+
+      const archivadosRes = await api.get('/clientes?limit=5000&archivados=true');
+      if (archivadosRes.success) {
+        setClientesArchivados(archivadosRes.data);
       }
 
       // Cargar carteras
@@ -925,7 +931,8 @@ export const AppProvider = ({ children }) => {
     actualizarCartera,
     eliminarCartera,
     eliminarCarteraPermanente,
-    restaurarCartera
+    restaurarCartera,
+    clientesArchivados
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

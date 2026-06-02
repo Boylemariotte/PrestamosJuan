@@ -4,6 +4,7 @@ import { calcularTotalMultasCuota, aplicarAbonosAutomaticamente, determinarEstad
 
 export const useCollectionsData = ({
     clientes,
+    clientesArchivados = [],
     searchTerm,
     fechaSeleccionada,
     fechaSeleccionadaStr,
@@ -426,7 +427,8 @@ export const useCollectionsData = ({
     // Obtener clientes que pagaron ese día — DINÁMICO
     const clientesPagados = useMemo(() => {
         const itemsMap = new Map();
-        clientes.forEach(cliente => {
+        const todosLosClientes = [...clientes, ...clientesArchivados];
+        todosLosClientes.forEach(cliente => {
             if (!cliente.creditos || !cliente.id) return;
             cliente.creditos.forEach(credito => {
                 if (!credito || credito.renovado || !credito.cuotas) return;
@@ -546,7 +548,7 @@ export const useCollectionsData = ({
             }
         });
         return res;
-    }, [clientes, fechaSeleccionadaStr, nombresCarterasCiudad]);
+    }, [clientes, clientesArchivados, fechaSeleccionadaStr, nombresCarterasCiudad]);
 
     const multasPagadasDia = useMemo(() => {
         const todas = [];
