@@ -583,6 +583,21 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
       return;
     }
 
+    // Validar contra el saldo pendiente para evitar pagos duplicados o en exceso
+    const abonosDeLaMulta = (creditoActualizado.abonosMulta || []).filter(a => String(a.multaId) === String(multa.id));
+    const totalAbonadoMulta = abonosDeLaMulta.reduce((sum, a) => sum + (a.valor || 0), 0);
+    const saldoPendienteMulta = multa.valor - totalAbonadoMulta;
+
+    if (saldoPendienteMulta <= 0) {
+      alert('Esta multa ya está pagada en su totalidad.');
+      setMultaParaPagar(null);
+      return;
+    }
+    if (valorNumerico > saldoPendienteMulta) {
+      alert(`El valor ingresado excede el saldo pendiente de la multa ($${saldoPendienteMulta.toLocaleString('es-CO')})`);
+      return;
+    }
+
     const descFinal = descripcion || `Pago Multa - ${multa.motivo}`;
 
     // Pasar multaId para que el backend agregue el abono a abonosMulta (independiente de abonos de cuotas)
@@ -600,7 +615,18 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     } catch (error) {
       skipSyncNext.current = false;
       console.error('Error agregando abono de multa:', error);
-      alert('Error al procesar el pago de la multa. Por favor, intente nuevamente.');
+      alert(error.message || 'Error al procesar el pago de la multa. Por favor, intente nuevamente.');
+      // Re-sincronizar el crédito por si el estado local estaba desactualizado
+      // (p. ej. la multa ya fue pagada desde otra pestaña o sesión)
+      try {
+        const response = await api.get(`/creditos/${credito.id}`);
+        if (response.success && response.data) {
+          setCreditoActualizado(response.data);
+          setMultaParaPagar(null);
+        }
+      } catch (syncError) {
+        console.error('Error re-sincronizando crédito:', syncError);
+      }
     } finally {
       setProcesandoPago(false);
     }

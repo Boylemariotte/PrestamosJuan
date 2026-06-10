@@ -785,6 +785,24 @@ export const agregarAbono = async (req, res, next) => {
         return res.status(400).json({ success: false, error: 'multaId es requerido para abonos de multa' });
       }
 
+      // Validar contra la multa para evitar abonos duplicados o en exceso
+      const multa = (credito.multas || []).find(m => String(m.id) === String(multaId));
+      if (!multa) {
+        return res.status(404).json({ success: false, error: 'Multa no encontrada' });
+      }
+
+      const totalAbonadoMulta = (credito.abonosMulta || [])
+        .filter(a => String(a.multaId) === String(multaId))
+        .reduce((sum, a) => sum + (a.valor || 0), 0);
+      const saldoPendienteMulta = multa.valor - totalAbonadoMulta;
+
+      if (saldoPendienteMulta <= 0) {
+        return res.status(400).json({ success: false, error: 'Esta multa ya está pagada en su totalidad. No se pueden registrar más abonos.' });
+      }
+      if (parseFloat(valor) > saldoPendienteMulta) {
+        return res.status(400).json({ success: false, error: `El abono excede el saldo pendiente de la multa ($${saldoPendienteMulta.toLocaleString('es-CO')})` });
+      }
+
       // Normalizar la fecha del abono de multa para evitar problemas de zona horaria
       let fechaAbonoMulta = fecha || new Date();
       if (fecha) {
