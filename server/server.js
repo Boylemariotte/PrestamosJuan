@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import morgan from 'morgan';
+import compression from 'compression';
 import { connectDB } from './config/database.js';
 import { applySecurityMiddleware } from './middleware/security.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
@@ -56,6 +57,9 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Comprimir todas las respuestas (las de JSON grande se reducen ~10x en red)
+app.use(compression());
 
 // Middleware de seguridad
 applySecurityMiddleware(app);
