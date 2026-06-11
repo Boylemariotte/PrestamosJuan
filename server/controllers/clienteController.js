@@ -97,6 +97,7 @@ export const getClientes = async (req, res, next) => {
       .sort({ fechaCreacion: -1 })
       .skip(skip)
       .limit(parseInt(limit))
+      .lean()
 
 
     const total = await Cliente.countDocuments(query);
