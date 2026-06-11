@@ -23,10 +23,32 @@ export const obtenerProrrogasPorCredito = async (req, res) => {
   }
 };
 
+// Máximo de días hacia el futuro permitido para una prórroga
+const MAX_DIAS_PRORROGA = 20;
+
 // Guardar o actualizar prórrogas para un crédito (bulk upsert)
 export const guardarProrrogas = async (req, res) => {
   try {
     const { clienteId, creditoId, prorrogas } = req.body; // prorrogas: [{ nroCuota, fechaProrroga }, ...]
+
+    // Validar que ninguna prórroga exceda el máximo permitido
+    // (protege contra errores de digitación como invertir día/mes)
+    const fechaLimite = new Date();
+    fechaLimite.setDate(fechaLimite.getDate() + MAX_DIAS_PRORROGA);
+    fechaLimite.setHours(23, 59, 59, 999);
+
+    for (const { nroCuota, fechaProrroga } of prorrogas) {
+      const fecha = new Date(fechaProrroga);
+      if (isNaN(fecha.getTime())) {
+        return res.status(400).json({ success: false, message: `Fecha de prórroga inválida para la cuota #${nroCuota}` });
+      }
+      if (fecha > fechaLimite) {
+        return res.status(400).json({
+          success: false,
+          message: `La prórroga de la cuota #${nroCuota} excede el máximo de ${MAX_DIAS_PRORROGA} días (fecha recibida: ${String(fechaProrroga).split('T')[0]})`
+        });
+      }
+    }
 
     const bulkOps = prorrogas.map(({ nroCuota, fechaProrroga }) => ({
       updateOne: {
