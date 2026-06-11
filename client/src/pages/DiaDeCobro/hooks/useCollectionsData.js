@@ -89,15 +89,7 @@ export const useCollectionsData = ({
                         return fechaPago === fechaSeleccionadaStr;
                     });
 
-                    // Depuración: clientes finalizados
                     if (cuotasPagadasHoy.length > 0) {
-                        console.log(`=== CLIENTE FINALIZADO DETECTADO ===`);
-                        console.log(`Cliente: ${cliente.nombre}`);
-                        console.log(`Crédito ID: ${credito.id}`);
-                        console.log(`Cuotas pagadas hoy: ${cuotasPagadasHoy.length}`);
-                        console.log(`Total cobrado hoy: ${cuotasPagadasHoy.length * credito.valorCuota}`);
-                        console.log('=====================================');
-                        
                         tieneActividadHoy = true;
                         totalCobradoHoy = cuotasPagadasHoy.length * credito.valorCuota;
                     }
@@ -177,12 +169,6 @@ export const useCollectionsData = ({
 
                 // Si el cliente ya pagó completamente hoy, no mostrar en día de cobro
                 if (totalACobrarHoy === 0 && (totalCobradoHoy > 0 || totalAbonadoHoy > 0)) {
-                    console.log(`=== CLIENTE PAGO/ABONO COMPLETO HOY - NO MOSTRAR EN DÍA DE COBRO ===`);
-                    console.log(`Cliente: ${cliente.nombre}`);
-                    console.log(`Total cobrado hoy: ${totalCobradoHoy}`);
-                    console.log(`Total abonado hoy: ${totalAbonadoHoy}`);
-                    console.log(`Total a cobrar hoy: ${totalACobrarHoy}`);
-                    console.log('================================================');
                     return; // No mostrar en día de cobro, solo en pagos registrados
                 }
 
@@ -350,24 +336,7 @@ export const useCollectionsData = ({
                     item.clienteTelefono?.includes(t) ||
                     item.clienteBarrio?.toLowerCase().includes(t);
             });
-            
-            // Depuración: mostrar qué items son filtrados
-            const noFiltrados = itemsList.filter(item => {
-                const ref = item.clientePosicion ? `#${item.clientePosicion}` : '';
-                return !(ref.toLowerCase().includes(t) ||
-                    item.clienteNombre?.toLowerCase().includes(t) ||
-                    item.clienteDocumento?.includes(t) ||
-                    item.clienteTelefono?.includes(t) ||
-                    item.clienteBarrio?.toLowerCase().includes(t));
-            });
-            
-            if (noFiltrados.length > 0) {
-                console.log('=== ITEMS FILTRADOS POR BÚSQUEDA ===');
-                console.log('Término de búsqueda:', t);
-                console.log('Items que NO pasan el filtro:', noFiltrados.map(i => i.clienteNombre));
-                console.log('=====================================');
-            }
-            
+
             return filtrados;
         };
 
@@ -376,18 +345,9 @@ export const useCollectionsData = ({
         nombresCarterasCiudad.forEach(nombre => {
             const filtro = filtrosPorCartera[nombre] || 'todos';
             
-            // Depuración: mostrar filtrado por tipo de pago
             const itemsPorCartera = itemsReportados.filter(i => i.clienteCartera === nombre);
             const itemsDespuesDeFiltroTipo = itemsPorCartera.filter(i => filtro === 'todos' || i.creditoTipo === filtro);
-            
-            if (nombre === 'K1' && itemsDespuesDeFiltroTipo.length !== itemsPorCartera.length) {
-                console.log('=== FILTRADO POR TIPO DE PAGO K1 ===');
-                console.log('Filtro aplicado:', filtro);
-                console.log('Items antes del filtro:', itemsPorCartera.map(i => ({nombre: i.clienteNombre, tipo: i.creditoTipo})));
-                console.log('Items después del filtro:', itemsDespuesDeFiltroTipo.map(i => ({nombre: i.clienteNombre, tipo: i.creditoTipo})));
-                console.log('=====================================');
-            }
-            
+
             resultado[nombre] = filtrarPorBusqueda(
                 ordenarItems(itemsDespuesDeFiltroTipo)
             );
@@ -408,16 +368,6 @@ export const useCollectionsData = ({
             // Solo contar items que tienen valorRealACobrar > 0 (clientes activos para cobrar hoy)
             const itemsActivos = items.filter(item => item.valorRealACobrar > 0);
             total += itemsActivos.length;
-            
-            // Depuración: verificar clienteRF de Guillermo Rodriguez y Norberto Serna
-            itemsActivos.forEach(item => {
-                if (item.clienteNombre === 'Guillermo Rodriguez' || item.clienteNombre === 'Norberto Serna') {
-                    console.log(`=== VERIFICACIÓN ${item.clienteNombre} ===`);
-                    console.log('clienteRF:', item.clienteRF);
-                    console.log('valorRealACobrar:', item.valorRealACobrar);
-                    console.log('=====================================');
-                }
-            });
         });
         
         localStorage.setItem('totalClientesHoy', total.toString());
