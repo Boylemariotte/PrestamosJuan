@@ -50,36 +50,34 @@ export const AppProvider = ({ children }) => {
 
     try {
       setLoading(true);
-      // Cargar clientes (limit alto para traer todos)
-      const clientesRes = await api.get('/clientes?limit=5000');
+
+      // Lanzar todas las peticiones en paralelo: el tiempo total pasa de la
+      // suma de todas a solo la más lenta
+      // Nota: Domiciliarios no ven caja según PERMISSIONS en Persona.js
+      const cargarCaja = user && user.role !== 'domiciliario' && user.role !== 'supervisor';
+
+      const [clientesRes, archivadosRes, carterasRes, movimientosRes, alertasRes] = await Promise.all([
+        api.get('/clientes?limit=5000'),
+        api.get('/clientes?limit=5000&archivados=true'),
+        api.get(user?.role === 'ceo' ? '/carteras?all=true' : '/carteras'),
+        cargarCaja ? api.get('/movimientos-caja?limit=10000') : Promise.resolve(null),
+        cargarCaja ? api.get('/alertas') : Promise.resolve(null)
+      ]);
+
       if (clientesRes.success) {
         setClientes(clientesRes.data);
       }
-
-      const archivadosRes = await api.get('/clientes?limit=5000&archivados=true');
       if (archivadosRes.success) {
         setClientesArchivados(archivadosRes.data);
       }
-
-      // Cargar carteras
-      const carterasRes = await api.get(user?.role === 'ceo' ? '/carteras?all=true' : '/carteras');
       if (carterasRes.success) {
         setCarteras(carterasRes.data);
       }
-
-      // Cargar movimientos de caja (Solo si tiene permiso o no es domiciliario)
-      // Nota: Domiciliarios no ven caja según PERMISSIONS en Persona.js
-      if (user && user.role !== 'domiciliario' && user.role !== 'supervisor') {
-        const movimientosRes = await api.get('/movimientos-caja?limit=10000');
-        if (movimientosRes.success) {
-          setMovimientosCaja(movimientosRes.data);
-        }
-
-        // Cargar alertas (Solo si tiene permiso o no es domiciliario)
-        const alertasRes = await api.get('/alertas');
-        if (alertasRes.success) {
-          setAlertas(alertasRes.data);
-        }
+      if (movimientosRes && movimientosRes.success) {
+        setMovimientosCaja(movimientosRes.data);
+      }
+      if (alertasRes && alertasRes.success) {
+        setAlertas(alertasRes.data);
       }
     } catch (error) {
       // Si es error de autenticación, no hacer nada (el usuario será redirigido)
