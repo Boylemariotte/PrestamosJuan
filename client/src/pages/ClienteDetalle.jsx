@@ -144,9 +144,16 @@ const ClienteDetalle = ({ soloLectura = false }) => {
 
 
   // Handlers - deben estar antes de los returns condicionales
-  const handleActualizarCliente = (clienteData) => {
-    actualizarCliente(id, clienteData);
-    setShowEditForm(false);
+  const handleActualizarCliente = async (clienteData) => {
+    try {
+      const actualizado = await actualizarCliente(id, clienteData);
+      // El cliente archivado no vive en el contexto, así que refrescamos el estado
+      // local con el dato devuelto para reflejar los cambios sin desarchivar.
+      if (actualizado) setClienteLocal(actualizado);
+      setShowEditForm(false);
+    } catch (error) {
+      alert(error.response?.data?.error || 'No se pudo actualizar el cliente.');
+    }
   };
 
   const handleEliminarCliente = () => {
@@ -306,6 +313,20 @@ const ClienteDetalle = ({ soloLectura = false }) => {
                   Eliminar
                 </button>
               )}
+            </div>
+          )}
+
+          {/* En la vista de archivados, los administradores/CEO pueden editar los
+              datos del cliente sin necesidad de desarchivarlo */}
+          {soloLectura && !esDomiciliarioOSupervisor && (
+            <div className="flex space-x-3 w-full md:w-auto justify-end">
+              <button
+                onClick={() => setShowEditForm(true)}
+                className="btn-secondary flex items-center justify-center flex-1 md:flex-none"
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Editar Datos
+              </button>
             </div>
           )}
         </div>

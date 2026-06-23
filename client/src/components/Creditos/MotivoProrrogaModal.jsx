@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { addDays, format, differenceInDays } from 'date-fns';
+import { obtenerFechaHoy } from '../../utils/creditCalculations';
 
 const MotivoProrrogaModal = ({ isOpen, onClose, onConfirm, initialDate = '', showDatePicker = true }) => {
     const { user } = useAuth();
@@ -95,7 +96,7 @@ const MotivoProrrogaModal = ({ isOpen, onClose, onConfirm, initialDate = '', sho
                                 }`}
                                 value={fecha}
                                 onChange={(e) => setFecha(e.target.value)}
-                                min={new Date().toISOString().split('T')[0]} // No permitir fechas pasadas
+                                min={obtenerFechaHoy()} // No permitir fechas pasadas
                                 max={format(addDays(new Date(), maxDiasProrroga), 'yyyy-MM-dd')} // Límite máximo de prórroga
                                 required
                             />

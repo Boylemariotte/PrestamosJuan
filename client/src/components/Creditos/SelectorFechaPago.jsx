@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Calendar, X, Check } from 'lucide-react';
-import { formatearFechaCorta } from '../../utils/creditCalculations';
+import { formatearFechaCorta, obtenerFechaHoy } from '../../utils/creditCalculations';
 
 const SelectorFechaPago = ({ 
   cuota, 
@@ -10,7 +10,7 @@ const SelectorFechaPago = ({
   isOpen 
 }) => {
   const [fechaSeleccionada, setFechaSeleccionada] = useState(
-    cuota.fechaProgramada || new Date().toISOString().split('T')[0]
+    cuota.fechaProgramada || obtenerFechaHoy()
   );
 
   if (!isOpen) return null;
@@ -56,7 +56,7 @@ const SelectorFechaPago = ({
               type="date"
               value={fechaSeleccionada}
               onChange={(e) => setFechaSeleccionada(e.target.value)}
-              max={new Date().toISOString().split('T')[0]}
+              max={obtenerFechaHoy()}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
             <p className="text-xs text-gray-500 mt-1">

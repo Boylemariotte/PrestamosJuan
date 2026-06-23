@@ -1,4 +1,5 @@
 import React from 'react';
+import { obtenerFechaHoy } from '../../utils/creditCalculations';
 
 const FormularioAbono = ({ 
   valorAbono, 
@@ -22,7 +23,7 @@ const FormularioAbono = ({
               value={fechaAbono}
               onChange={(e) => onFechaChange(e.target.value)}
               className="input-field"
-              max={new Date().toISOString().split('T')[0]}
+              max={obtenerFechaHoy()}
             />
           </div>
           <div>

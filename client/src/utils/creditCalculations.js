@@ -448,6 +448,15 @@ export const formatearFechaCorta = (fecha) => {
   return format(new Date(fecha), 'dd/MM/yyyy');
 };
 
+/**
+ * Devuelve la fecha de hoy en horario Colombia (UTC-5) en formato "YYYY-MM-DD".
+ * Usar esto para valores por defecto de inputs de fecha en lugar de
+ * `new Date().toISOString().split('T')[0]`, que devuelve el día UTC y, después
+ * de las 7:00 p.m. hora local, ya corresponde al día siguiente.
+ */
+export const obtenerFechaHoy = () =>
+  new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+
 // Calcular total de multas de una cuota (Deprecado/Fallback)
 export const calcularTotalMultasCuota = (cuota) => {
   return 0; // Las multas ya no pertenecen a la cuota

@@ -834,11 +834,29 @@ export const agregarAbono = async (req, res, next) => {
       credito.abonosMulta.push(nuevoAbonoMulta);
     } else {
       // Abono de cuota (normal)
+      // Normalizar la fecha del abono para evitar problemas de zona horaria
+      // (un string "YYYY-MM-DD" se castea a medianoche UTC y se muestra un día antes en Colombia)
+      let fechaAbonoCuota = fecha || new Date();
+      if (fecha) {
+        if (typeof fecha === 'string') {
+          const partes = fecha.split('T')[0].split('-');
+          if (partes.length === 3) {
+            fechaAbonoCuota = new Date(Date.UTC(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]), 12, 0, 0, 0));
+          } else {
+            fechaAbonoCuota = new Date(fecha);
+          }
+        } else if (fecha instanceof Date) {
+          fechaAbonoCuota = fecha;
+        } else {
+          fechaAbonoCuota = new Date(fecha);
+        }
+      }
+
       const nuevoAbono = {
         id: Date.now().toString(),
         valor: parseFloat(valor),
         descripcion: descripcion || 'Abono al crédito',
-        fecha: fecha || new Date(),
+        fecha: fechaAbonoCuota,
         nroCuota: nroCuota ? parseInt(nroCuota, 10) : null
       };
 
@@ -849,50 +867,11 @@ export const agregarAbono = async (req, res, next) => {
     credito = recalcularCreditoCompleto(credito);
 
     await credito.save();
-    credito = await Credito.findById(req.params.id).populate('cliente');
-    if (!credito) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
-
-    const abonoId = req.params.abonoId;
-
-    // Buscar en abonos de cuotas
-    const abonoEncontrado = credito.abonos.find(a => a.id === abonoId);
-    let abonoEliminado = null;
-
-    if (abonoEncontrado) {
-      abonoEliminado = { ...abonoEncontrado };
-      credito.abonos = credito.abonos.filter(a => a.id !== abonoId);
-    } else {
-      // Buscar en abonos de multas
-      const abonoMultaEncontrado = (credito.abonosMulta || []).find(a => a.id === abonoId);
-      if (abonoMultaEncontrado) {
-        abonoEliminado = { ...abonoMultaEncontrado };
-        credito.abonosMulta = (credito.abonosMulta || []).filter(a => a.id !== abonoId);
-      }
-    }
-
-    if (abonoEliminado) {
-      // Registrar en historial
-      await registrarBorrado({
-        tipo: 'abono',
-        idOriginal: abonoId,
-        detalles: abonoEliminado,
-        usuario: req.user._id,
-        usuarioNombre: req.user.nombre,
-        metadata: {
-          creditoId: req.params.id,
-          valorAbono: abonoEliminado.valor,
-          nombreCliente: credito.cliente?.nombre || 'Desconocido'
-        }
-      });
-    }
-
-    // Recalcular todo el estado del crédito tras eliminar abono
-    credito = recalcularCreditoCompleto(credito);
-
-    await credito.save();
     await syncCreditoToCliente(req.params.id);
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
+    if (!creditoActualizado) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
+
     res.status(200).json({ success: true, data: creditoActualizado });
   } catch (error) {
     next(error);

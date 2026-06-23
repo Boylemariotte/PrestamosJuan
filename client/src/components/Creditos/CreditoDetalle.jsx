@@ -8,7 +8,8 @@ import {
   formatearMoneda,
   calcularTotalMultasCredito,
   aplicarAbonosAutomaticamente,
-  formatearFechaCorta
+  formatearFechaCorta,
+  obtenerFechaHoy
 } from '../../utils/creditCalculations';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -154,7 +155,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
   const [mostrarFormularioAbono, setMostrarFormularioAbono] = useState(false);
   const [valorAbono, setValorAbono] = useState('');
   const [descripcionAbono, setDescripcionAbono] = useState('');
-  const [fechaAbono, setFechaAbono] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaAbono, setFechaAbono] = useState(obtenerFechaHoy());
   const [mostrarFormularioDescuento, setMostrarFormularioDescuento] = useState(false);
   const [valorDescuento, setValorDescuento] = useState('');
   const [tipoDescuento, setTipoDescuento] = useState('dias');
@@ -497,7 +498,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
   const handleEditarMulta = (multa) => {
     // Extraer el motivo sin la referencia a cuota para edición
     const motivoSinRef = multa.motivo ? multa.motivo.replace(/\s*\(Ref\. Cuota #\d+\)/, '') : '';
-    const fechaBase = multa.fecha ? (multa.fecha.includes('T') ? multa.fecha.split('T')[0] : multa.fecha) : new Date().toISOString().split('T')[0];
+    const fechaBase = multa.fecha ? (multa.fecha.includes('T') ? multa.fecha.split('T')[0] : multa.fecha) : obtenerFechaHoy();
 
     setMultaParaEditar({
       ...multa,
@@ -648,7 +649,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     setMostrarFormularioAbono(false);
     setValorAbono('');
     setDescripcionAbono('');
-    setFechaAbono(new Date().toISOString().split('T')[0]);
+    setFechaAbono(obtenerFechaHoy());
 
     try {
       setProcesandoPago(true);
@@ -1074,7 +1075,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
   // Función para imprimir/exportar a PDF
   const handlePrint = useReactToPrint({
     contentRef: formularioRef,
-    documentTitle: `credito-${cliente?.nombre?.replace(/\s+/g, '-') || 'cliente'}-${credito.id}-${new Date().toISOString().split('T')[0]}`,
+    documentTitle: `credito-${cliente?.nombre?.replace(/\s+/g, '-') || 'cliente'}-${credito.id}-${obtenerFechaHoy()}`,
     pageStyle: `
       @page {
         size: A4;
@@ -1353,7 +1354,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
                 setMostrarFormularioAbono(false);
                 setValorAbono('');
                 setDescripcionAbono('');
-                setFechaAbono(new Date().toISOString().split('T')[0]);
+                setFechaAbono(obtenerFechaHoy());
               }}
               onMostrarFormularioRenovacion={soloLectura ? null : () => setMostrarFormularioRenovacion(true)}
               soloLectura={soloLectura}
@@ -1487,7 +1488,7 @@ export default CreditoDetalle;
 
 const ModalEditarAbono = ({ abono, maxCuotas, onClose, onConfirm, onDelete }) => {
   const [valor, setValor] = useState(abono.valor || '');
-  const [fecha, setFecha] = useState(abono.fecha ? abono.fecha.split('T')[0] : new Date().toISOString().split('T')[0]);
+  const [fecha, setFecha] = useState(abono.fecha ? abono.fecha.split('T')[0] : obtenerFechaHoy());
   const [descripcion, setDescripcion] = useState(abono.descripcion || '');
 
   // Intentar deducir nroCuota si no viene explícito
@@ -1598,7 +1599,7 @@ const ModalEditarAbono = ({ abono, maxCuotas, onClose, onConfirm, onDelete }) =>
 
 const ModalPago = ({ cuota, onClose, onConfirm, procesando = false }) => {
   const [valor, setValor] = useState(cuota.valorPendiente || '');
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  const [fecha, setFecha] = useState(obtenerFechaHoy());
   const [descripcion, setDescripcion] = useState('');
 
   const handleSubmit = (e) => {
@@ -1687,7 +1688,7 @@ const ModalPago = ({ cuota, onClose, onConfirm, procesando = false }) => {
 const ModalPagoMulta = ({ multa, onClose, onConfirm, procesando = false }) => {
   const { multa: multaData, valorPendiente } = multa;
   const [valor, setValor] = useState(valorPendiente || '');
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  const [fecha, setFecha] = useState(obtenerFechaHoy());
   const [descripcion, setDescripcion] = useState('');
 
   const handleSubmit = (e) => {
@@ -1774,7 +1775,7 @@ const ModalPagoMulta = ({ multa, onClose, onConfirm, procesando = false }) => {
 
 const ModalMulta = ({ onClose, onConfirm, procesando = false }) => {
   const [valor, setValor] = useState('');
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  const [fecha, setFecha] = useState(obtenerFechaHoy());
   const [motivo, setMotivo] = useState('');
 
   const handleSubmit = (e) => {
@@ -1852,7 +1853,7 @@ const ModalMulta = ({ onClose, onConfirm, procesando = false }) => {
 
 const ModalEditarMulta = ({ multa, onClose, onGuardar, onEliminar, procesando = false }) => {
   const [valor, setValor] = useState(multa.valor || '');
-  const [fecha, setFecha] = useState(multa.fecha || new Date().toISOString().split('T')[0]);
+  const [fecha, setFecha] = useState(multa.fecha || obtenerFechaHoy());
   const [motivo, setMotivo] = useState(multa.motivo || '');
 
   const handleSubmit = (e) => {
