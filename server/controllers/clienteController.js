@@ -349,6 +349,9 @@ const obtenerTipoPagoCliente = (cliente) => {
 
   // Buscar créditos activos o en mora (con cuotas no pagadas)
   const creditoActivo = cliente.creditos.find(c => {
+    // Un crédito ya renovado no es activo: su saldo se trasladó al crédito de renovación.
+    // Ignorarlo evita que cuotas huérfanas de una renovación clasifiquen mal el tipo del cliente.
+    if (c.renovado) return false;
     if (!c.cuotas || c.cuotas.length === 0) return false;
     const tieneCuotasPendientes = c.cuotas.some(cuota => !cuota.pagado);
     return tieneCuotasPendientes && c.tipo;
