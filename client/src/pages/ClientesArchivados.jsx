@@ -22,7 +22,6 @@ const ClientesArchivados = () => {
   const [posicionSeleccionada, setPosicionSeleccionada] = useState(null);
   const [carteraSeleccionada, setCarteraSeleccionada] = useState('');
   const [tipoPagoSeleccionado, setTipoPagoSeleccionado] = useState('');
-  const [bloquearSelectores, setBloquearSelectores] = useState(false);
 
   // Definición de etiquetas
   const ETIQUETAS = {
@@ -184,12 +183,9 @@ const ClientesArchivados = () => {
   };
 
   const abrirModalPosicion = async (cliente) => {
-    const saldoPendiente = calcularSaldoPendienteTotal(cliente);
-    const tieneDeuda = saldoPendiente > 0;
-
     setClienteParaDesarchivar(cliente);
 
-    // Si tiene deuda, se bloquean los selectores a sus valores actuales
+    // Preseleccionar la cartera actual del cliente (puede cambiarse en el modal)
     const carteraInicial = cliente.cartera || carteras[0]?.nombre || 'K1';
 
     // Obtener tipo de pago inicial (preferir el cliente, luego fallback a la cartera)
@@ -201,7 +197,6 @@ const ClientesArchivados = () => {
 
     setCarteraSeleccionada(carteraInicial);
     setTipoPagoSeleccionado(tipoPagoInicial);
-    setBloquearSelectores(tieneDeuda);
     setPosicionSeleccionada(null);
     setMostrarModalPosicion(true);
   };
@@ -504,19 +499,6 @@ const ClientesArchivados = () => {
             </div>
 
             <div className="px-6 py-4 overflow-y-auto flex-1">
-              {bloquearSelectores && (
-                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
-                  <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-amber-800">Cliente con saldo pendiente</p>
-                    <p className="text-xs text-amber-700">
-                      Debido a que el cliente posee un saldo de {formatearMoneda(calcularSaldoPendienteTotal(clienteParaDesarchivar))},
-                      solo puede ser restaurado a su cartera y modalidad original.
-                    </p>
-                  </div>
-                </div>
-              )}
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -524,7 +506,6 @@ const ClientesArchivados = () => {
                   </label>
                   <select
                     value={carteraSeleccionada}
-                    disabled={bloquearSelectores}
                     onChange={(e) => {
                       const nuevaC = e.target.value;
                       setCarteraSeleccionada(nuevaC);
@@ -537,7 +518,7 @@ const ClientesArchivados = () => {
                         setTipoPagoSeleccionado(tiposPermitidos[0]);
                       }
                     }}
-                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${bloquearSelectores ? 'bg-gray-100 cursor-not-allowed opacity-75' : ''}`}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     {carteras?.filter(c => c.activa).map(c => (
                       <option key={c.id || c._id} value={c.nombre}>
@@ -552,9 +533,8 @@ const ClientesArchivados = () => {
                   </label>
                   <select
                     value={tipoPagoSeleccionado}
-                    disabled={bloquearSelectores}
                     onChange={(e) => setTipoPagoSeleccionado(e.target.value)}
-                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${bloquearSelectores ? 'bg-gray-100 cursor-not-allowed opacity-75' : ''}`}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     {(() => {
                       const carteraObj = carteras?.find(c => c.nombre === carteraSeleccionada);
