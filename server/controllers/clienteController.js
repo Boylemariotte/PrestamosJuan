@@ -363,7 +363,22 @@ const obtenerTipoPagoCliente = (cliente) => {
   }
 
   // Si no hay créditos activos, usar tipoPagoEsperado como fallback
-  return cliente.tipoPagoEsperado || null;
+  if (cliente.tipoPagoEsperado) {
+    return cliente.tipoPagoEsperado;
+  }
+
+  // Último recurso: el tipo del crédito más reciente (aunque esté pagado o renovado).
+  // Un cliente con posición asignada sigue ocupando la sección de su último crédito;
+  // sin este fallback quedaría "sin tipo" y su posición se ofrecería como disponible.
+  const creditosConTipo = cliente.creditos.filter(c => c.tipo);
+  if (creditosConTipo.length > 0) {
+    const masReciente = creditosConTipo.reduce((a, b) =>
+      new Date(b.fechaCreacion || 0) >= new Date(a.fechaCreacion || 0) ? b : a
+    );
+    return masReciente.tipo;
+  }
+
+  return null;
 };
 
 export const desarchivarCliente = async (req, res, next) => {
@@ -418,29 +433,31 @@ export const desarchivarCliente = async (req, res, next) => {
         _id: { $ne: req.params.id }
       };
 
-      let clienteOcupando = await Cliente.findOne(queryBase);
+      // Buscar TODOS los clientes en esa posición: en K1/K3 una misma posición
+      // puede estar ocupada por dos clientes (uno semanal y uno quincenal/mensual),
+      // así que hay que verificar el conflicto contra cada ocupante.
+      const ocupantes = await Cliente.find(queryBase);
+      let clienteOcupando = null;
 
-      // Para K1 y K3, si hay un cliente ocupando la posición, verificar si es del mismo tipo de pago
-      // Si es del mismo tipo, la posición está ocupada. Si es de otro tipo, está disponible.
-      // Para K1 y K3, si hay un cliente ocupando la posición, verificar conflicto de tipos
-      // - Semanal ocupa su propia ranura
-      // - Quincenal y Mensual comparten ranura (conflictúan entre sí)
-      if ((cartera === 'K1' || cartera === 'K3') && tipoPagoCliente && clienteOcupando) {
-        const tipoPagoOcupante = obtenerTipoPagoCliente(clienteOcupando);
+      if (ocupantes.length > 0) {
+        // Para K1 y K3, verificar conflicto de tipos contra cada ocupante
+        // - Semanal ocupa su propia ranura
+        // - Quincenal y Mensual comparten ranura (conflictúan entre sí)
+        if ((cartera === 'K1' || cartera === 'K3') && tipoPagoCliente) {
+          const esGrupoQuincenalMensual = (t) => t === 'quincenal' || t === 'mensual';
+          const sonConflictivos = (t1, t2) => {
+            if (!t1 || !t2) return true; // Tipo indeterminable: asumir conflicto para no duplicar la posición
+            if (t1 === t2) return true; // Mismo tipo siempre conflictúa
+            if (esGrupoQuincenalMensual(t1) && esGrupoQuincenalMensual(t2)) return true; // Quincenal y Mensual conflictúan
+            return false;
+          };
 
-        // Definir grupos de conflicto
-        const esGrupoQuincenalMensual = (t) => t === 'quincenal' || t === 'mensual';
-        const sonConflictivos = (t1, t2) => {
-          if (t1 === t2) return true; // Mismo tipo siempre conflictúa
-          if (esGrupoQuincenalMensual(t1) && esGrupoQuincenalMensual(t2)) return true; // Quincenal y Mensual conflictúan
-          return false;
-        };
-
-        if (sonConflictivos(tipoPagoCliente, tipoPagoOcupante)) {
-          // La posición está ocupada
+          clienteOcupando = ocupantes.find(ocupante =>
+            sonConflictivos(tipoPagoCliente, obtenerTipoPagoCliente(ocupante))
+          ) || null;
         } else {
-          // La posición está ocupada pero por un cliente de tipo compatible, está disponible para este tipo
-          clienteOcupando = null;
+          // K2 (o sin tipo determinable): cualquier ocupante bloquea la posición
+          clienteOcupando = ocupantes[0];
         }
       }
 
@@ -477,6 +494,9 @@ export const desarchivarCliente = async (req, res, next) => {
 
         if ((cartera === 'K1' || cartera === 'K3') && tipoPagoCliente) {
           const tipoPagoOtroCliente = obtenerTipoPagoCliente(c);
+
+          // Tipo indeterminable: asumir conflicto para no asignar su misma posición
+          if (!tipoPagoOtroCliente) return true;
 
           const esGrupoQuincenalMensual = (t) => t === 'quincenal' || t === 'mensual';
 
@@ -586,11 +606,10 @@ export const getPosicionesDisponibles = async (req, res, next) => {
       // Obtener el tipo de pago activo del cliente
       const tipoCliente = obtenerTipoPagoCliente(cliente);
 
-      // Si el cliente no tiene tipo definido, ¿ocupa espacio?
-      // Estrategia conservadora: Si no tiene tipo, no sabemos dónde va.
-      // Pero si fue creado en esta cartera, debe estar en alguna sección.
-      // Asumiremos que si su tipo (o tipoPagoEsperado) coincide con los de la sección, ocupa espacio.
-      if (!tipoCliente) return false;
+      // Si no se puede determinar el tipo, no sabemos en qué sección está:
+      // bloquear su posición en TODAS las secciones. Es preferible no ofrecer
+      // una posición dudosa a asignarla dos veces.
+      if (!tipoCliente) return true;
 
       return tiposPagoPermitidos.includes(tipoCliente);
     });
