@@ -99,6 +99,8 @@ export const getClientes = async (req, res, next) => {
       .limit(parseInt(limit))
       .lean()
 
+    // lean() no incluye el virtual `id` y el frontend identifica los clientes por ese campo
+    clientes.forEach(c => { c.id = c._id.toString(); });
 
     const total = await Cliente.countDocuments(query);
 
