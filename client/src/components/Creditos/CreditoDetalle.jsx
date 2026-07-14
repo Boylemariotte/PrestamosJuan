@@ -1066,10 +1066,14 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     }
   })();
 
-  const handleRenovar = (datosRenovacion) => {
-    renovarCredito(clienteId, credito.id, datosRenovacion);
-    setMostrarFormularioRenovacion(false);
-    onClose();
+  const handleRenovar = async (datosRenovacion) => {
+    try {
+      await renovarCredito(clienteId, credito.id, datosRenovacion);
+      setMostrarFormularioRenovacion(false);
+      onClose();
+    } catch (error) {
+      alert(error.message || 'No fue posible renovar el crédito. Verifique antes de reintentar.');
+    }
   };
 
   // Función para imprimir/exportar a PDF

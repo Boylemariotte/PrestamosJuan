@@ -307,6 +307,11 @@ export const AppProvider = ({ children }) => {
       }
 
       const payload = {
+        // Id generado en el cliente: si la misma petición se reenvía (doble clic,
+        // reintento del navegador), el servidor detecta el id repetido y no duplica.
+        id: `CRED-${typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`}`,
         clienteId,
         monto,
         papeleria,

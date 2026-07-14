@@ -167,6 +167,38 @@ export const createCredito = async (req, res, next) => {
     // Generar ID único para el crédito (más robusto que Date.now())
     const creditoId = creditoDataRaw.id || `CRED-${new mongoose.Types.ObjectId().toString()}`;
 
+    // IDEMPOTENCIA: si el frontend reenvía la misma petición (doble clic, reintento
+    // del navegador o del usuario por respuesta lenta), no crear un duplicado.
+    // Caso 1: ya existe un crédito con el mismo id enviado por el cliente.
+    if (creditoDataRaw.id) {
+      const existente = await Credito.findById(creditoId).populate('cliente');
+      if (existente) {
+        return res.status(200).json({
+          success: true,
+          data: existente,
+          duplicadoEvitado: true
+        });
+      }
+    }
+
+    // Caso 2 (red de seguridad para clientes sin id): mismo cliente con un crédito
+    // idéntico creado hace menos de 60 segundos.
+    const duplicadoReciente = await Credito.findOne({
+      cliente: clienteId,
+      monto: creditoDataRaw.monto,
+      tipo: creditoDataRaw.tipo,
+      totalAPagar: creditoDataRaw.totalAPagar,
+      fechaInicio: creditoDataRaw.fechaInicio,
+      fechaCreacion: { $gte: new Date(Date.now() - 60 * 1000) }
+    }).populate('cliente');
+    if (duplicadoReciente) {
+      return res.status(200).json({
+        success: true,
+        data: duplicadoReciente,
+        duplicadoEvitado: true
+      });
+    }
+
     // SANITIZACIÓN Y VALIDACIÓN (Evitar vulnerabilidades JSON y Mass-Assignment)
     const creditoData = {
       monto: creditoDataRaw.monto,
@@ -216,12 +248,26 @@ export const createCredito = async (req, res, next) => {
     }));
 
     // 1. Guardar en la colección Creditos
-    const credito = await Credito.create({
-      ...creditoData,
-      _id: creditoId,
-      cuotas: cuotasProcesadas,
-      cliente: clienteId
-    });
+    let credito;
+    try {
+      credito = await Credito.create({
+        ...creditoData,
+        _id: creditoId,
+        cuotas: cuotasProcesadas,
+        cliente: clienteId
+      });
+    } catch (error) {
+      // Clave duplicada: otra petición simultánea ya creó este mismo crédito
+      if (error.code === 11000) {
+        const existente = await Credito.findById(creditoId).populate('cliente');
+        return res.status(200).json({
+          success: true,
+          data: existente,
+          duplicadoEvitado: true
+        });
+      }
+      throw error;
+    }
 
     // 2. Preparar objeto embebido para el cliente (sin referencia circular)
     const creditoEmbebido = {
@@ -248,9 +294,11 @@ export const createCredito = async (req, res, next) => {
       fechaCreacion: new Date()
     };
 
-    // 3. Agregar el crédito embebido al cliente
-    cliente.creditos.push(creditoEmbebido);
-    await cliente.save();
+    // 3. Agregar el crédito embebido al cliente (sin duplicarlo si ya existe)
+    if (!cliente.creditos.some(c => c.id === creditoId)) {
+      cliente.creditos.push(creditoEmbebido);
+      await cliente.save();
+    }
 
     const creditoPopulado = await Credito.findById(credito._id)
       .populate('cliente');

@@ -13,6 +13,7 @@ import {
 import { obtenerFechaLocal } from '../../utils/dateUtils';
 
 const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     monto: MONTOS_DISPONIBLES[0],
     tipo: creditoAnterior.tipo, // Mantener el mismo tipo de pago
@@ -158,9 +159,11 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
+    if (isSubmitting) return;
+
     // Si es manual, validar que los campos estén llenos
     if (formData.usarMontoManual) {
       if (!formData.montoManual || !formData.valorCuotaManual || !formData.numCuotasManual) {
@@ -206,7 +209,12 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
       modoFechas: formData.modoFechas // Nuevo campo
     };
     
-    onSubmit(dataToSubmit);
+    setIsSubmitting(true);
+    try {
+      await onSubmit(dataToSubmit);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -609,14 +617,14 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
             </button>
             <button
               type="submit"
-              disabled={montoAEntregar < 0}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold text-white transition-all ${montoAEntregar >= 0
+              disabled={montoAEntregar < 0 || isSubmitting}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold text-white transition-all ${montoAEntregar >= 0 && !isSubmitting
                   ? 'bg-gradient-to-r from-purple-600 to-blue-600 hover:opacity-90 shadow-md'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
             >
-              <RefreshCw className="h-4 w-4" />
-              Renovar Crédito
+              <RefreshCw className={`h-4 w-4 ${isSubmitting ? 'animate-spin' : ''}`} />
+              {isSubmitting ? 'Renovando...' : 'Renovar Crédito'}
             </button>
           </div>
         </form>
