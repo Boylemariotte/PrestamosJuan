@@ -239,6 +239,11 @@ export const determinarEstadoCredito = (cuotas, credito = null) => {
     return 'renovado';
   }
 
+  // Un crédito desactivado manualmente no cuenta como activo en ninguna vista
+  if (credito && credito.desactivado) {
+    return 'desactivado';
+  }
+
   // Si todas las cuotas están pagadas
   if (progreso.cuotasPagadas === progreso.totalCuotas) {
     return 'finalizado';
@@ -304,6 +309,8 @@ export const getColorEstado = (estado) => {
       return 'text-blue-600 bg-blue-100';
     case 'renovado':
       return 'text-gray-600 bg-gray-200';
+    case 'desactivado':
+      return 'text-gray-500 bg-gray-200 line-through';
     default:
       return 'text-gray-600 bg-gray-100';
   }

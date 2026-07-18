@@ -275,7 +275,7 @@ const DiaDeCobroBuga = () => {
 
       cliente.creditos.forEach(credito => {
         if (!credito.cuotas || !Array.isArray(credito.cuotas)) return;
-        if (credito.renovado) return;
+        if (credito.renovado || credito.desactivado) return;
 
         // 1. Calcular Por Cobrar Global (Pendientes hoy o vencidos)
         const creditoConAbonos = aplicarAbonosAutomaticamente(credito);

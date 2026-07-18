@@ -198,6 +198,11 @@ const creditoSchema = new mongoose.Schema({
     default: false
   },
   creditoAnteriorId: String,
+  desactivado: {
+    type: Boolean,
+    default: false
+  },
+  fechaDesactivacion: Date,
   modoFechas: {
     type: String,
     enum: ['automatico', 'manual'],

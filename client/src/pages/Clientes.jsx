@@ -188,10 +188,12 @@ const Clientes = () => {
       if (!carteraConfig) return; // Si el cliente es de una cartera no visible, ignorarlo
 
       const tiposActivos = getTiposPagoActivos(cliente);
-      // Si no tiene créditos activos, usar preferencia o default (basado en lógica antigua o heurística)
-      const tiposAAsignar = tiposActivos.length > 0
-        ? tiposActivos
-        : (cliente.tipoPagoEsperado ? [cliente.tipoPagoEsperado] : []);
+      // El tipo declarado fija la casilla del cliente (igual que en el backend):
+      // un crédito viejo de otra modalidad con cuotas pendientes no debe
+      // pintarlo en la sección anterior. Sin declarado, usar créditos activos.
+      const tiposAAsignar = cliente.tipoPagoEsperado
+        ? [cliente.tipoPagoEsperado]
+        : tiposActivos;
 
       // Si no tiene tipo asignable, intentar asignar a la primera sección disponible que lo admita o default
       if (tiposAAsignar.length === 0) {
@@ -274,10 +276,10 @@ const Clientes = () => {
         if (card.cliente) {
           counts.todos++; // Contar para el total de la cartera seleccionada
 
-          // Para el conteo por tipo, verificamos qué tipo de crédito tiene el cliente en esa card específica
-          // Si la card es de una sección 'general' (multitipo), debemos ver el crédito real
+          // Para el conteo por tipo, el tipo declarado del cliente manda
+          // (misma regla que la asignación de cards y el backend)
           const tipos = getTiposPagoActivos(card.cliente);
-          const tipoBase = tipos.length > 0 ? tipos[0] : card.cliente.tipoPagoEsperado;
+          const tipoBase = card.cliente.tipoPagoEsperado || (tipos.length > 0 ? tipos[0] : null);
 
           if (tipoBase && counts[tipoBase] !== undefined) {
             counts[tipoBase]++;
@@ -314,7 +316,7 @@ const Clientes = () => {
       // Si la card tiene cliente, verificar su tipo real
       if (card.cliente) {
         const tipos = getTiposPagoActivos(card.cliente);
-        const tipoCliente = tipos.length > 0 ? tipos[0] : card.cliente.tipoPagoEsperado;
+        const tipoCliente = card.cliente.tipoPagoEsperado || (tipos.length > 0 ? tipos[0] : null);
         coincideTipo = tipoCliente === filtroTipoPago;
       } else {
         // Si está vacía, mostrarla si SU SECCIÓN permite el tipo filtrado

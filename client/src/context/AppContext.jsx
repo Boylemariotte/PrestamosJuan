@@ -353,6 +353,19 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const toggleDesactivadoCredito = async (clienteId, creditoId, desactivado) => {
+    try {
+      const response = await api.put(`/creditos/${creditoId}/desactivar`, { desactivado });
+      if (response.success) {
+        await fetchData();
+        return response.data;
+      }
+    } catch (error) {
+      console.error('Error cambiando estado de activación del crédito:', error);
+      throw error;
+    }
+  };
+
   const eliminarCredito = async (clienteId, creditoId) => {
     try {
       const response = await api.delete(`/creditos/${creditoId}`);
@@ -898,6 +911,7 @@ export const AppProvider = ({ children }) => {
     actualizarCoordenadasGPS,
     agregarCredito,
     actualizarCredito,
+    toggleDesactivadoCredito,
     eliminarCredito,
     obtenerCredito,
     asignarEtiquetaCredito,

@@ -63,7 +63,7 @@ export const useCollectionsData = ({
                 if (!credito || !credito.id) return;
                 if (!credito.cuotas || !Array.isArray(credito.cuotas) || credito.cuotas.length === 0) return;
                 if (!credito.monto || !credito.valorCuota || !credito.tipo) return;
-                if (credito.renovado) return;
+                if (credito.renovado || credito.desactivado) return;
                 if (typeof credito.id !== 'string' || credito.id.trim() === '') return;
 
                 const creditoKey = `${cliente.id}-${credito.id}`;
@@ -276,7 +276,7 @@ export const useCollectionsData = ({
         const clientesNoEncontradosItems = clientesFiltrados
             .filter(cliente => clientesNoEncontradosHoy.has(cliente.id) && !idsYaEnLista.has(cliente.id))
             .map(cliente => {
-                const creditoActivo = cliente.creditos?.find(cred => !cred.renovado && cred.cuotas?.some(c => !c.pagado));
+                const creditoActivo = cliente.creditos?.find(cred => !cred.renovado && !cred.desactivado && cred.cuotas?.some(c => !c.pagado));
                 if (!creditoActivo) return null;
 
                 const { cuotasActualizadas } = aplicarAbonosAutomaticamente(creditoActivo);
@@ -381,7 +381,7 @@ export const useCollectionsData = ({
         todosLosClientes.forEach(cliente => {
             if (!cliente.creditos || !cliente.id) return;
             cliente.creditos.forEach(credito => {
-                if (!credito || credito.renovado || !credito.cuotas) return;
+                if (!credito || credito.renovado || credito.desactivado || !credito.cuotas) return;
 
                 // Para clientes finalizados, verificar si pagaron hoy
                 const estadoCredito = determinarEstadoCredito(credito.cuotas, credito);

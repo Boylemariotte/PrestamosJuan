@@ -282,8 +282,8 @@ const Rutas = () => {
         // Validar que tenga las propiedades esenciales
         if (!credito.cuotas || !Array.isArray(credito.cuotas) || credito.cuotas.length === 0) return;
         if (!credito.monto || !credito.valorCuota || !credito.tipo) return;
-        // Excluir créditos que ya fueron renovados de la ruta de cobro
-        if (credito.renovado) return;
+        // Excluir créditos renovados o desactivados de la ruta de cobro
+        if (credito.renovado || credito.desactivado) return;
         // Validar que el ID no sea un formato inválido o corrupto
         // Los IDs válidos suelen ser ObjectIds de MongoDB o IDs generados por el sistema
         // Si el ID parece ser un timestamp sin formato correcto, podría ser inválido
@@ -522,7 +522,7 @@ const Rutas = () => {
       )
       .map(cliente => {
         // Buscar si el cliente tiene créditos activos para mostrar información básica
-        const creditoActivo = cliente.creditos?.find(cred => !cred.renovado && cred.cuotas?.some(c => !c.pagado));
+        const creditoActivo = cliente.creditos?.find(cred => !cred.renovado && !cred.desactivado && cred.cuotas?.some(c => !c.pagado));
         if (!creditoActivo) return null;
 
         const { cuotasActualizadas } = aplicarAbonosAutomaticamente(creditoActivo);
@@ -622,7 +622,7 @@ const Rutas = () => {
 
       cliente.creditos.forEach(credito => {
         if (!credito || !credito.id || !credito.cuotas || !Array.isArray(credito.cuotas)) return;
-        if (credito.renovado) return;
+        if (credito.renovado || credito.desactivado) return;
 
         // 1. Procesar pagos de cuotas
         credito.cuotas.forEach(cuota => {

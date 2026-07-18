@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tag, RefreshCw } from 'lucide-react';
+import { Tag, RefreshCw, Power } from 'lucide-react';
 import { formatearMoneda, formatearFechaCorta } from '../../utils/creditCalculations';
 
 
@@ -26,10 +26,12 @@ const ResumenCredito = ({
   onAgregarAbono,
   onCancelarAbono,
   onMostrarFormularioRenovacion,
+  onToggleDesactivado,
   soloLectura = false
 }) => {
   const getEstadoLabel = () => {
     if (estado === 'renovado') return 'Crédito Renovado';
+    if (estado === 'desactivado') return 'Crédito Desactivado';
     return estado.charAt(0).toUpperCase() + estado.slice(1);
   };
   // Calcular saldo pendiente
@@ -160,6 +162,20 @@ const ResumenCredito = ({
               >
                 <RefreshCw className="h-5 w-5 mr-2" />
                 Renovar Crédito
+              </button>
+            )}
+
+            {/* Botón Desactivar/Reactivar (solo admin/ceo) */}
+            {!soloLectura && onToggleDesactivado && (
+              <button
+                onClick={onToggleDesactivado}
+                className={`w-full px-4 py-2 font-bold rounded-lg transition-all flex items-center justify-center border-2 ${credito.desactivado
+                  ? 'bg-green-50 hover:bg-green-100 text-green-700 border-green-300'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-600 border-gray-300'
+                  }`}
+              >
+                <Power className="h-5 w-5 mr-2" />
+                {credito.desactivado ? 'Reactivar Crédito' : 'Desactivar Crédito'}
               </button>
             )}
           </div>

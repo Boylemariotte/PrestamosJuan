@@ -15,7 +15,8 @@ import {
   eliminarMulta,
   agregarDescuento,
   eliminarNota,
-  actualizarFechaCreacion
+  actualizarFechaCreacion,
+  toggleDesactivadoCredito
 } from '../controllers/creditoController.js';
 import { protect, authorize, requireRole } from '../middleware/auth.js';
 
@@ -62,6 +63,9 @@ router.route('/:id/descuentos')
 
 router.route('/:id/fecha-creacion')
   .put(authorize('editarCreditos'), actualizarFechaCreacion);
+
+router.route('/:id/desactivar')
+  .put(requireRole('administrador'), toggleDesactivadoCredito);
 
 export default router;
 

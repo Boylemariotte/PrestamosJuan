@@ -34,7 +34,7 @@ import EditorFecha from './EditorFecha';
 import PanelEdicionFechas from './PanelEdicionFechas';
 
 const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, soloLectura = false }) => {
-  const { registrarPago, cancelarPago, editarFechaCuota, agregarNota, eliminarNota, agregarMulta, editarMulta, eliminarMulta, agregarAbono, editarAbono, eliminarAbono, agregarDescuento, eliminarDescuento, asignarEtiquetaCredito, renovarCredito, eliminarCredito, obtenerCredito, actualizarFechaCreacion } = useApp();
+  const { registrarPago, cancelarPago, editarFechaCuota, agregarNota, eliminarNota, agregarMulta, editarMulta, eliminarMulta, agregarAbono, editarAbono, eliminarAbono, agregarDescuento, eliminarDescuento, asignarEtiquetaCredito, renovarCredito, toggleDesactivadoCredito, eliminarCredito, obtenerCredito, actualizarFechaCreacion } = useApp();
   const { user } = useAuth();
 
   // Obtener el crédito actualizado del contexto
@@ -1048,10 +1048,11 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
   const puedeRenovar = (() => {
     // Si el rol es ceo, puede renovar siempre que no esté ya renovado o finalizado
     if (user?.role === 'ceo') {
-      return !credito.renovado && estado !== 'finalizado';
+      return !credito.renovado && !credito.desactivado && estado !== 'finalizado';
     }
 
     if (credito.renovado) return false; // Ya fue renovado
+    if (credito.desactivado) return false; // Está desactivado
     if (estado === 'finalizado') return false; // Ya está finalizado
 
     switch (credito.tipo) {
@@ -1065,6 +1066,21 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
         return false;
     }
   })();
+
+  const handleToggleDesactivado = async () => {
+    const desactivar = !credito.desactivado;
+    const mensaje = desactivar
+      ? '¿Desactivar este crédito? Dejará de contar como activo (modalidad del cliente, día de cobro, rutas). Su historial se conserva y puedes reactivarlo cuando quieras.'
+      : '¿Reactivar este crédito? Volverá a contar como activo en todas las vistas.';
+    if (!confirm(mensaje)) return;
+
+    try {
+      await toggleDesactivadoCredito(clienteId, credito.id, desactivar);
+      onClose();
+    } catch (error) {
+      alert(error.message || 'No fue posible cambiar el estado del crédito.');
+    }
+  };
 
   const handleRenovar = async (datosRenovacion) => {
     try {
@@ -1361,6 +1377,7 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
                 setFechaAbono(obtenerFechaHoy());
               }}
               onMostrarFormularioRenovacion={soloLectura ? null : () => setMostrarFormularioRenovacion(true)}
+              onToggleDesactivado={(!soloLectura && !credito.renovado && (user?.role === 'ceo' || user?.role === 'administrador')) ? handleToggleDesactivado : null}
               soloLectura={soloLectura}
             />
           </div>

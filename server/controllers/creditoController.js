@@ -355,6 +355,8 @@ const syncCreditoToCliente = async (creditoId) => {
         creditoRenovacionId: credito.creditoRenovacionId,
         esRenovacion: credito.esRenovacion,
         creditoAnteriorId: credito.creditoAnteriorId,
+        desactivado: credito.desactivado || false,
+        fechaDesactivacion: credito.fechaDesactivacion,
         modoFechas: credito.modoFechas || 'automatico',
         fechaCreacion: credito.fechaCreacion
       };
@@ -364,6 +366,41 @@ const syncCreditoToCliente = async (creditoId) => {
     }
   } catch (error) {
     console.error(`Error sincronizando crédito ${creditoId}:`, error);
+  }
+};
+
+/**
+ * @desc    Desactivar o reactivar un crédito. Un crédito desactivado conserva
+ *          su historial pero deja de contar como activo (modalidad del cliente,
+ *          día de cobro, rutas, estadísticas).
+ * @route   PUT /api/creditos/:id/desactivar
+ * @access  Private (administrador/ceo)
+ */
+export const toggleDesactivadoCredito = async (req, res, next) => {
+  try {
+    const desactivado = !!req.body.desactivado;
+
+    const credito = await Credito.findById(req.params.id);
+    if (!credito) {
+      return res.status(404).json({
+        success: false,
+        error: 'Crédito no encontrado'
+      });
+    }
+
+    credito.desactivado = desactivado;
+    credito.fechaDesactivacion = desactivado ? new Date() : null;
+    await credito.save();
+
+    await syncCreditoToCliente(credito._id);
+
+    res.status(200).json({
+      success: true,
+      message: desactivado ? 'Crédito desactivado' : 'Crédito reactivado',
+      data: credito
+    });
+  } catch (error) {
+    next(error);
   }
 };
 

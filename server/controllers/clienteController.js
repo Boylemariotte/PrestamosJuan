@@ -345,8 +345,19 @@ export const archivarCliente = async (req, res, next) => {
  */
 // Helper: Determinar el tipo de pago del cliente basándose en créditos activos
 const obtenerTipoPagoCliente = (cliente) => {
-  if (!cliente || !cliente.creditos || cliente.creditos.length === 0) {
-    return cliente?.tipoPagoEsperado || null;
+  if (!cliente) return null;
+
+  // El tipo declarado del cliente fija su casilla. Tiene prioridad sobre el
+  // derivado de créditos: un crédito viejo de otra modalidad que quedó con
+  // cuotas pendientes (p. ej. terminado "incompleto") no debe retener al
+  // cliente en la sección anterior, ni un crédito nuevo de otra modalidad
+  // debe moverlo de sección silenciosamente.
+  if (cliente.tipoPagoEsperado) {
+    return cliente.tipoPagoEsperado;
+  }
+
+  if (!cliente.creditos || cliente.creditos.length === 0) {
+    return null;
   }
 
   // Buscar créditos activos o en mora (con cuotas no pagadas)
@@ -354,6 +365,8 @@ const obtenerTipoPagoCliente = (cliente) => {
     // Un crédito ya renovado no es activo: su saldo se trasladó al crédito de renovación.
     // Ignorarlo evita que cuotas huérfanas de una renovación clasifiquen mal el tipo del cliente.
     if (c.renovado) return false;
+    // Un crédito desactivado manualmente tampoco cuenta como activo
+    if (c.desactivado) return false;
     if (!c.cuotas || c.cuotas.length === 0) return false;
     const tieneCuotasPendientes = c.cuotas.some(cuota => !cuota.pagado);
     return tieneCuotasPendientes && c.tipo;
@@ -362,11 +375,6 @@ const obtenerTipoPagoCliente = (cliente) => {
   // Si hay crédito activo, usar su tipo de pago
   if (creditoActivo && creditoActivo.tipo) {
     return creditoActivo.tipo;
-  }
-
-  // Si no hay créditos activos, usar tipoPagoEsperado como fallback
-  if (cliente.tipoPagoEsperado) {
-    return cliente.tipoPagoEsperado;
   }
 
   // Último recurso: el tipo del crédito más reciente (aunque esté pagado o renovado).

@@ -16,7 +16,7 @@ const CreditoCard = ({ credito, onClick }) => {
   return (
     <div
       onClick={onClick}
-      className={`card cursor-pointer hover:scale-[1.02] transition-transform duration-200 ${estado === 'renovado' ? 'opacity-60 saturate-50 bg-gray-50 border-gray-200' : ''
+      className={`card cursor-pointer hover:scale-[1.02] transition-transform duration-200 ${(estado === 'renovado' || estado === 'desactivado') ? 'opacity-60 saturate-50 bg-gray-50 border-gray-200' : ''
         }`}
     >
       <div className="flex items-start justify-between mb-4">

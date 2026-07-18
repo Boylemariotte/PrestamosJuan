@@ -117,6 +117,8 @@ const creditoEmbebidoSchema = new mongoose.Schema({
   creditoRenovacionId: String,
   esRenovacion: { type: Boolean, default: false },
   creditoAnteriorId: String,
+  desactivado: { type: Boolean, default: false },
+  fechaDesactivacion: Date,
   fechaCreacion: { type: Date, default: Date.now }
 }, { _id: false });
 
