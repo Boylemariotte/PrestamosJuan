@@ -129,9 +129,12 @@ const ClienteDetalle = ({ soloLectura = false }) => {
       return estado === 'activo' || estado === 'mora';
     });
 
-    const tipo = creditosActivos.length > 0
-      ? creditosActivos[0].tipo
-      : (cliente.tipoPagoEsperado || 'quincenal/mensual');
+    // El tipo declarado del cliente fija su modalidad y tiene prioridad sobre
+    // el crédito activo: si el usuario ya cambió al cliente de modalidad,
+    // un crédito activo que quedó con el tipo viejo no debe forzarlo de nuevo
+    // (mismo criterio que obtenerTipoPagoCliente en el backend).
+    const tipo = cliente.tipoPagoEsperado
+      || (creditosActivos.length > 0 ? creditosActivos[0].tipo : 'quincenal/mensual');
 
     return {
       tipo,

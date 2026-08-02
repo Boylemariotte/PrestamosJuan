@@ -776,13 +776,15 @@ const Clientes = () => {
 
                     {/* Modalidad */}
                     <td className="px-6 py-4 whitespace-nowrap text-xs font-bold text-gray-500 uppercase tracking-wider">
-                      {creditoInfo?.tipo
-                        ? (creditoInfo.tipo.charAt(0).toUpperCase() + creditoInfo.tipo.slice(1))
-                        : (card.cliente?.tipoPagoEsperado
-                          ? (card.cliente.tipoPagoEsperado.charAt(0).toUpperCase() + card.cliente.tipoPagoEsperado.slice(1))
-                          : (card.tipoPago === 'quincenalMensual' ? 'Quincenal/Mensual' : card.tipoPago)
-                        )
-                      }
+                      {(() => {
+                        // El tipo declarado del cliente manda (igual que en la asignación de
+                        // card, filtros y conteos de esta misma vista): si acaba de cambiar de
+                        // modalidad, no debe mostrar la del crédito viejo mientras no renueva.
+                        const tipoMostrado = card.cliente?.tipoPagoEsperado || creditoInfo?.tipo;
+                        return tipoMostrado
+                          ? (tipoMostrado.charAt(0).toUpperCase() + tipoMostrado.slice(1))
+                          : (card.tipoPago === 'quincenalMensual' ? 'Quincenal/Mensual' : card.tipoPago);
+                      })()}
                     </td>
 
                     {/* RF Button style */}

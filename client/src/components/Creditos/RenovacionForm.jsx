@@ -14,9 +14,14 @@ import { obtenerFechaLocal } from '../../utils/dateUtils';
 
 const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // El tipo declarado del cliente (tipoPagoEsperado) es la fuente de verdad:
+  // si el usuario ya movió al cliente a otra modalidad, la renovación debe
+  // reflejarla en vez de repetir el tipo del crédito que se está reemplazando.
+  const tipoInicial = cliente?.tipoPagoEsperado || creditoAnterior.tipo;
+
   const [formData, setFormData] = useState({
     monto: MONTOS_DISPONIBLES[0],
-    tipo: creditoAnterior.tipo, // Mantener el mismo tipo de pago
+    tipo: tipoInicial,
     tipoQuincenal: creditoAnterior.tipoQuincenal || '1-16',
     fechaInicio: obtenerFechaLocal(),
     usarMontoManual: false,
