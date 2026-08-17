@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Credito from '../models/Credito.js';
 import Cliente from '../models/Cliente.js';
+import SyncError from '../models/SyncError.js';
 import { registrarBorrado } from './historialBorradoController.js';
 
 /**
@@ -314,58 +315,112 @@ export const createCredito = async (req, res, next) => {
 
 /**
  * Helper: Sincroniza el crédito de la colección Creditos al embebido en Cliente
+ *
+ * IMPORTANTE: Esta función usa actualizaciones atómicas (Cliente.updateOne con el
+ * operador posicional $) en vez del patrón anterior "leer todo el Cliente -> mutar en
+ * memoria -> guardar todo el Cliente". Ese patrón (read-modify-write) provocaba
+ * VersionError de Mongoose cuando dos operaciones sobre el mismo cliente ocurrían casi
+ * al mismo tiempo (dos abonos seguidos, dos créditos del mismo cliente actualizándose
+ * a la vez, etc.), y el error se descartaba en silencio: el pago quedaba bien guardado
+ * en la colección Credito (fuente de verdad) pero nunca se replicaba a
+ * Cliente.creditos[], que es de donde leen Día de Cobro, Cartera y los listados de
+ * clientes. Resultado: la cuota volvía a verse "sin pagar" cuando alguien revisaba
+ * después, aunque el pago sí existía.
+ *
+ * Con $set posicional cada llamada escribe solo su propio elemento del arreglo,
+ * sin comparar versión de documento completo, así que dos llamadas simultáneas para
+ * el mismo cliente ya no compiten entre sí (y como cada una escribe el estado ya
+ * recalculado desde Credito, el resultado final es correcto sin importar el orden).
  */
-const syncCreditoToCliente = async (creditoId) => {
+export const construirCreditoEmbebido = (credito, creditoId) => ({
+  id: creditoId,
+  monto: credito.monto,
+  papeleria: credito.papeleria,
+  montoEntregado: credito.montoEntregado,
+  tipo: credito.tipo,
+  tipoQuincenal: credito.tipoQuincenal,
+  fechaInicio: credito.fechaInicio,
+  totalAPagar: credito.totalAPagar, // Usar el valor ya calculado por recalcularCreditoCompleto
+  valorCuota: credito.valorCuota,
+  numCuotas: credito.numCuotas,
+  cuotas: credito.cuotas,
+  abonos: credito.abonos,
+  abonosMulta: credito.abonosMulta || [],
+  multas: credito.multas,
+  descuentos: credito.descuentos,
+  notas: credito.notas,
+  etiqueta: credito.etiqueta,
+  fechaEtiqueta: credito.fechaEtiqueta,
+  renovado: credito.renovado,
+  fechaRenovacion: credito.fechaRenovacion,
+  creditoRenovacionId: credito.creditoRenovacionId,
+  esRenovacion: credito.esRenovacion,
+  creditoAnteriorId: credito.creditoAnteriorId,
+  desactivado: credito.desactivado || false,
+  fechaDesactivacion: credito.fechaDesactivacion,
+  modoFechas: credito.modoFechas || 'automatico',
+  fechaCreacion: credito.fechaCreacion
+});
+
+export const syncCreditoToCliente = async (creditoId, intento = 1) => {
   try {
     const credito = await Credito.findById(creditoId);
     if (!credito) return;
 
-    const cliente = await Cliente.findById(credito.cliente);
-    if (!cliente) return;
+    const creditoEmbebido = construirCreditoEmbebido(credito, creditoId);
 
-    // Buscar el crédito embebido por su id
-    const idx = cliente.creditos.findIndex(c => c.id === creditoId || c.id === credito._id.toString());
+    // 1. Intento normal: actualizar in-place el elemento existente del arreglo.
+    //    Atómico: no lee-modifica-escribe el documento Cliente completo, así que no
+    //    hay condición de carrera con otra sincronización concurrente del mismo cliente.
+    const resultado = await Cliente.updateOne(
+      { _id: credito.cliente, 'creditos.id': creditoId },
+      { $set: { 'creditos.$': creditoEmbebido } }
+    );
 
-    if (idx !== -1) {
-      // Actualizar el crédito embebido
-      // Usar el totalAPagar ya calculado por recalcularCreditoCompleto (considera abonos parciales)
-      // No recalcular aquí para evitar duplicaciones
+    if (resultado.matchedCount === 0) {
+      // El crédito todavía no existe embebido en el cliente (caso raro: cliente nuevo,
+      // o un fallo previo hizo que nunca se agregara). Lo agregamos de forma segura
+      // quitando cualquier copia previa con ese id y volviendo a insertarlo, para que
+      // sea seguro reintentar sin generar duplicados.
+      await Cliente.updateOne(
+        { _id: credito.cliente },
+        { $pull: { creditos: { id: creditoId } } }
+      );
+      const pushResultado = await Cliente.updateOne(
+        { _id: credito.cliente },
+        { $push: { creditos: creditoEmbebido } }
+      );
 
-      cliente.creditos[idx] = {
-        id: creditoId,
-        monto: credito.monto,
-        papeleria: credito.papeleria,
-        montoEntregado: credito.montoEntregado,
-        tipo: credito.tipo,
-        tipoQuincenal: credito.tipoQuincenal,
-        fechaInicio: credito.fechaInicio,
-        totalAPagar: credito.totalAPagar, // Usar el valor ya calculado por recalcularCreditoCompleto
-        valorCuota: credito.valorCuota,
-        numCuotas: credito.numCuotas,
-        cuotas: credito.cuotas,
-        abonos: credito.abonos,
-        abonosMulta: credito.abonosMulta || [],
-        multas: credito.multas,
-        descuentos: credito.descuentos,
-        notas: credito.notas,
-        etiqueta: credito.etiqueta,
-        fechaEtiqueta: credito.fechaEtiqueta,
-        renovado: credito.renovado,
-        fechaRenovacion: credito.fechaRenovacion,
-        creditoRenovacionId: credito.creditoRenovacionId,
-        esRenovacion: credito.esRenovacion,
-        creditoAnteriorId: credito.creditoAnteriorId,
-        desactivado: credito.desactivado || false,
-        fechaDesactivacion: credito.fechaDesactivacion,
-        modoFechas: credito.modoFechas || 'automatico',
-        fechaCreacion: credito.fechaCreacion
-      };
-      await cliente.save();
-    } else {
-      console.warn(`No se encontró crédito ${creditoId} embebido en cliente ${cliente._id} para sincronizar.`);
+      if (pushResultado.matchedCount === 0) {
+        throw new Error(`Cliente ${credito.cliente} no encontrado al sincronizar crédito ${creditoId}`);
+      }
     }
   } catch (error) {
-    console.error(`Error sincronizando crédito ${creditoId}:`, error);
+    console.error(`Error sincronizando crédito ${creditoId} (intento ${intento}):`, error.message);
+
+    if (intento < 3) {
+      // Reintentar un par de veces con pequeña espera: cubre fallos transitorios de
+      // red/DB. Ya no depende de versión de documento, así que un reintento simple
+      // es seguro (no puede "chocar" con otro reintento).
+      await new Promise((resolve) => setTimeout(resolve, 250 * intento));
+      return syncCreditoToCliente(creditoId, intento + 1);
+    }
+
+    // Si sigue fallando tras los reintentos, dejar constancia persistente en vez de
+    // perder el error en la consola del servidor, para poder detectarlo y corregirlo
+    // (ver server/scripts/reconciliarCreditos.js).
+    try {
+      const creditoRef = await Credito.findById(creditoId).select('cliente');
+      await SyncError.create({
+        creditoId,
+        clienteId: creditoRef?.cliente || null,
+        mensaje: error.message,
+        stack: error.stack,
+        intentos: intento
+      });
+    } catch (logError) {
+      console.error('No se pudo registrar el SyncError:', logError.message);
+    }
   }
 };
 

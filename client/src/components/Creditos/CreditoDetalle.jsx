@@ -259,11 +259,23 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
     }));
   };
 
-  const handlePago = (nroCuota, pagado, fechaPago = null) => {
-    if (pagado) {
-      cancelarPago(clienteId, credito.id, nroCuota);
-    } else {
-      registrarPago(clienteId, credito.id, nroCuota, fechaPago);
+  // NOTA: esta función (junto con el componente ListaCuotas que la usa) no está
+  // conectada a la vista actual de cuotas -- el flujo de pago real es
+  // GrillaCuotas -> CuotaCard -> ModalPago -> handleConfirmarPago (más abajo en
+  // este archivo), que sí espera la respuesta del servidor y bloquea el botón
+  // mientras la petición está en curso. Se deja corregida (await + manejo de
+  // error) por si en el futuro se vuelve a usar, para no reintroducir la
+  // condición de carrera de "clic rápido dispara pagos superpuestos".
+  const handlePago = async (nroCuota, pagado, fechaPago = null) => {
+    try {
+      if (pagado) {
+        await cancelarPago(clienteId, credito.id, nroCuota);
+      } else {
+        await registrarPago(clienteId, credito.id, nroCuota, fechaPago);
+      }
+    } catch (error) {
+      console.error('Error registrando/cancelando pago:', error);
+      alert('Hubo un error al procesar el pago. Por favor, intenta de nuevo.');
     }
   };
 

@@ -14,6 +14,7 @@ import historialBorradoRoutes from './historialBorradoRoutes.js';
 import totalMultasRoutes from './totalMultasRoutes.js';
 import notaRoutes from './notaRoutes.js';
 import carteraRoutes from './carteraRoutes.js';
+import syncErrorRoutes from './syncErrorRoutes.js';
 
 const router = express.Router();
 
@@ -35,6 +36,7 @@ router.use('/ordenes-cobro', ordenCobroRoutes);
 router.use('/historial-borrados', historialBorradoRoutes);
 router.use('/total-multas', totalMultasRoutes);
 router.use('/notas', notaRoutes);
+router.use('/sync-errors', syncErrorRoutes);
 
 // Ruta de salud del servidor
 router.get('/health', (req, res) => {
