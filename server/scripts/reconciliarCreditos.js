@@ -34,8 +34,29 @@ const APLICAR = process.argv.includes('--apply');
 // (Se ignoran diferencias irrelevantes de orden/serialización comparando JSON normalizado.)
 const camposClave = ['cuotas', 'abonos', 'abonosMulta', 'multas', 'totalAPagar', 'desactivado'];
 
+// JSON.stringify normal es sensible al orden de las propiedades: los subdocumentos de
+// Mongoose pueden serializar sus campos en distinto orden según el esquema (Credito.cuotas
+// vs Cliente.creditos[].cuotas), lo que genera falsos positivos aunque el contenido sea
+// idéntico. canonicalizar() ordena las claves de cada objeto recursivamente (preservando el
+// orden de los arreglos, que sí es significativo) para que la comparación sea por contenido.
+function canonicalizar(valor) {
+  if (Array.isArray(valor)) {
+    return valor.map(canonicalizar);
+  }
+  if (valor && typeof valor === 'object') {
+    if (valor instanceof Date) return valor.toISOString();
+    return Object.keys(valor)
+      .sort()
+      .reduce((obj, key) => {
+        obj[key] = canonicalizar(valor[key]);
+        return obj;
+      }, {});
+  }
+  return valor;
+}
+
 function normalizar(valor) {
-  return JSON.parse(JSON.stringify(valor ?? null));
+  return canonicalizar(JSON.parse(JSON.stringify(valor ?? null)));
 }
 
 function difiere(creditoEmbebidoActual, creditoEmbebidoCorrecto) {
@@ -114,7 +135,7 @@ async function main() {
     console.log('Aplicando correcciones...');
     let corregidos = 0;
     for (const a of afectados) {
-      await syncCreditoToCliente(a.creditoId);
+      await syncCreditoToCliente(a.creditoId, { origen: 'reconciliarCreditos.js --apply' });
       corregidos++;
     }
     console.log(`✅ ${corregidos} crédito(s) resincronizado(s).`);

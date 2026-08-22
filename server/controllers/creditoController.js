@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Credito from '../models/Credito.js';
 import Cliente from '../models/Cliente.js';
 import SyncError from '../models/SyncError.js';
+import RegistroPago from '../models/RegistroPago.js';
 import { registrarBorrado } from './historialBorradoController.js';
 
 /**
@@ -362,12 +363,75 @@ export const construirCreditoEmbebido = (credito, creditoId) => ({
   fechaCreacion: credito.fechaCreacion
 });
 
-export const syncCreditoToCliente = async (creditoId, intento = 1) => {
+// Construye el contexto de auditoría (quién y desde qué acción) para pasarle a syncCreditoToCliente.
+const contextoDesde = (req, origen) => ({
+  origen,
+  usuario: req.user?._id || null,
+  usuarioNombre: req.user?.nombre || null
+});
+
+/**
+ * Compara, cuota por cuota, el flag `pagado` que hoy tiene la copia embebida en
+ * Cliente.creditos[] contra el nuevo estado en `credito` (fuente de verdad) y deja un
+ * registro en RegistroPago por cada transición. Se corre justo antes de sobrescribir la
+ * copia embebida, así que "estado anterior" es literalmente lo que un usuario veía en
+ * pantalla hasta este momento.
+ */
+const registrarCambiosPago = async (credito, creditoId, contexto = {}) => {
+  const clienteDoc = await Cliente.findOne(
+    { _id: credito.cliente, 'creditos.id': creditoId },
+    { nombre: 1, documento: 1, 'creditos.$': 1 }
+  );
+  if (!clienteDoc) return; // Crédito nuevo, aún no embebido: no hay "antes" que comparar.
+
+  const cuotasAnteriores = clienteDoc.creditos?.[0]?.cuotas || [];
+
+  const eventos = [];
+  for (const cuotaNueva of credito.cuotas || []) {
+    const cuotaAnterior = cuotasAnteriores.find((c) => c.nroCuota === cuotaNueva.nroCuota);
+    const pagadoAntes = !!cuotaAnterior?.pagado;
+    const pagadoAhora = !!cuotaNueva.pagado;
+
+    if (pagadoAntes !== pagadoAhora) {
+      eventos.push({
+        clienteId: credito.cliente,
+        clienteNombre: clienteDoc.nombre,
+        documento: clienteDoc.documento,
+        creditoId,
+        nroCuota: cuotaNueva.nroCuota,
+        evento: pagadoAhora ? 'pagado' : 'despagado',
+        valorCuota: credito.valorCuota,
+        saldoPendienteAnterior: cuotaAnterior?.saldoPendiente ?? null,
+        saldoPendienteNuevo: cuotaNueva.saldoPendiente ?? null,
+        fechaPagoAnterior: cuotaAnterior?.fechaPago || null,
+        fechaPagoNueva: cuotaNueva.fechaPago || null,
+        origen: contexto.origen || 'desconocido',
+        usuario: contexto.usuario || null,
+        usuarioNombre: contexto.usuarioNombre || null
+      });
+    }
+  }
+
+  if (eventos.length > 0) {
+    await RegistroPago.insertMany(eventos);
+  }
+};
+
+export const syncCreditoToCliente = async (creditoId, contexto = {}, intento = 1) => {
   try {
     const credito = await Credito.findById(creditoId);
     if (!credito) return;
 
     const creditoEmbebido = construirCreditoEmbebido(credito, creditoId);
+
+    // Antes de sobrescribir la copia embebida, comparar su estado "pagado" por cuota
+    // contra el nuevo estado (fuente de verdad) para dejar constancia de cualquier cambio
+    // en RegistroPago. Es best-effort: nunca debe tumbar la sincronización en sí.
+    if (intento === 1) {
+      await registrarCambiosPago(credito, creditoId, contexto).catch((err) => {
+        console.error(`No se pudo registrar cambios de pago del crédito ${creditoId}:`, err.message);
+      });
+    }
 
     // 1. Intento normal: actualizar in-place el elemento existente del arreglo.
     //    Atómico: no lee-modifica-escribe el documento Cliente completo, así que no
@@ -403,7 +467,7 @@ export const syncCreditoToCliente = async (creditoId, intento = 1) => {
       // red/DB. Ya no depende de versión de documento, así que un reintento simple
       // es seguro (no puede "chocar" con otro reintento).
       await new Promise((resolve) => setTimeout(resolve, 250 * intento));
-      return syncCreditoToCliente(creditoId, intento + 1);
+      return syncCreditoToCliente(creditoId, contexto, intento + 1);
     }
 
     // Si sigue fallando tras los reintentos, dejar constancia persistente en vez de
@@ -447,7 +511,7 @@ export const toggleDesactivadoCredito = async (req, res, next) => {
     credito.fechaDesactivacion = desactivado ? new Date() : null;
     await credito.save();
 
-    await syncCreditoToCliente(credito._id);
+    await syncCreditoToCliente(credito._id, contextoDesde(req, 'toggleDesactivadoCredito'));
 
     res.status(200).json({
       success: true,
@@ -484,7 +548,7 @@ export const updateCredito = async (req, res, next) => {
     await credito.save();
 
     // Sincronizar con el embebido en cliente
-    await syncCreditoToCliente(req.params.id);
+    await syncCreditoToCliente(req.params.id, contextoDesde(req, 'updateCredito'));
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
 
@@ -792,7 +856,7 @@ export const registrarPago = async (req, res, next) => {
       credito = recalcularCreditoCompleto(credito);
 
       await credito.save();
-      await syncCreditoToCliente(req.params.id);
+      await syncCreditoToCliente(req.params.id, contextoDesde(req, 'registrarPago'));
     }
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
@@ -833,7 +897,7 @@ export const agregarNota = async (req, res, next) => {
     await credito.save();
 
     // Sincronizar con el embebido en cliente
-    await syncCreditoToCliente(req.params.id);
+    await syncCreditoToCliente(req.params.id, contextoDesde(req, 'agregarNota'));
 
     const creditoActualizado = await Credito.findById(credito._id)
       .populate('cliente');
@@ -891,7 +955,7 @@ export const eliminarNota = async (req, res, next) => {
     });
 
     // Sincronizar con el embebido en cliente
-    await syncCreditoToCliente(id);
+    await syncCreditoToCliente(id, contextoDesde(req, 'eliminarNota'));
 
     const creditoActualizado = await Credito.findById(credito._id)
       .populate('cliente');
@@ -1007,7 +1071,7 @@ export const agregarAbono = async (req, res, next) => {
     credito = recalcularCreditoCompleto(credito);
 
     await credito.save();
-    await syncCreditoToCliente(req.params.id);
+    await syncCreditoToCliente(req.params.id, contextoDesde(req, 'agregarAbono'));
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
     if (!creditoActualizado) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
@@ -1108,7 +1172,7 @@ export const editarAbono = async (req, res, next) => {
     credito = recalcularCreditoCompleto(credito);
 
     await credito.save();
-    await syncCreditoToCliente(req.params.id);
+    await syncCreditoToCliente(req.params.id, contextoDesde(req, 'editarAbono'));
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
     res.status(200).json({ success: true, data: creditoActualizado });
@@ -1165,7 +1229,7 @@ export const eliminarAbono = async (req, res, next) => {
     credito = recalcularCreditoCompleto(credito);
 
     await credito.save();
-    await syncCreditoToCliente(req.params.id);
+    await syncCreditoToCliente(req.params.id, contextoDesde(req, 'eliminarAbono'));
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
     res.status(200).json({ success: true, data: creditoActualizado });
@@ -1199,7 +1263,7 @@ export const agregarMulta = async (req, res, next) => {
     credito = recalcularCreditoCompleto(credito);
 
     await credito.save();
-    await syncCreditoToCliente(req.params.id);
+    await syncCreditoToCliente(req.params.id, contextoDesde(req, 'agregarMulta'));
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
     res.status(201).json({ success: true, data: creditoActualizado });
@@ -1241,7 +1305,7 @@ export const editarMulta = async (req, res, next) => {
     credito = recalcularCreditoCompleto(credito);
 
     await credito.save();
-    await syncCreditoToCliente(req.params.id);
+    await syncCreditoToCliente(req.params.id, contextoDesde(req, 'editarMulta'));
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
     res.status(200).json({ success: true, data: creditoActualizado });
@@ -1289,7 +1353,7 @@ export const eliminarMulta = async (req, res, next) => {
     credito = recalcularCreditoCompleto(credito);
 
     await credito.save();
-    await syncCreditoToCliente(req.params.id);
+    await syncCreditoToCliente(req.params.id, contextoDesde(req, 'eliminarMulta'));
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
     res.status(200).json({ success: true, data: creditoActualizado });
@@ -1320,7 +1384,7 @@ export const agregarDescuento = async (req, res, next) => {
     await credito.save();
 
     // Sincronizar con el embebido en cliente
-    await syncCreditoToCliente(req.params.id);
+    await syncCreditoToCliente(req.params.id, contextoDesde(req, 'agregarDescuento'));
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
     res.status(201).json({ success: true, data: creditoActualizado });
@@ -1352,7 +1416,7 @@ export const actualizarFechaCreacion = async (req, res, next) => {
     await credito.save();
 
     // Sincronizar con el embebido en cliente
-    await syncCreditoToCliente(req.params.id);
+    await syncCreditoToCliente(req.params.id, contextoDesde(req, 'actualizarFechaCreacion'));
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
     
