@@ -60,6 +60,13 @@ const request = async (endpoint, options = {}) => {
       throw new Error(data.error || data.message || `Error en la petición (${response.status})`);
     }
 
+    // Aunque el HTTP sea 200, si el backend responde success:false es un fallo
+    // de negocio que el llamador debe ver como error (antes pasaba silencioso y
+    // podía parecer un éxito: el pago/abono no se guardaba y nadie se enteraba).
+    if (data && data.success === false) {
+      throw new Error(data.error || data.message || 'La operación no pudo completarse');
+    }
+
     return data;
   } catch (error) {
     throw error;
