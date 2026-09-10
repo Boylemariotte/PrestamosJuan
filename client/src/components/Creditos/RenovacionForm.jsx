@@ -98,6 +98,11 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
   // Monto a entregar = Nuevo monto - Papelería - Deuda pendiente
   const montoAEntregar = montoReal - papeleria - deudaPendiente;
 
+  // Para mensuales, el negocio permite renovar aunque el monto a entregar quede negativo.
+  // La deuda pendiente del crédito viejo NO se traspasa al nuevo: simplemente queda
+  // registrada como pendiente en el crédito anterior (renovado), sin bloquear la renovación.
+  const bloqueaPorDeudaPendiente = montoAEntregar < 0 && formData.tipo !== 'mensual';
+
   // Efecto para inicializar fechas manuales cuando cambia el modo o el número de cuotas
   useEffect(() => {
     if (formData.modoFechas === 'manual') {
@@ -186,7 +191,7 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
       }
     }
     
-    if (montoAEntregar < 0) {
+    if (bloqueaPorDeudaPendiente) {
       alert('La deuda pendiente es mayor que el monto de renovación. Por favor, selecciona un monto mayor.');
       return;
     }
@@ -584,7 +589,7 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
               </span>
             </div>
 
-            {montoAEntregar < 0 && (
+            {bloqueaPorDeudaPendiente && (
               <div className="mt-3 p-3 bg-red-100 border border-red-300 rounded-lg">
                 <p className="text-sm text-red-800 font-medium">
                   ⚠️ La deuda pendiente es mayor que el monto de renovación. Selecciona un monto mayor.
@@ -622,8 +627,8 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
             </button>
             <button
               type="submit"
-              disabled={montoAEntregar < 0 || isSubmitting}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold text-white transition-all ${montoAEntregar >= 0 && !isSubmitting
+              disabled={bloqueaPorDeudaPendiente || isSubmitting}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold text-white transition-all ${!bloqueaPorDeudaPendiente && !isSubmitting
                   ? 'bg-gradient-to-r from-purple-600 to-blue-600 hover:opacity-90 shadow-md'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
