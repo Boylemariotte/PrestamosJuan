@@ -107,7 +107,7 @@ const Navbar = () => {
         { path: '/usuarios', label: 'Gestión de usuarios', icon: UserPlus },
         { path: '/gestion-carteras', label: 'Gestión de carteras', icon: Briefcase },
         { path: '/estadisticas', label: 'Estadísticas', icon: BarChart3 },
-        { path: '/historial-borrados', label: 'Historial de borrados', icon: History },
+        { path: '/historial-borrados', label: 'Historial', icon: History },
         { path: '/configuracion', label: 'Configuración', icon: Settings }
       ]
     }

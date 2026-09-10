@@ -16,6 +16,7 @@ import notaRoutes from './notaRoutes.js';
 import carteraRoutes from './carteraRoutes.js';
 import syncErrorRoutes from './syncErrorRoutes.js';
 import registroPagoRoutes from './registroPagoRoutes.js';
+import historialAccionRoutes from './historialAccionRoutes.js';
 
 const router = express.Router();
 
@@ -39,6 +40,7 @@ router.use('/total-multas', totalMultasRoutes);
 router.use('/notas', notaRoutes);
 router.use('/sync-errors', syncErrorRoutes);
 router.use('/registro-pagos', registroPagoRoutes);
+router.use('/historial-acciones', historialAccionRoutes);
 
 // Ruta de salud del servidor
 router.get('/health', (req, res) => {

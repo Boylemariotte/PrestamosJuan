@@ -4,6 +4,7 @@ import Cliente from '../models/Cliente.js';
 import SyncError from '../models/SyncError.js';
 import RegistroPago from '../models/RegistroPago.js';
 import { registrarBorrado } from './historialBorradoController.js';
+import { registrarAccion, resumenDiferencias } from './historialAccionController.js';
 
 /**
  * @desc    Obtener todos los créditos
@@ -305,6 +306,27 @@ export const createCredito = async (req, res, next) => {
     const creditoPopulado = await Credito.findById(credito._id)
       .populate('cliente');
 
+    await registrarAccion({
+      accion: 'crear',
+      entidad: 'credito',
+      entidadId: creditoId,
+      creditoId,
+      clienteId,
+      clienteNombre: cliente.nombre,
+      descripcion: `Crédito creado: $${creditoData.monto.toLocaleString('es-CO')} (${creditoData.tipo}, ${creditoData.numCuotas} cuotas)${creditoData.esRenovacion ? ' — renovación' : ''}`,
+      despues: {
+        monto: creditoData.monto,
+        tipo: creditoData.tipo,
+        numCuotas: creditoData.numCuotas,
+        valorCuota: creditoData.valorCuota,
+        totalAPagar: creditoData.totalAPagar,
+        esRenovacion: creditoData.esRenovacion,
+        creditoAnteriorId: creditoData.creditoAnteriorId
+      },
+      usuario: req.user?._id || null,
+      usuarioNombre: req.user?.nombre || null
+    });
+
     res.status(201).json({
       success: true,
       data: creditoPopulado
@@ -513,6 +535,19 @@ export const toggleDesactivadoCredito = async (req, res, next) => {
 
     await syncCreditoToCliente(credito._id, contextoDesde(req, 'toggleDesactivadoCredito'));
 
+    const clienteRef = await Cliente.findById(credito.cliente).select('nombre').lean();
+    await registrarAccion({
+      accion: desactivado ? 'desactivar' : 'activar',
+      entidad: 'credito',
+      entidadId: credito._id,
+      creditoId: credito._id,
+      clienteId: credito.cliente,
+      clienteNombre: clienteRef?.nombre || null,
+      descripcion: desactivado ? 'Crédito desactivado' : 'Crédito reactivado',
+      usuario: req.user?._id || null,
+      usuarioNombre: req.user?.nombre || null
+    });
+
     res.status(200).json({
       success: true,
       message: desactivado ? 'Crédito desactivado' : 'Crédito reactivado',
@@ -528,6 +563,13 @@ export const toggleDesactivadoCredito = async (req, res, next) => {
  * @route   PUT /api/creditos/:id
  * @access  Private
  */
+const CAMPOS_EDITABLES_CREDITO = ['monto', 'montoEntregado', 'papeleria', 'valorCuota', 'totalAPagar', 'numCuotas', 'tipo', 'tipoQuincenal', 'fechaInicio', 'renovado', 'desactivado', 'etiqueta'];
+const ETIQUETAS_CAMPOS_CREDITO = {
+  monto: 'monto', montoEntregado: 'monto entregado', papeleria: 'papelería', valorCuota: 'valor de cuota',
+  totalAPagar: 'total a pagar', numCuotas: 'número de cuotas', tipo: 'tipo', tipoQuincenal: 'modalidad quincenal',
+  fechaInicio: 'fecha de inicio', renovado: 'renovado', desactivado: 'desactivado', etiqueta: 'etiqueta'
+};
+
 export const updateCredito = async (req, res, next) => {
   try {
     let credito = await Credito.findById(req.params.id);
@@ -538,6 +580,8 @@ export const updateCredito = async (req, res, next) => {
         error: 'Crédito no encontrado'
       });
     }
+
+    const antesSnapshot = credito.toObject();
 
     // Actualizar campos
     Object.assign(credito, req.body);
@@ -551,6 +595,24 @@ export const updateCredito = async (req, res, next) => {
     await syncCreditoToCliente(req.params.id, contextoDesde(req, 'updateCredito'));
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
+
+    const diff = resumenDiferencias(antesSnapshot, credito.toObject(), CAMPOS_EDITABLES_CREDITO, ETIQUETAS_CAMPOS_CREDITO);
+    if (diff.huboCambios) {
+      const seVolvioRenovado = antesSnapshot.renovado !== true && credito.renovado === true;
+      await registrarAccion({
+        accion: seVolvioRenovado ? 'renovar' : 'editar',
+        entidad: 'credito',
+        entidadId: credito._id,
+        creditoId: credito._id,
+        clienteId: credito.cliente,
+        clienteNombre: creditoActualizado?.cliente?.nombre || null,
+        descripcion: seVolvioRenovado ? `Crédito marcado como renovado${diff.descripcion ? ' (' + diff.descripcion + ')' : ''}` : diff.descripcion,
+        antes: diff.antes,
+        despues: diff.despues,
+        usuario: req.user?._id || null,
+        usuarioNombre: req.user?.nombre || null
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -902,6 +964,18 @@ export const agregarNota = async (req, res, next) => {
     const creditoActualizado = await Credito.findById(credito._id)
       .populate('cliente');
 
+    await registrarAccion({
+      accion: 'crear',
+      entidad: 'nota',
+      entidadId: nuevaNota.id,
+      creditoId: req.params.id,
+      clienteId: credito.cliente,
+      clienteNombre: creditoActualizado?.cliente?.nombre || null,
+      descripcion: `Nota agregada: "${texto}"`,
+      usuario: req.user?._id || null,
+      usuarioNombre: req.user?.nombre || null
+    });
+
     res.status(201).json({
       success: true,
       data: creditoActualizado
@@ -983,6 +1057,9 @@ export const agregarAbono = async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
     }
 
+    let abonoRegistrado = null;
+    let entidadAbono = 'abono';
+
     // Si es un abono de multa, agregarlo a abonosMulta (completamente independiente)
     if (multaId || tipo === 'multa') {
       if (!multaId) {
@@ -1036,6 +1113,8 @@ export const agregarAbono = async (req, res, next) => {
 
       credito.abonosMulta = credito.abonosMulta || [];
       credito.abonosMulta.push(nuevoAbonoMulta);
+      abonoRegistrado = nuevoAbonoMulta;
+      entidadAbono = 'abonoMulta';
     } else {
       // Abono de cuota (normal)
       // Normalizar la fecha del abono para evitar problemas de zona horaria
@@ -1065,6 +1144,8 @@ export const agregarAbono = async (req, res, next) => {
       };
 
       credito.abonos.push(nuevoAbono);
+      abonoRegistrado = nuevoAbono;
+      entidadAbono = 'abono';
     }
 
     // Lógica Centralizada de Recálculo
@@ -1075,6 +1156,19 @@ export const agregarAbono = async (req, res, next) => {
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
     if (!creditoActualizado) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
+
+    await registrarAccion({
+      accion: 'crear',
+      entidad: entidadAbono,
+      entidadId: abonoRegistrado.id,
+      creditoId: req.params.id,
+      clienteId: credito.cliente,
+      clienteNombre: creditoActualizado.cliente?.nombre || null,
+      descripcion: `${entidadAbono === 'abonoMulta' ? 'Abono a multa' : 'Abono'} agregado: $${abonoRegistrado.valor.toLocaleString('es-CO')}${abonoRegistrado.nroCuota ? ` (Cuota #${abonoRegistrado.nroCuota})` : ''}`,
+      despues: abonoRegistrado,
+      usuario: req.user?._id || null,
+      usuarioNombre: req.user?.nombre || null
+    });
 
     res.status(200).json({ success: true, data: creditoActualizado });
   } catch (error) {
@@ -1126,6 +1220,9 @@ export const editarAbono = async (req, res, next) => {
       }
     }
 
+    let abonoOriginalLog = null;
+    let abonoActualizadoLog = null;
+
     if (esAbonoMulta) {
       // Actualizar abono de multa
       const abonoOriginal = credito.abonosMulta[abonoIndex];
@@ -1144,6 +1241,8 @@ export const editarAbono = async (req, res, next) => {
         idx === abonoIndex ? abonoActualizado : abono
       );
       credito.set('abonosMulta', nuevosAbonosMulta);
+      abonoOriginalLog = abonoOriginal;
+      abonoActualizadoLog = abonoActualizado;
 
       console.log(`[editarAbono] Abono de multa actualizado:`, {
         abonoId,
@@ -1157,7 +1256,7 @@ export const editarAbono = async (req, res, next) => {
     } else {
       // Actualizar abono de cuota
       const abonoOriginal = credito.abonos[abonoIndex];
-      credito.abonos[abonoIndex] = {
+      const abonoActualizado = {
         ...abonoOriginal,
         id: abonoOriginal.id || abonoId, // Asegurar que el ID siempre esté presente
         valor: valor ? parseFloat(valor) : abonoOriginal.valor,
@@ -1166,6 +1265,9 @@ export const editarAbono = async (req, res, next) => {
         tipo: tipo || abonoOriginal.tipo,
         nroCuota: nroCuota ? parseInt(nroCuota, 10) : (nroCuota === null ? null : abonoOriginal.nroCuota)
       };
+      credito.abonos[abonoIndex] = abonoActualizado;
+      abonoOriginalLog = abonoOriginal;
+      abonoActualizadoLog = abonoActualizado;
     }
 
     // Recalcular todo el estado del crédito tras editar abono
@@ -1175,6 +1277,26 @@ export const editarAbono = async (req, res, next) => {
     await syncCreditoToCliente(req.params.id, contextoDesde(req, 'editarAbono'));
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
+
+    if (abonoOriginalLog && abonoActualizadoLog) {
+      const diff = resumenDiferencias(abonoOriginalLog, abonoActualizadoLog, ['valor', 'descripcion', 'fecha', 'nroCuota'], { valor: 'valor', descripcion: 'descripción', fecha: 'fecha', nroCuota: 'cuota' });
+      if (diff.huboCambios) {
+        await registrarAccion({
+          accion: 'editar',
+          entidad: esAbonoMulta ? 'abonoMulta' : 'abono',
+          entidadId: abonoId,
+          creditoId: req.params.id,
+          clienteId: credito.cliente,
+          clienteNombre: creditoActualizado?.cliente?.nombre || null,
+          descripcion: `${esAbonoMulta ? 'Abono a multa' : 'Abono'} editado: ${diff.descripcion}`,
+          antes: diff.antes,
+          despues: diff.despues,
+          usuario: req.user?._id || null,
+          usuarioNombre: req.user?.nombre || null
+        });
+      }
+    }
+
     res.status(200).json({ success: true, data: creditoActualizado });
   } catch (error) {
     next(error);
@@ -1250,14 +1372,15 @@ export const agregarMulta = async (req, res, next) => {
     let credito = await Credito.findById(req.params.id);
     if (!credito) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
 
-    credito.multas = credito.multas || [];
-    credito.multas.push({
+    const nuevaMulta = {
       id: Date.now().toString(),
       valor: parseFloat(valor),
       motivo: motivo + (nroCuota ? ` (Ref. Cuota #${nroCuota})` : ''),
       fecha: new Date(),
       pagada: false
-    });
+    };
+    credito.multas = credito.multas || [];
+    credito.multas.push(nuevaMulta);
 
     // Recalcular saldos y totalAPagar (incluye multas pendientes)
     credito = recalcularCreditoCompleto(credito);
@@ -1266,6 +1389,20 @@ export const agregarMulta = async (req, res, next) => {
     await syncCreditoToCliente(req.params.id, contextoDesde(req, 'agregarMulta'));
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
+
+    await registrarAccion({
+      accion: 'crear',
+      entidad: 'multa',
+      entidadId: nuevaMulta.id,
+      creditoId: req.params.id,
+      clienteId: credito.cliente,
+      clienteNombre: creditoActualizado?.cliente?.nombre || null,
+      descripcion: `Multa agregada: $${nuevaMulta.valor.toLocaleString('es-CO')} — ${nuevaMulta.motivo}`,
+      despues: nuevaMulta,
+      usuario: req.user?._id || null,
+      usuarioNombre: req.user?.nombre || null
+    });
+
     res.status(201).json({ success: true, data: creditoActualizado });
   } catch (error) {
     next(error);
@@ -1286,6 +1423,8 @@ export const editarMulta = async (req, res, next) => {
 
     const multa = credito.multas.find(m => m.id === multaId);
     if (!multa) return res.status(404).json({ success: false, error: 'Multa no encontrada' });
+
+    const multaAntes = { valor: multa.valor, fecha: multa.fecha, motivo: multa.motivo };
 
     // Actualizar valores si se proporcionan
     if (valor !== undefined) {
@@ -1308,6 +1447,24 @@ export const editarMulta = async (req, res, next) => {
     await syncCreditoToCliente(req.params.id, contextoDesde(req, 'editarMulta'));
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
+
+    const diffMulta = resumenDiferencias(multaAntes, { valor: multa.valor, fecha: multa.fecha, motivo: multa.motivo }, ['valor', 'fecha', 'motivo'], { valor: 'valor', fecha: 'fecha', motivo: 'motivo' });
+    if (diffMulta.huboCambios) {
+      await registrarAccion({
+        accion: 'editar',
+        entidad: 'multa',
+        entidadId: multaId,
+        creditoId: req.params.id,
+        clienteId: credito.cliente,
+        clienteNombre: creditoActualizado?.cliente?.nombre || null,
+        descripcion: `Multa editada: ${diffMulta.descripcion}`,
+        antes: diffMulta.antes,
+        despues: diffMulta.despues,
+        usuario: req.user?._id || null,
+        usuarioNombre: req.user?.nombre || null
+      });
+    }
+
     res.status(200).json({ success: true, data: creditoActualizado });
   } catch (error) {
     next(error);
@@ -1373,13 +1530,14 @@ export const agregarDescuento = async (req, res, next) => {
     const credito = await Credito.findById(req.params.id);
     if (!credito) return res.status(404).json({ success: false, error: 'Crédito no encontrado' });
 
-    credito.descuentos.push({
+    const nuevoDescuento = {
       id: Date.now().toString(),
       valor,
       tipo,
       descripcion,
       fecha: new Date()
-    });
+    };
+    credito.descuentos.push(nuevoDescuento);
 
     await credito.save();
 
@@ -1387,6 +1545,20 @@ export const agregarDescuento = async (req, res, next) => {
     await syncCreditoToCliente(req.params.id, contextoDesde(req, 'agregarDescuento'));
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
+
+    await registrarAccion({
+      accion: 'crear',
+      entidad: 'descuento',
+      entidadId: nuevoDescuento.id,
+      creditoId: req.params.id,
+      clienteId: credito.cliente,
+      clienteNombre: creditoActualizado?.cliente?.nombre || null,
+      descripcion: `Descuento agregado: $${Number(nuevoDescuento.valor).toLocaleString('es-CO')} (${nuevoDescuento.tipo})`,
+      despues: nuevoDescuento,
+      usuario: req.user?._id || null,
+      usuarioNombre: req.user?.nombre || null
+    });
+
     res.status(201).json({ success: true, data: creditoActualizado });
   } catch (error) {
     next(error);
@@ -1411,15 +1583,30 @@ export const actualizarFechaCreacion = async (req, res, next) => {
     }
 
     // Actualizar la fecha de creación
+    const fechaAnterior = credito.fechaCreacion;
     credito.fechaCreacion = new Date(fechaCreacion);
-    
+
     await credito.save();
 
     // Sincronizar con el embebido en cliente
     await syncCreditoToCliente(req.params.id, contextoDesde(req, 'actualizarFechaCreacion'));
 
     const creditoActualizado = await Credito.findById(credito._id).populate('cliente');
-    
+
+    await registrarAccion({
+      accion: 'editar',
+      entidad: 'credito',
+      entidadId: credito._id,
+      creditoId: credito._id,
+      clienteId: credito.cliente,
+      clienteNombre: creditoActualizado?.cliente?.nombre || null,
+      descripcion: `Fecha de creación cambiada: ${fechaAnterior ? new Date(fechaAnterior).toISOString().split('T')[0] : '(vacío)'} → ${credito.fechaCreacion.toISOString().split('T')[0]}`,
+      antes: { fechaCreacion: fechaAnterior },
+      despues: { fechaCreacion: credito.fechaCreacion },
+      usuario: req.user?._id || null,
+      usuarioNombre: req.user?.nombre || null
+    });
+
     res.status(200).json({
       success: true,
       data: creditoActualizado

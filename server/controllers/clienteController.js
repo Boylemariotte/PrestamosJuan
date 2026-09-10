@@ -3,6 +3,7 @@ import Credito from '../models/Credito.js';
 import HistorialBorrado from '../models/HistorialBorrado.js';
 import Cartera from '../models/Cartera.js';
 import { registrarBorrado } from './historialBorradoController.js';
+import { registrarAccion, resumenDiferencias } from './historialAccionController.js';
 
 /**
  * @desc    Obtener todos los clientes
@@ -161,6 +162,18 @@ export const createCliente = async (req, res, next) => {
     };
     const cliente = await Cliente.create(clienteData);
 
+    await registrarAccion({
+      accion: 'crear',
+      entidad: 'cliente',
+      entidadId: cliente._id,
+      clienteId: cliente._id,
+      clienteNombre: cliente.nombre,
+      descripcion: `Cliente creado: ${cliente.nombre} (documento ${cliente.documento})`,
+      despues: { nombre: cliente.nombre, documento: cliente.documento, cartera: cliente.cartera, telefono: cliente.telefono },
+      usuario: req.user?._id || null,
+      usuarioNombre: req.user?.nombre || null
+    });
+
     res.status(201).json({
       success: true,
       data: cliente
@@ -168,6 +181,13 @@ export const createCliente = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+};
+
+const CAMPOS_EDITABLES_CLIENTE = ['nombre', 'documento', 'telefono', 'direccion', 'barrio', 'direccionTrabajo', 'correo', 'cartera', 'tipoPago', 'posicion', 'tipoPagoEsperado', 'rf'];
+const ETIQUETAS_CAMPOS_CLIENTE = {
+  nombre: 'nombre', documento: 'documento', telefono: 'teléfono', direccion: 'dirección', barrio: 'barrio',
+  direccionTrabajo: 'dirección de trabajo', correo: 'correo', cartera: 'cartera', tipoPago: 'tipo de pago',
+  posicion: 'posición', tipoPagoEsperado: 'tipo de pago esperado', rf: 'RF'
 };
 
 /**
@@ -180,6 +200,14 @@ export const updateCliente = async (req, res, next) => {
     // Si se está activando RF, actualizar la fecha solo si no se proporciona una específica
     if (req.body.rf === 'RF' && !req.body.fechaRF) {
       req.body.fechaRF = new Date();
+    }
+
+    const clienteAntes = await Cliente.findById(req.params.id).lean();
+    if (!clienteAntes) {
+      return res.status(404).json({
+        success: false,
+        error: 'Cliente no encontrado'
+      });
     }
 
     const cliente = await Cliente.findByIdAndUpdate(
@@ -195,6 +223,22 @@ export const updateCliente = async (req, res, next) => {
       return res.status(404).json({
         success: false,
         error: 'Cliente no encontrado'
+      });
+    }
+
+    const diff = resumenDiferencias(clienteAntes, cliente.toObject(), CAMPOS_EDITABLES_CLIENTE, ETIQUETAS_CAMPOS_CLIENTE);
+    if (diff.huboCambios) {
+      await registrarAccion({
+        accion: 'editar',
+        entidad: 'cliente',
+        entidadId: cliente._id,
+        clienteId: cliente._id,
+        clienteNombre: cliente.nombre,
+        descripcion: diff.descripcion,
+        antes: diff.antes,
+        despues: diff.despues,
+        usuario: req.user?._id || null,
+        usuarioNombre: req.user?.nombre || null
       });
     }
 
