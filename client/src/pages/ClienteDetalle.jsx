@@ -11,6 +11,7 @@ import MapaUbicaciones from '../components/Clientes/MapaUbicaciones';
 import ActualizarUbicacion from '../components/Clientes/ActualizarUbicacion';
 import { determinarEstadoCredito } from '../utils/creditCalculations';
 import api from '../services/api';
+import SelectorEtiquetas, { ETIQUETAS } from '../components/Clientes/SelectorEtiquetas';
 
 const ClienteDetalle = ({ soloLectura = false }) => {
   const { id } = useParams();
@@ -28,45 +29,6 @@ const ClienteDetalle = ({ soloLectura = false }) => {
   const [cargandoCliente, setCargandoCliente] = useState(true);
   const [clienteNoEncontrado, setClienteNoEncontrado] = useState(false);
   const [mostrarSelectorEtiqueta, setMostrarSelectorEtiqueta] = useState(false);
-
-  // Definición de etiquetas
-  const ETIQUETAS = {
-    excelente: {
-      nombre: 'Excelente',
-      color: 'bg-green-100 text-green-800 border-green-300',
-      icono: Award
-    },
-    bueno: {
-      nombre: 'Bueno',
-      color: 'bg-blue-100 text-blue-800 border-blue-300',
-      icono: Check
-    },
-    atrasado: {
-      nombre: 'Atrasado',
-      color: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-      icono: Calendar
-    },
-    incompleto: {
-      nombre: 'Incompleto',
-      color: 'bg-red-100 text-red-800 border-red-300',
-      icono: AlertCircle
-    },
-    vetado: {
-      nombre: 'Vetado',
-      color: 'bg-gray-800 text-white border-gray-900',
-      icono: Ban
-    },
-    perdido: {
-      nombre: 'Perdido',
-      color: 'bg-rose-100 text-rose-800 border-rose-300',
-      icono: AlertOctagon
-    },
-    'sin-etiqueta': {
-      nombre: 'Sin etiqueta',
-      color: 'bg-gray-100 text-gray-800 border-gray-300',
-      icono: null
-    }
-  };
 
   // Intentar obtener el cliente del contexto primero
   const clienteDelContexto = obtenerCliente(id);
@@ -562,39 +524,11 @@ const ClienteDetalle = ({ soloLectura = false }) => {
 
       {/* Modal para seleccionar etiqueta */}
       {mostrarSelectorEtiqueta && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-              <Award className="h-5 w-5 mr-2 text-purple-600" />
-              Asignar Etiqueta a {cliente.nombre}
-            </h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Selecciona una etiqueta para clasificar el comportamiento del cliente:
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
-              {Object.entries(ETIQUETAS).map(([key, etiqueta]) => (
-                <button
-                  key={key}
-                  onClick={() => handleAsignarEtiqueta(key)}
-                  className={`p-4 rounded-lg border-2 transition-all hover:scale-105 ${etiqueta.color} ${cliente.etiqueta === key ? 'ring-4 ring-purple-400' : ''}`}
-                >
-                  <div className="flex items-center justify-center mb-2">
-                    {etiqueta.icono && React.createElement(etiqueta.icono, { className: 'h-8 w-8' })}
-                  </div>
-                  <h5 className="font-bold text-center">{etiqueta.nombre}</h5>
-                </button>
-              ))}
-            </div>
-            <div className="flex justify-end">
-              <button
-                onClick={() => setMostrarSelectorEtiqueta(false)}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
+        <SelectorEtiquetas
+          cliente={cliente}
+          onAsignarEtiqueta={handleAsignarEtiqueta}
+          onCancelar={() => setMostrarSelectorEtiqueta(false)}
+        />
       )}
 
     </div>

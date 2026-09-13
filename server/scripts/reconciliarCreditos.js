@@ -16,6 +16,11 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+//servidor dns para poder conectar a mongo db en dispositivos con problemas de red
+import dns from 'node:dns/promises';
+
+
+dns.setServers(['1.1.1.1', '8.8.8.8']);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

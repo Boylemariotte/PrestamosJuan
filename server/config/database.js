@@ -1,5 +1,10 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+//servidor dns para poder conectar a mongo db en dispositivos con problemas de red
+import dns from 'node:dns/promises';
+
+
+dns.setServers(['1.1.1.1', '8.8.8.8']);
 
 dotenv.config();
 
@@ -20,7 +25,7 @@ export const connectDB = async () => {
     });
 
     console.log(`✅ MongoDB conectado: ${conn.connection.host}`);
-    
+
     // Manejar eventos de conexión
     mongoose.connection.on('error', (err) => {
       console.error('❌ Error de conexión a MongoDB:', err);

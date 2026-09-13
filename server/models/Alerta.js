@@ -16,12 +16,16 @@ const alertaSchema = new mongoose.Schema({
     trim: true
   },
   cliente: {
-    type: mongoose.Schema.Types.ObjectId,
+    // String y no ObjectId: Cliente._id es String a propósito (soporta IDs numéricos
+    // heredados de clientes previos a la migración). Con ObjectId aquí, crear una alerta
+    // para un cliente con ID heredado (o crédito con formato CRED-<uuid>) fallaba con
+    // BSONError, igual que pasaba con RegistroPago.
+    type: String,
     ref: 'Cliente',
     default: null
   },
   credito: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: String,
     ref: 'Credito',
     default: null
   },
@@ -54,4 +58,3 @@ alertaSchema.index({ notificada: 1 });
 const Alerta = mongoose.model('Alerta', alertaSchema);
 
 export default Alerta;
-

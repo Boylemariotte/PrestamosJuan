@@ -1574,7 +1574,7 @@ export const actualizarFechaCreacion = async (req, res, next) => {
   try {
     const { fechaCreacion } = req.body;
     const credito = await Credito.findById(req.params.id);
-    
+
     if (!credito) {
       return res.status(404).json({
         success: false,
