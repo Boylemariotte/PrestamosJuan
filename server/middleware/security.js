@@ -21,10 +21,11 @@ export const corsOptions = {
  */
 export const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 1000, // Aumentado para desarrollo
+  max: 5000, // Límite amplio por IP individual
   message: { error: 'Demasiadas solicitudes desde esta IP, intenta de nuevo más tarde.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false }
 });
 
 /**

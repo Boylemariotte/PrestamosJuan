@@ -17,6 +17,10 @@ connectDB();
 
 // Inicializar Express
 const app = express();
+
+// Confiar en el primer proxy (Render, Cloudflare, etc.) para identificar correctamente la IP de cada cliente
+app.set('trust proxy', 1);
+
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
