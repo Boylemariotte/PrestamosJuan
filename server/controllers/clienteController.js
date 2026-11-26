@@ -795,6 +795,12 @@ export const getHistorialDocumento = async (req, res, next) => {
       documento: { $regex: documento, $options: 'i' }
     }).lean();
 
+    // 1b. Buscar clientes a los que esta cédula les sirve de fiador
+    const documentoEscapado = documento.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const clientesComoFiador = await Cliente.find({
+      'fiador.documento': { $regex: documentoEscapado, $options: 'i' }
+    }).lean();
+
     // 2. Buscar en historial de borrados (clientes eliminados)
     const historialBorrados = await HistorialBorrado.find({
       tipo: 'cliente',
@@ -854,8 +860,16 @@ export const getHistorialDocumento = async (req, res, next) => {
       etiquetaOriginal: registro.detalles?.etiqueta || null
     }));
 
+    // 4b. Clientes respaldados como fiador: se envía el cliente completo (con créditos)
+    // para mostrar las tarjetas y el detalle de crédito en solo lectura.
+    const comoFiador = clientesComoFiador.map(cliente => ({
+      ...cliente,
+      esVetado: cliente.etiqueta === 'vetado',
+      esPerdido: cliente.etiqueta === 'perdido'
+    }));
+
     // 5. Construir respuesta
-    const tieneHistorial = clientes.length > 0 || historialBorrados.length > 0;
+    const tieneHistorial = clientes.length > 0 || historialBorrados.length > 0 || comoFiador.length > 0;
     const hayVetados = clientesInfo.some(c => c.esVetado);
     const hayPerdidos = clientesInfo.some(c => c.esPerdido);
 
@@ -866,9 +880,11 @@ export const getHistorialDocumento = async (req, res, next) => {
         hayVetados,
         hayPerdidos,
         clientes: clientesInfo,
+        comoFiador,
         borrados: borradosInfo,
         resumen: {
           totalClientes: clientes.length,
+          totalComoFiador: comoFiador.length,
           clientesActivos: clientes.filter(c => !c.esArchivado).length,
           clientesArchivados: clientes.filter(c => c.esArchivado).length,
           vecesBorrado: historialBorrados.length,

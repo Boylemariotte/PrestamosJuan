@@ -1,9 +1,11 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Search, AlertTriangle, User, FileText, Trash2, Calendar, MapPin, Phone, Archive, ExternalLink } from 'lucide-react';
+import { Search, AlertTriangle, User, FileText, Trash2, Calendar, MapPin, Phone, Archive, ExternalLink, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { formatearFechaCompleta } from '../utils/dateUtils';
+import CreditoCard from '../components/Creditos/CreditoCard';
+import CreditoDetalle from '../components/Creditos/CreditoDetalle';
 
 const BuscarDocumento = () => {
     const [documento, setDocumento] = useState('');
@@ -11,6 +13,8 @@ const BuscarDocumento = () => {
     const [historial, setHistorial] = useState(null);
     const [error, setError] = useState('');
     const [buscado, setBuscado] = useState(false);
+    // Crédito abierto en detalle (solo lectura) desde la sección "Es fiador de"
+    const [creditoAbierto, setCreditoAbierto] = useState(null); // { credito, cliente }
 
     const location = useLocation();
 
@@ -88,7 +92,7 @@ const BuscarDocumento = () => {
                     <div>
                         <h1 className="text-2xl font-bold">Buscar por Documento</h1>
                         <p className="text-slate-300 text-sm">
-                            Consulta el historial completo de un número de cédula
+                            Consulta el historial completo de un número de cédula, como cliente o como fiador
                         </p>
                     </div>
                 </div>
@@ -165,10 +169,14 @@ const BuscarDocumento = () => {
                     {/* Resumen */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                         <h2 className="text-lg font-bold text-gray-900 mb-4">Resumen del Historial</h2>
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                             <div className="bg-slate-50 p-4 rounded-lg text-center">
                                 <p className="text-2xl font-bold text-slate-800">{historial.resumen.totalClientes}</p>
                                 <p className="text-xs text-slate-500 font-medium">Clientes encontrados</p>
+                            </div>
+                            <div className="bg-indigo-50 p-4 rounded-lg text-center">
+                                <p className="text-2xl font-bold text-indigo-600">{historial.resumen.totalComoFiador || 0}</p>
+                                <p className="text-xs text-indigo-600 font-medium">Es fiador de</p>
                             </div>
                             <div className="bg-green-50 p-4 rounded-lg text-center">
                                 <p className="text-2xl font-bold text-green-600">{historial.resumen.clientesActivos}</p>
@@ -307,6 +315,83 @@ const BuscarDocumento = () => {
                         </div>
                     )}
 
+                    {/* Como fiador: a quién le está sirviendo y sus créditos */}
+                    {historial.comoFiador?.length > 0 && (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div className="bg-indigo-50 px-6 py-4 border-b border-indigo-200">
+                                <h2 className="text-lg font-bold text-indigo-900 flex items-center gap-2">
+                                    <ShieldCheck className="h-5 w-5 text-indigo-600" />
+                                    Es Fiador De ({historial.comoFiador.length})
+                                </h2>
+                            </div>
+                            <div className="divide-y divide-gray-100">
+                                {historial.comoFiador.map((cliente) => (
+                                    <div key={cliente._id} className="p-6">
+                                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
+                                            <div>
+                                                <p className="text-xs font-semibold text-indigo-600 uppercase mb-1">
+                                                    Fiador: {cliente.fiador?.nombre} (Doc: {cliente.fiador?.documento})
+                                                </p>
+                                                <h3 className="text-lg font-bold text-gray-900">Le sirve a: {cliente.nombre}</h3>
+                                                <p className="text-sm text-gray-500">Doc: {cliente.documento}</p>
+                                                <div className="flex flex-wrap items-center gap-2 mt-2">
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-bold border ${getEtiquetaColor(cliente.etiqueta)}`}>
+                                                        {cliente.etiqueta?.toUpperCase() || 'SIN ETIQUETA'}
+                                                    </span>
+                                                    {cliente.esArchivado && (
+                                                        <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-bold">
+                                                            ARCHIVADO
+                                                        </span>
+                                                    )}
+                                                    <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-medium">
+                                                        Cartera {cliente.cartera}
+                                                    </span>
+                                                </div>
+                                                <div className="flex flex-wrap gap-4 mt-3 text-sm text-gray-600">
+                                                    {cliente.telefono && (
+                                                        <span className="flex items-center gap-2"><Phone className="h-4 w-4 text-gray-400" />{cliente.telefono}</span>
+                                                    )}
+                                                    {cliente.direccion && (
+                                                        <span className="flex items-center gap-2"><MapPin className="h-4 w-4 text-gray-400" />{cliente.direccion}</span>
+                                                    )}
+                                                </div>
+                                                {(cliente.esVetado || cliente.esPerdido) && (
+                                                    <p className="mt-3 text-sm font-semibold text-red-600 flex items-center gap-2">
+                                                        <AlertTriangle className="h-4 w-4" />
+                                                        El cliente al que respalda está marcado como {cliente.etiqueta?.toUpperCase()}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <Link
+                                                to={cliente.esArchivado ? `/archivados/cliente/${cliente._id}` : `/cliente/${cliente._id}`}
+                                                className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors text-sm font-medium self-start"
+                                            >
+                                                <ExternalLink className="h-4 w-4" />
+                                                Ver cliente
+                                            </Link>
+                                        </div>
+
+                                        {cliente.creditos?.length > 0 ? (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                {cliente.creditos.map((credito) => (
+                                                    <CreditoCard
+                                                        key={credito.id}
+                                                        credito={credito}
+                                                        onClick={() => setCreditoAbierto({ credito, cliente })}
+                                                    />
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="bg-slate-50 rounded-lg p-3 text-sm text-gray-600">
+                                                Este cliente no tiene créditos registrados.
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Historial de borrados */}
                     {historial.borrados.length > 0 && (
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -342,6 +427,17 @@ const BuscarDocumento = () => {
                         </div>
                     )}
                 </>
+            )}
+
+            {/* Detalle del crédito (solo lectura) */}
+            {creditoAbierto && (
+                <CreditoDetalle
+                    credito={creditoAbierto.credito}
+                    clienteId={creditoAbierto.cliente._id}
+                    cliente={creditoAbierto.cliente}
+                    onClose={() => setCreditoAbierto(null)}
+                    soloLectura={true}
+                />
             )}
         </div>
     );
