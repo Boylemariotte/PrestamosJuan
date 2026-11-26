@@ -9,7 +9,8 @@ import {
   archivarCliente,
   desarchivarCliente,
   getPosicionesDisponibles,
-  getHistorialDocumento
+  getHistorialDocumento,
+  moverSeccionCliente
 } from '../controllers/clienteController.js';
 import { protect, authorize, requireRole } from '../middleware/auth.js';
 
@@ -28,6 +29,10 @@ router.route('/:id/archivar')
 
 router.route('/:id/desarchivar')
   .put(authorize('editarClientes'), desarchivarCliente);
+
+// Mover al cliente de sección (Semanal <-> Quincenal/Mensual), usado desde la renovación
+router.route('/:id/mover-seccion')
+  .put(authorize('editarClientes'), moverSeccionCliente);
 
 router.route('/posiciones-disponibles/:cartera')
   .get(authorize('verClientes'), getPosicionesDisponibles);

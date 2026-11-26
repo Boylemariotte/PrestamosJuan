@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, RefreshCw, AlertCircle, Calendar } from 'lucide-react';
+import { X, RefreshCw, AlertCircle, Calendar, ArrowRightLeft } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
+import api from '../../services/api';
 import {
   MONTOS_DISPONIBLES,
   calcularTotalAPagar,
@@ -12,7 +14,12 @@ import {
 } from '../../utils/creditCalculations';
 import { obtenerFechaLocal } from '../../utils/dateUtils';
 
+// Carteras en las que, por ahora, la renovación puede mover al cliente de sección
+// (Semanal <-> Quincenal/Mensual). Debe coincidir con CARTERAS_CON_CAMBIO_SECCION del servidor.
+const CARTERAS_CON_CAMBIO_SECCION = ['K1'];
+
 const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
+  const { carteras } = useApp();
   const [isSubmitting, setIsSubmitting] = useState(false);
   // El tipo declarado del cliente (tipoPagoEsperado) es la fuente de verdad:
   // si el usuario ya movió al cliente a otra modalidad, la renovación debe
@@ -102,6 +109,64 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
   // La deuda pendiente del crédito viejo NO se traspasa al nuevo: simplemente queda
   // registrada como pendiente en el crédito anterior (renovado), sin bloquear la renovación.
   const bloqueaPorDeudaPendiente = montoAEntregar < 0 && formData.tipo !== 'mensual';
+
+  // --- Cambio de sección (ej: Quincenal/Mensual -> Semanal) ---
+  // La sección donde aparece el cliente la fija su tipo de pago esperado. Si la nueva
+  // modalidad pertenece a otra sección de la cartera, hay que moverlo y darle una
+  // posición libre allí (su número actual puede estar ocupado en la sección destino).
+  const nombreCartera = cliente?.cartera || 'K1';
+  const carteraConfig = (carteras || []).find(c => c.nombre === nombreCartera);
+  const seccionDeTipo = (tipo) =>
+    carteraConfig?.secciones?.find(s => s.tiposPagoPermitidos?.includes(tipo)) || null;
+  const seccionActual = seccionDeTipo(cliente?.tipoPagoEsperado || creditoAnterior.tipo);
+  const seccionNueva = seccionDeTipo(formData.tipo);
+  const requiereCambioSeccion =
+    CARTERAS_CON_CAMBIO_SECCION.includes(nombreCartera) &&
+    (carteraConfig?.secciones?.length || 0) > 1 &&
+    !!seccionActual && !!seccionNueva &&
+    seccionActual.nombreInterno !== seccionNueva.nombreInterno;
+
+  const [posicionesDisponibles, setPosicionesDisponibles] = useState([]);
+  const [cargandoPosiciones, setCargandoPosiciones] = useState(false);
+  const [errorPosiciones, setErrorPosiciones] = useState(null);
+  const [posicionNueva, setPosicionNueva] = useState('');
+
+  useEffect(() => {
+    if (!requiereCambioSeccion) {
+      setPosicionesDisponibles([]);
+      setPosicionNueva('');
+      setErrorPosiciones(null);
+      return;
+    }
+
+    let cancelado = false;
+    const cargarPosiciones = async () => {
+      setCargandoPosiciones(true);
+      setErrorPosiciones(null);
+      try {
+        const response = await api.get(`/clientes/posiciones-disponibles/${nombreCartera}?tipoPago=${formData.tipo}`);
+        if (cancelado) return;
+        const disponibles = response.data || [];
+        setPosicionesDisponibles(disponibles);
+        // Conservar el mismo número si está libre en la sección destino; si no, el primero libre.
+        const posicionActual = Number(cliente?.posicion);
+        const sugerida = disponibles.includes(posicionActual) ? posicionActual : disponibles[0];
+        setPosicionNueva(sugerida ? String(sugerida) : '');
+      } catch (error) {
+        if (cancelado) return;
+        setPosicionesDisponibles([]);
+        setPosicionNueva('');
+        setErrorPosiciones(error.message || 'No se pudieron cargar las posiciones disponibles');
+      } finally {
+        if (!cancelado) setCargandoPosiciones(false);
+      }
+    };
+
+    cargarPosiciones();
+    return () => { cancelado = true; };
+  }, [requiereCambioSeccion, nombreCartera, formData.tipo]);
+
+  const bloqueaPorCambioSeccion = requiereCambioSeccion && (cargandoPosiciones || !posicionNueva);
 
   // Efecto para inicializar fechas manuales cuando cambia el modo o el número de cuotas
   useEffect(() => {
@@ -195,7 +260,12 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
       alert('La deuda pendiente es mayor que el monto de renovación. Por favor, selecciona un monto mayor.');
       return;
     }
-    
+
+    if (requiereCambioSeccion && !posicionNueva) {
+      alert(`Selecciona la nueva posición del cliente en la sección ${seccionNueva.titulo}.`);
+      return;
+    }
+
     // Preparar cuotas según el modo
     let cuotas;
     if (formData.modoFechas === 'manual') {
@@ -216,7 +286,11 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
       deudaPendiente,
       montoAEntregar: montoAEntregar,
       cuotas: cuotas, // Enviar cuotas (vacías si es automático, con fechas si es manual)
-      modoFechas: formData.modoFechas // Nuevo campo
+      modoFechas: formData.modoFechas, // Nuevo campo
+      // Movimiento del cliente a la sección de la nueva modalidad (solo si cambia de sección)
+      cambioSeccion: requiereCambioSeccion
+        ? { tipoPago: formData.tipo, posicion: parseInt(posicionNueva, 10) }
+        : null
     };
     
     setIsSubmitting(true);
@@ -456,6 +530,49 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
             </div>
           )}
 
+          {/* Cambio de sección del cliente */}
+          {requiereCambioSeccion && (
+            <div className="border-2 border-indigo-300 rounded-lg p-4 bg-indigo-50">
+              <div className="flex items-center gap-2 mb-2">
+                <ArrowRightLeft className="h-5 w-5 text-indigo-600" />
+                <span className="font-bold text-indigo-900">Cambio de sección</span>
+              </div>
+              <p className="text-sm text-indigo-800 mb-3">
+                Al renovar, el cliente pasará de <strong>{nombreCartera} {seccionActual.titulo}</strong>
+                {cliente?.posicion ? ` (#${cliente.posicion})` : ''} a <strong>{nombreCartera} {seccionNueva.titulo}</strong>.
+                Su posición actual quedará libre.
+              </p>
+
+              {cargandoPosiciones ? (
+                <p className="text-sm text-indigo-700">Cargando posiciones disponibles...</p>
+              ) : errorPosiciones ? (
+                <p className="text-sm text-red-700 font-medium">⚠️ {errorPosiciones}</p>
+              ) : posicionesDisponibles.length === 0 ? (
+                <p className="text-sm text-red-700 font-medium">
+                  ⚠️ No hay posiciones libres en {nombreCartera} {seccionNueva.titulo}. No se puede renovar con esta modalidad.
+                </p>
+              ) : (
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">
+                    Nueva posición en {seccionNueva.titulo} * ({posicionesDisponibles.length} libres)
+                  </label>
+                  <select
+                    value={posicionNueva}
+                    onChange={(e) => setPosicionNueva(e.target.value)}
+                    className="input-field w-full border rounded-md p-2"
+                    required
+                  >
+                    {posicionesDisponibles.map(pos => (
+                      <option key={pos} value={pos}>
+                        #{pos}{Number(cliente?.posicion) === pos ? ' (mismo número actual)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Fecha de inicio */}
           <div>
             <label className="label block text-sm font-medium text-gray-700 mb-1 font-bold">Fecha de Inicio *</label>
@@ -612,6 +729,14 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
                   <span className="text-gray-600">Valor por cuota:</span>
                   <span className="font-semibold">{formatearMoneda(valorCuota)}</span>
                 </div>
+                {requiereCambioSeccion && posicionNueva && (
+                  <div className="flex justify-between text-indigo-700">
+                    <span>Nueva ubicación:</span>
+                    <span className="font-semibold">
+                      {nombreCartera} {seccionNueva.titulo} #{posicionNueva}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -627,8 +752,8 @@ const RenovacionForm = ({ creditoAnterior, cliente, onSubmit, onClose }) => {
             </button>
             <button
               type="submit"
-              disabled={bloqueaPorDeudaPendiente || isSubmitting}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold text-white transition-all ${!bloqueaPorDeudaPendiente && !isSubmitting
+              disabled={bloqueaPorDeudaPendiente || bloqueaPorCambioSeccion || isSubmitting}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold text-white transition-all ${!bloqueaPorDeudaPendiente && !bloqueaPorCambioSeccion && !isSubmitting
                   ? 'bg-gradient-to-r from-purple-600 to-blue-600 hover:opacity-90 shadow-md'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}

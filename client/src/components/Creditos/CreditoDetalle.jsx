@@ -1107,6 +1107,12 @@ const CreditoDetalle = ({ credito: creditoInicial, clienteId, cliente, onClose, 
       onClose();
     } catch (error) {
       alert(error.message || 'No fue posible renovar el crédito. Verifique antes de reintentar.');
+      // Si el crédito ya quedó renovado (solo falló el cambio de sección), cerrar el
+      // formulario para no permitir una segunda renovación del mismo crédito.
+      if (error.renovacionCompletada) {
+        setMostrarFormularioRenovacion(false);
+        onClose();
+      }
     }
   };
 

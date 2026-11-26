@@ -598,6 +598,82 @@ export const desarchivarCliente = async (req, res, next) => {
   }
 };
 
+/**
+ * Helper: calcula las posiciones libres de la sección de una cartera que corresponde
+ * a un tipo de pago. Devuelve { posiciones, seccion } o { status, error } si la cartera
+ * o el tipo de pago no son válidos.
+ *
+ * `excluirClienteId` permite ignorar a un cliente concreto (útil al mover a ese mismo
+ * cliente de sección: su casilla actual no debe contar como ocupada).
+ */
+const calcularPosicionesDisponibles = async (nombreCartera, tipoPago, { excluirClienteId = null } = {}) => {
+  // 1. Obtener configuración de la cartera
+  const carteraConfig = await Cartera.findOne({ nombre: nombreCartera });
+  if (!carteraConfig) {
+    return { status: 404, error: `Cartera ${nombreCartera} no encontrada` };
+  }
+
+  // 2. Determinar a qué sección aplica el tipo de pago
+  let seccionAplicable = null;
+
+  if (carteraConfig.secciones.length === 1) {
+    // Si solo hay una sección (ej: K2), usar esa
+    seccionAplicable = carteraConfig.secciones[0];
+  } else {
+    // Si hay múltiples (ej: K1, K3), buscar la que contiene el tipoPago
+    if (!tipoPago) {
+      return { status: 400, error: 'Debe especificar el tipo de pago para esta cartera' };
+    }
+    seccionAplicable = carteraConfig.secciones.find(s =>
+      s.tiposPagoPermitidos.includes(tipoPago)
+    );
+  }
+
+  if (!seccionAplicable) {
+    return { status: 400, error: `El tipo de pago ${tipoPago} no es válido para la cartera ${nombreCartera}` };
+  }
+
+  const { capacidad: capacidadMaxima, tiposPagoPermitidos } = seccionAplicable;
+
+  // 3. Obtener TODOS los clientes de la cartera (no archivados y con posición).
+  // Como el tipo se deriva de créditos, se traen y se filtra en memoria.
+  const filtro = {
+    cartera: nombreCartera,
+    esArchivado: { $ne: true },
+    posicion: { $ne: null }
+  };
+  if (excluirClienteId) {
+    filtro._id = { $ne: excluirClienteId };
+  }
+  const todosLosClientes = await Cliente.find(filtro);
+
+  // 4. Filtrar clientes que ocupan espacio EN ESTA SECCIÓN
+  const clientesOcupando = todosLosClientes.filter(cliente => {
+    const tipoCliente = obtenerTipoPagoCliente(cliente);
+
+    // Si no se puede determinar el tipo, no sabemos en qué sección está:
+    // bloquear su posición en TODAS las secciones. Es preferible no ofrecer
+    // una posición dudosa a asignarla dos veces.
+    if (!tipoCliente) return true;
+
+    return tiposPagoPermitidos.includes(tipoCliente);
+  });
+
+  const posicionesOcupadas = new Set(
+    clientesOcupando.map(c => c.posicion).filter(p => typeof p === 'number')
+  );
+
+  // 5. Generar lista de disponibles
+  const posiciones = [];
+  for (let i = 1; i <= capacidadMaxima; i++) {
+    if (!posicionesOcupadas.has(i)) {
+      posiciones.push(i);
+    }
+  }
+
+  return { posiciones, seccion: seccionAplicable };
+};
+
 // @desc    Obtener posiciones disponibles para una cartera y tipo de pago
 // @route   GET /api/clientes/posiciones-disponibles/:cartera
 // @access  Private
@@ -606,84 +682,93 @@ export const getPosicionesDisponibles = async (req, res, next) => {
     const { cartera: nombreCartera } = req.params;
     const { tipoPago } = req.query; // 'semanal', 'quincenal', 'mensual', 'diario'
 
-    // 1. Obtener configuración de la cartera
-    const carteraConfig = await Cartera.findOne({ nombre: nombreCartera });
-    if (!carteraConfig) {
-      return res.status(404).json({
-        success: false,
-        error: `Cartera ${nombreCartera} no encontrada`
-      });
-    }
-
-    // 2. Determinar a qué sección aplica el tipo de pago
-    let seccionAplicable = null;
-
-    if (carteraConfig.secciones.length === 1) {
-      // Si solo hay una sección (ej: K2), usar esa
-      seccionAplicable = carteraConfig.secciones[0];
-    } else {
-      // Si hay múltiples (ej: K1, K3), buscar la que contiene el tipoPago
-      if (!tipoPago) {
-        return res.status(400).json({
-          success: false,
-          error: 'Debe especificar el tipo de pago para esta cartera'
-        });
-      }
-      seccionAplicable = carteraConfig.secciones.find(s =>
-        s.tiposPagoPermitidos.includes(tipoPago)
-      );
-    }
-
-    if (!seccionAplicable) {
-      // Caso especial: si el tipo de pago no está explícitamente en ninguna sección,
-      // buscar una sección "default" o retornar error.
-      // Por flexibilidad, si no se encuentra, retornamos error.
-      return res.status(400).json({
-        success: false,
-        error: `El tipo de pago ${tipoPago} no es válido para la cartera ${nombreCartera}`
-      });
-    }
-
-    const { capacidad: capacidadMaxima, tiposPagoPermitidos } = seccionAplicable;
-
-    // 3. Obtener TODOS los clientes de la cartera (no archivados y con posición)
-    // Optimización: podríamos filtrar por tipos en la query de Mongo si fuera simple,
-    // pero como el tipo se deriva de créditos, mejor traerlos y filtrar en memoria (como antes).
-    const todosLosClientes = await Cliente.find({
-      cartera: nombreCartera,
-      esArchivado: { $ne: true },
-      posicion: { $ne: null }
-    }).populate('creditos'); // Necesitamos créditos para saber el tipo real
-
-    // 4. Filtrar clientes que ocupan espacio EN ESTA SECCIÓN
-    const clientesOcupando = todosLosClientes.filter(cliente => {
-      // Obtener el tipo de pago activo del cliente
-      const tipoCliente = obtenerTipoPagoCliente(cliente);
-
-      // Si no se puede determinar el tipo, no sabemos en qué sección está:
-      // bloquear su posición en TODAS las secciones. Es preferible no ofrecer
-      // una posición dudosa a asignarla dos veces.
-      if (!tipoCliente) return true;
-
-      return tiposPagoPermitidos.includes(tipoCliente);
-    });
-
-    const posicionesOcupadas = new Set(
-      clientesOcupando.map(c => c.posicion).filter(p => typeof p === 'number')
-    );
-
-    // 5. Generar lista de disponibles
-    const posicionesDisponibles = [];
-    for (let i = 1; i <= capacidadMaxima; i++) {
-      if (!posicionesOcupadas.has(i)) {
-        posicionesDisponibles.push(i);
-      }
+    const resultado = await calcularPosicionesDisponibles(nombreCartera, tipoPago);
+    if (resultado.error) {
+      return res.status(resultado.status).json({ success: false, error: resultado.error });
     }
 
     res.status(200).json({
       success: true,
-      data: posicionesDisponibles
+      data: resultado.posiciones
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Carteras en las que, por ahora, se permite mover a un cliente de sección
+// (Semanal <-> Quincenal/Mensual) desde la renovación de un crédito.
+export const CARTERAS_CON_CAMBIO_SECCION = ['K1'];
+
+// @desc    Mover un cliente a otra sección de su cartera (ej: de Quincenal/Mensual a Semanal)
+//          y asignarle una posición libre en la sección destino.
+// @route   PUT /api/clientes/:id/mover-seccion
+// @access  Private
+export const moverSeccionCliente = async (req, res, next) => {
+  try {
+    const { tipoPago, posicion } = req.body;
+    const posicionNum = parseInt(posicion, 10);
+    const TIPOS_VALIDOS = ['semanal', 'quincenal', 'mensual', 'diario'];
+
+    if (!TIPOS_VALIDOS.includes(tipoPago)) {
+      return res.status(400).json({ success: false, error: 'Tipo de pago no válido' });
+    }
+    if (isNaN(posicionNum) || posicionNum < 1) {
+      return res.status(400).json({ success: false, error: 'La posición debe ser un número válido' });
+    }
+
+    const clienteAntes = await Cliente.findById(req.params.id).lean();
+    if (!clienteAntes) {
+      return res.status(404).json({ success: false, error: 'Cliente no encontrado' });
+    }
+    if (clienteAntes.esArchivado) {
+      return res.status(400).json({ success: false, error: 'No se puede mover de sección un cliente archivado' });
+    }
+
+    const cartera = clienteAntes.cartera || 'K1';
+    if (!CARTERAS_CON_CAMBIO_SECCION.includes(cartera)) {
+      return res.status(400).json({
+        success: false,
+        error: `El cambio de sección no está habilitado para la cartera ${cartera}`
+      });
+    }
+
+    // Verificar justo antes de escribir que la posición siga libre en la sección destino
+    // (otro usuario pudo haberla tomado mientras se llenaba el formulario).
+    const resultado = await calcularPosicionesDisponibles(cartera, tipoPago, { excluirClienteId: req.params.id });
+    if (resultado.error) {
+      return res.status(resultado.status).json({ success: false, error: resultado.error });
+    }
+    if (!resultado.posiciones.includes(posicionNum)) {
+      return res.status(409).json({
+        success: false,
+        error: `La posición #${posicionNum} ya no está disponible en la sección ${resultado.seccion.titulo}. Elige otra.`
+      });
+    }
+
+    const cliente = await Cliente.findByIdAndUpdate(
+      req.params.id,
+      { $set: { tipoPagoEsperado: tipoPago, posicion: posicionNum } },
+      { new: true, runValidators: true }
+    );
+
+    const diff = resumenDiferencias(clienteAntes, cliente.toObject(), ['tipoPagoEsperado', 'posicion'], ETIQUETAS_CAMPOS_CLIENTE);
+    if (diff.huboCambios) {
+      await registrarAccion({
+        accion: 'editar',
+        entidad: 'cliente',
+        entidadId: cliente._id,
+        clienteId: cliente._id,
+        clienteNombre: cliente.nombre,
+        descripcion: `Cambio de sección a ${resultado.seccion.titulo} (renovación): ${diff.descripcion}`,
+        antes: diff.antes,
+        despues: diff.despues,
+        usuario: req.user?._id || null,
+        usuarioNombre: req.user?.nombre || null
+      });
+    }
+
+    res.status(200).json({ success: true, data: cliente });
   } catch (error) {
     next(error);
   }

@@ -400,7 +400,20 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const renovarCredito = async (clienteId, creditoAnteriorId, nuevoCreditoData) => {
+  // Mueve al cliente a otra sección de su cartera (ej: Quincenal/Mensual -> Semanal)
+  // y le asigna una posición libre en la sección destino.
+  const moverSeccionCliente = async (clienteId, tipoPago, posicion) => {
+    const response = await api.put(`/clientes/${clienteId}/mover-seccion`, { tipoPago, posicion });
+    if (response.success) {
+      setClientes(prev => prev.map(c => (c?.id === clienteId || c?._id === clienteId) ? response.data : c));
+      return response.data;
+    }
+  };
+
+  const renovarCredito = async (clienteId, creditoAnteriorId, datosRenovacion) => {
+    // cambioSeccion ({ tipoPago, posicion }) no pertenece al crédito: se aplica al cliente
+    // después de crear el crédito nuevo.
+    const { cambioSeccion, ...nuevoCreditoData } = datosRenovacion;
     try {
       // 1. Marcar anterior como renovado
       await api.put(`/creditos/${creditoAnteriorId}`, {
@@ -427,6 +440,21 @@ export const AppProvider = ({ children }) => {
         await api.put(`/creditos/${creditoAnteriorId}`, {
           creditoRenovacionId: nuevoCredito.id
         });
+      }
+
+      // 4. Si la nueva modalidad pertenece a otra sección, mover al cliente.
+      //    El crédito ya quedó renovado: si esto falla, se avisa sin deshacer la renovación.
+      if (cambioSeccion) {
+        try {
+          await moverSeccionCliente(clienteId, cambioSeccion.tipoPago, cambioSeccion.posicion);
+        } catch (errorMovimiento) {
+          const error = new Error(
+            `El crédito se renovó correctamente, pero no se pudo mover al cliente de sección: ${errorMovimiento.message}. ` +
+            'Edita el cliente para asignarle la sección y posición correctas.'
+          );
+          error.renovacionCompletada = true;
+          throw error;
+        }
       }
 
       return nuevoCredito;
@@ -904,6 +932,7 @@ export const AppProvider = ({ children }) => {
     fetchData,
     agregarCliente,
     actualizarCliente,
+    moverSeccionCliente,
     toggleReportado,
     eliminarCliente,
     archivarCliente,
