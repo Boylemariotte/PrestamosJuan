@@ -5,7 +5,8 @@ import {
   createVisita,
   updateVisita,
   deleteVisita,
-  completarVisita
+  completarVisita,
+  decidirVisita
 } from '../controllers/visitaController.js';
 import { protect } from '../middleware/auth.js';
 
@@ -25,6 +26,9 @@ router.route('/:id')
 
 router.route('/:id/completar')
   .put(completarVisita);
+
+router.route('/:id/decision')
+  .put(decidirVisita);
 
 export default router;
 

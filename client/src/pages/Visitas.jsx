@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Save, Printer, UserPlus, X, Briefcase, Trash2, PlusCircle, Search, Pencil } from 'lucide-react';
+import { Save, Printer, UserPlus, X, Briefcase, Trash2, PlusCircle, Search, Pencil, CheckCircle, XCircle, Clock, Eye } from 'lucide-react';
 import { BARRIOS_TULUA, BARRIOS_BUGA } from '../constants/barrios';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
@@ -30,6 +30,22 @@ const Visitas = () => {
 
     const [visitas, setVisitas] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    // Decisión de visitas terminadas (aprobar / no aprobar)
+    const [tabActiva, setTabActiva] = useState('pendiente');
+    const [showRechazoModal, setShowRechazoModal] = useState(false);
+    const [motivoRechazo, setMotivoRechazo] = useState('');
+    const [guardandoDecision, setGuardandoDecision] = useState(false);
+    const [visitaDetalle, setVisitaDetalle] = useState(null);
+
+    const estadoDe = (v) => v.estadoDecision || 'pendiente';
+    const visitasPendientes = visitas.filter(v => estadoDe(v) === 'pendiente');
+    const visitasAprobadas = visitas
+        .filter(v => estadoDe(v) === 'aprobada')
+        .sort((a, b) => new Date(b.fechaDecision) - new Date(a.fechaDecision));
+    const visitasRechazadas = visitas
+        .filter(v => estadoDe(v) === 'rechazada')
+        .sort((a, b) => new Date(b.fechaDecision) - new Date(a.fechaDecision));
 
     // Cerrar dropdowns al hacer clic fuera
     useEffect(() => {
@@ -358,23 +374,72 @@ const Visitas = () => {
         setShowCarteraModal(true);
     };
 
-    const handleAddToClients = (cartera) => {
+    const reemplazarVisita = (actualizada) => {
+        const id = actualizada._id || actualizada.id;
+        setVisitas(prev => prev.map(v => (v._id === id || v.id === id) ? actualizada : v));
+    };
+
+    const guardarDecision = async (visit, payload) => {
+        const visitId = visit._id || visit.id;
+        setGuardandoDecision(true);
+        try {
+            const response = await api.put(`/visitas/${visitId}/decision`, payload);
+            if (response.success) {
+                reemplazarVisita(response.data);
+                return response.data;
+            }
+        } catch (error) {
+            console.error('Error guardando la decisión de la visita:', error);
+            alert(error?.message || 'No se pudo guardar la decisión. Intenta de nuevo.');
+        } finally {
+            setGuardandoDecision(false);
+        }
+        return null;
+    };
+
+    // Aprobar: se guarda la decisión con la cartera y se abre el formulario de cliente prellenado
+    const handleSeleccionCartera = async (cartera) => {
         if (!selectedVisit) return;
+        if (estadoDe(selectedVisit) === 'pendiente') {
+            const ok = await guardarDecision(selectedVisit, { decision: 'aprobada', cartera });
+            if (!ok) return;
+        }
+        handleAddToClients(cartera);
+    };
+
+    const openRechazoModal = (visit) => {
+        setSelectedVisit(visit);
+        setMotivoRechazo('');
+        setShowRechazoModal(true);
+    };
+
+    const handleConfirmarRechazo = async () => {
+        if (!selectedVisit || !motivoRechazo.trim()) return;
+        const ok = await guardarDecision(selectedVisit, { decision: 'rechazada', motivo: motivoRechazo.trim() });
+        if (ok) {
+            setShowRechazoModal(false);
+            setSelectedVisit(null);
+            setMotivoRechazo('');
+        }
+    };
+
+    const handleAddToClients = (cartera, visit = selectedVisit) => {
+        if (!visit) return;
 
         const clientData = {
-            nombre: selectedVisit.solicitante.nombre,
-            documento: selectedVisit.solicitante.cc,
-            telefono: selectedVisit.solicitante.telefono,
-            direccion: selectedVisit.solicitante.direccionCasa,
-            barrio: selectedVisit.solicitante.barrioCasa,
-            direccionTrabajo: selectedVisit.solicitante.direccionTrabajo,
+            nombre: visit.solicitante.nombre,
+            documento: visit.solicitante.cc,
+            telefono: visit.solicitante.telefono,
+            direccion: visit.solicitante.direccionCasa,
+            barrio: visit.solicitante.barrioCasa,
+            direccionTrabajo: visit.solicitante.direccionTrabajo,
             fiador: {
-                nombre: selectedVisit.fiador.nombre,
-                documento: selectedVisit.fiador.cc,
-                telefono: selectedVisit.fiador.telefono,
-                direccion: selectedVisit.fiador.direccionCasa,
-                barrio: selectedVisit.fiador.barrioCasa,
-                direccionTrabajo: selectedVisit.fiador.direccionTrabajo
+                nombre: visit.fiador.nombre,
+                documento: visit.fiador.cc,
+                telefono: visit.fiador.telefono,
+                direccion: visit.fiador.direccionCasa,
+                barrio: visit.fiador.barrioCasa,
+                direccionTrabajo: visit.fiador.direccionTrabajo
             }
         };
 
@@ -386,6 +451,123 @@ const Visitas = () => {
             }
         });
     };
+
+    // Cuerpo con todos los datos ingresados de la visita (se usa en la tarjeta y en Ver detalle)
+    const renderCuerpoVisita = (visit) => (
+            <div className="p-8 space-y-6 text-sm print:p-4 print:space-y-3 print:text-[11px]">
+                {/* Fechas */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1 print:gap-3">
+                    <div className="flex flex-col">
+                        <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Fecha Agendamiento</label>
+                        <div className="border-b-2 border-gray-300 py-2 text-gray-800">
+                            {formatearFechaVisual(visit.fechaAgendamiento)}
+                        </div>
+                    </div>
+                    <div className="flex flex-col">
+                        <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Fecha de la Visita</label>
+                        <div className="border-b-2 border-gray-300 py-2 text-gray-800">
+                            {formatearFechaVisual(visit.fechaVisita)}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Información del Préstamo */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-6">
+                        <div className="flex flex-col">
+                            <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Tipo de Préstamo</label>
+                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                {visit.tipoPrestamo}
+                            </div>
+                        </div>
+                        <div className="flex flex-col">
+                            <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Valor del Préstamo</label>
+                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                {visit.valorPrestamo ? `$ ${visit.valorPrestamo}` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="space-y-6">
+                        <div className="flex flex-col">
+                            <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Número de Cliente</label>
+                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                {visit.numeroCliente}
+                            </div>
+                        </div>
+                        <div className="flex flex-col">
+                            <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Valor Cuota</label>
+                            <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                                {visit.valorCuota ? `$ ${visit.valorCuota}` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Solicitante */}
+                <div className="space-y-4 border-t pt-4">
+                    <h3 className="text-md font-bold text-gray-700 uppercase">Datos del Solicitante</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1 print:gap-2">
+                        <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                            {visit.solicitante.nombre}
+                        </div>
+                        <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                            {visit.solicitante.cc}
+                        </div>
+                        <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                            {visit.solicitante.telefono}
+                        </div>
+                        <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                            {visit.solicitante.direccionCasa}
+                        </div>
+                        <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                            {visit.solicitante.barrioCasa}
+                        </div>
+                        <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                            {visit.solicitante.direccionTrabajo}
+                        </div>
+                        <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                            {visit.solicitante.barrioTrabajo}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Fiador */}
+                <div className="space-y-4 border-t pt-4">
+                    <h3 className="text-md font-bold text-gray-700 uppercase">Datos del Fiador</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                            {visit.fiador.nombre}
+                        </div>
+                        <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                            {visit.fiador.cc}
+                        </div>
+                        <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                            {visit.fiador.telefono}
+                        </div>
+                        <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                            {visit.fiador.direccionCasa}
+                        </div>
+                        <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                            {visit.fiador.barrioCasa}
+                        </div>
+                        <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                            {visit.fiador.direccionTrabajo}
+                        </div>
+                        <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
+                            {visit.fiador.barrioTrabajo}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Observaciones */}
+                <div className="pt-4 border-t min-h-[3rem]">
+                    <label className="text-xs font-semibold text-gray-600 mb-1 uppercase block">Observaciones</label>
+                    <div className="w-full border-2 border-gray-300 rounded-lg p-3 min-h-[3rem] text-gray-800 whitespace-pre-wrap">
+                        {visit.observaciones}
+                    </div>
+                </div>
+            </div>
+    );
 
     return (
         <div className="max-w-6xl mx-auto space-y-8 p-4 print:p-2 print:space-y-4 print:max-w-full">
@@ -756,19 +938,146 @@ const Visitas = () => {
 
             {/* Lista de Visitas Agendadas */}
             <div className="space-y-6 print:space-y-3 print:text-xs">
-                <h2 className="text-2xl font-bold text-gray-800 text-center no-print">Visitas Agendadas ({visitas.length})</h2>
+                {/* Pestañas por estado de la decisión */}
+                <div className="flex flex-wrap justify-center gap-2 no-print">
+                    {[
+                        { id: 'pendiente', label: 'Pendientes', count: visitasPendientes.length, icon: Clock, activo: 'bg-gray-800 text-white border-gray-800' },
+                        { id: 'aprobada', label: 'Aprobadas', count: visitasAprobadas.length, icon: CheckCircle, activo: 'bg-green-600 text-white border-green-600' },
+                        { id: 'rechazada', label: 'No aprobadas', count: visitasRechazadas.length, icon: XCircle, activo: 'bg-red-600 text-white border-red-600' }
+                    ].map(({ id, label, count, icon: Icon, activo }) => (
+                        <button
+                            key={id}
+                            type="button"
+                            onClick={() => setTabActiva(id)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 font-semibold transition-colors ${tabActiva === id ? activo : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                        >
+                            <Icon size={18} />
+                            {label} ({count})
+                        </button>
+                    ))}
+                </div>
 
                 {loading ? (
                     <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300 no-print">
                         <p className="text-gray-500 text-lg">Cargando visitas...</p>
                     </div>
-                ) : visitas.length === 0 ? (
+                ) : tabActiva === 'aprobada' ? (
+                    visitasAprobadas.length === 0 ? (
+                        <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
+                            <p className="text-gray-500 text-lg">No hay visitas aprobadas.</p>
+                        </div>
+                    ) : (
+                        <div className="bg-white shadow-md rounded-lg overflow-x-auto border border-gray-200">
+                            <table className="min-w-full text-sm">
+                                <thead className="bg-green-50 text-green-900 text-left text-xs uppercase">
+                                    <tr>
+                                        <th className="px-4 py-3">Solicitante</th>
+                                        <th className="px-4 py-3">Cédula</th>
+                                        <th className="px-4 py-3">Teléfono</th>
+                                        <th className="px-4 py-3">Fecha visita</th>
+                                        <th className="px-4 py-3">Préstamo</th>
+                                        <th className="px-4 py-3">Cartera</th>
+                                        <th className="px-4 py-3">Aprobada</th>
+                                        <th className="px-4 py-3 no-print"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {visitasAprobadas.map(visit => (
+                                        <tr key={visit._id || visit.id} className="hover:bg-gray-50">
+                                            <td className="px-4 py-3 font-semibold text-gray-800">{visit.solicitante.nombre}</td>
+                                            <td className="px-4 py-3">{visit.solicitante.cc}</td>
+                                            <td className="px-4 py-3">{visit.solicitante.telefono}</td>
+                                            <td className="px-4 py-3">{formatearFechaVisual(visit.fechaVisita)}</td>
+                                            <td className="px-4 py-3">{visit.valorPrestamo ? `$ ${Number(visit.valorPrestamo).toLocaleString('es-CO')}` : ''}</td>
+                                            <td className="px-4 py-3">
+                                                <span className="px-2 py-1 rounded-full bg-green-100 text-green-800 font-bold text-xs">{visit.carteraAsignada}</span>
+                                            </td>
+                                            <td className="px-4 py-3 text-gray-600">
+                                                {visit.fechaDecision ? new Date(visit.fechaDecision).toLocaleDateString('es-CO') : ''}
+                                                {visit.decididoPorNombre && <div className="text-xs text-gray-400">{visit.decididoPorNombre}</div>}
+                                            </td>
+                                            <td className="px-4 py-3 no-print whitespace-nowrap">
+                                                <button
+                                                    onClick={() => setVisitaDetalle(visit)}
+                                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                                                    title="Ver detalle"
+                                                >
+                                                    <Eye size={18} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleAddToClients(visit.carteraAsignada, visit)}
+                                                    className="p-2 text-green-600 hover:bg-green-50 rounded-full transition-colors"
+                                                    title="Abrir formulario de cliente"
+                                                >
+                                                    <UserPlus size={18} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )
+                ) : tabActiva === 'rechazada' ? (
+                    visitasRechazadas.length === 0 ? (
+                        <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
+                            <p className="text-gray-500 text-lg">No hay visitas no aprobadas.</p>
+                        </div>
+                    ) : (
+                        <div className="bg-white shadow-md rounded-lg overflow-x-auto border border-gray-200">
+                            <table className="min-w-full text-sm">
+                                <thead className="bg-red-50 text-red-900 text-left text-xs uppercase">
+                                    <tr>
+                                        <th className="px-4 py-3">Solicitante</th>
+                                        <th className="px-4 py-3">Cédula</th>
+                                        <th className="px-4 py-3">Teléfono</th>
+                                        <th className="px-4 py-3">Fecha visita</th>
+                                        <th className="px-4 py-3">Razón / causa</th>
+                                        <th className="px-4 py-3">Decidida</th>
+                                        <th className="px-4 py-3 no-print"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {visitasRechazadas.map(visit => (
+                                        <tr key={visit._id || visit.id} className="hover:bg-gray-50 align-top">
+                                            <td className="px-4 py-3 font-semibold text-gray-800">{visit.solicitante.nombre}</td>
+                                            <td className="px-4 py-3">{visit.solicitante.cc}</td>
+                                            <td className="px-4 py-3">{visit.solicitante.telefono}</td>
+                                            <td className="px-4 py-3">{formatearFechaVisual(visit.fechaVisita)}</td>
+                                            <td className="px-4 py-3 text-red-800 whitespace-pre-wrap max-w-md">{visit.motivoRechazo}</td>
+                                            <td className="px-4 py-3 text-gray-600">
+                                                {visit.fechaDecision ? new Date(visit.fechaDecision).toLocaleDateString('es-CO') : ''}
+                                                {visit.decididoPorNombre && <div className="text-xs text-gray-400">{visit.decididoPorNombre}</div>}
+                                            </td>
+                                            <td className="px-4 py-3 no-print whitespace-nowrap">
+                                                <button
+                                                    onClick={() => setVisitaDetalle(visit)}
+                                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                                                    title="Ver detalle"
+                                                >
+                                                    <Eye size={18} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteVisit(visit._id || visit.id)}
+                                                    className="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                                                    title="Eliminar"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )
+                ) : visitasPendientes.length === 0 ? (
                     <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300 no-print">
-                        <p className="text-gray-500 text-lg">No hay visitas agendadas para imprimir.</p>
+                        <p className="text-gray-500 text-lg">No hay visitas pendientes.</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 gap-8 print:gap-4">
-                        {visitas.map((visit, index) => {
+                        {visitasPendientes.map((visit, index) => {
                             const visitId = visit._id || visit.id;
                             return (
                                 <div key={visitId} className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200 break-inside-avoid print:shadow-none print:border print:mb-2 print:page-break-inside-avoid">
@@ -788,10 +1097,19 @@ const Visitas = () => {
                                             </button>
                                             <button
                                                 onClick={() => openCarteraModal(visit)}
-                                                className="p-2 text-green-600 hover:bg-green-50 rounded-full transition-colors"
-                                                title="Añadir a Clientes"
+                                                className="flex items-center gap-1 px-3 py-1.5 text-sm font-semibold text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded-full transition-colors"
+                                                title="Aprobar y añadir a una cartera"
                                             >
-                                                <UserPlus size={20} />
+                                                <CheckCircle size={18} />
+                                                Aprobar
+                                            </button>
+                                            <button
+                                                onClick={() => openRechazoModal(visit)}
+                                                className="flex items-center gap-1 px-3 py-1.5 text-sm font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-full transition-colors"
+                                                title="No aprobar"
+                                            >
+                                                <XCircle size={18} />
+                                                No aprobar
                                             </button>
                                             <button
                                                 onClick={() => handleDeleteVisit(visitId)}
@@ -804,119 +1122,7 @@ const Visitas = () => {
                                     </div>
 
                                     {/* Cuerpo con formato similar al formulario de Nueva Visita */}
-                                    <div className="p-8 space-y-6 text-sm print:p-4 print:space-y-3 print:text-[11px]">
-                                        {/* Fechas */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1 print:gap-3">
-                                            <div className="flex flex-col">
-                                                <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Fecha Agendamiento</label>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800">
-                                                    {formatearFechaVisual(visit.fechaAgendamiento)}
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Fecha de la Visita</label>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800">
-                                                    {formatearFechaVisual(visit.fechaVisita)}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Información del Préstamo */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="space-y-6">
-                                                <div className="flex flex-col">
-                                                    <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Tipo de Préstamo</label>
-                                                    <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                        {visit.tipoPrestamo}
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Valor del Préstamo</label>
-                                                    <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                        {visit.valorPrestamo ? `$ ${visit.valorPrestamo}` : ''}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="space-y-6">
-                                                <div className="flex flex-col">
-                                                    <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Número de Cliente</label>
-                                                    <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                        {visit.numeroCliente}
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <label className="text-xs font-semibold text-gray-600 mb-1 uppercase">Valor Cuota</label>
-                                                    <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                        {visit.valorCuota ? `$ ${visit.valorCuota}` : ''}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Solicitante */}
-                                        <div className="space-y-4 border-t pt-4">
-                                            <h3 className="text-md font-bold text-gray-700 uppercase">Datos del Solicitante</h3>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1 print:gap-2">
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.solicitante.nombre}
-                                                </div>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.solicitante.cc}
-                                                </div>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.solicitante.telefono}
-                                                </div>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.solicitante.direccionCasa}
-                                                </div>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.solicitante.barrioCasa}
-                                                </div>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.solicitante.direccionTrabajo}
-                                                </div>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.solicitante.barrioTrabajo}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Fiador */}
-                                        <div className="space-y-4 border-t pt-4">
-                                            <h3 className="text-md font-bold text-gray-700 uppercase">Datos del Fiador</h3>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.fiador.nombre}
-                                                </div>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.fiador.cc}
-                                                </div>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.fiador.telefono}
-                                                </div>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.fiador.direccionCasa}
-                                                </div>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.fiador.barrioCasa}
-                                                </div>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.fiador.direccionTrabajo}
-                                                </div>
-                                                <div className="border-b-2 border-gray-300 py-2 text-gray-800 min-h-[2rem]">
-                                                    {visit.fiador.barrioTrabajo}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Observaciones */}
-                                        <div className="pt-4 border-t min-h-[3rem]">
-                                            <label className="text-xs font-semibold text-gray-600 mb-1 uppercase block">Observaciones</label>
-                                            <div className="w-full border-2 border-gray-300 rounded-lg p-3 min-h-[3rem] text-gray-800 whitespace-pre-wrap">
-                                                {visit.observaciones}
-                                            </div>
-                                        </div>
-                                    </div>
+                                    {renderCuerpoVisita(visit)}
                                 </div>
                             );
                         })}
@@ -929,7 +1135,7 @@ const Visitas = () => {
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 no-print">
                     <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden">
                         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-                            <h3 className="text-lg font-bold text-gray-800">Seleccionar Cartera</h3>
+                            <h3 className="text-lg font-bold text-gray-800">Aprobar visita</h3>
                             <button
                                 onClick={() => setShowCarteraModal(false)}
                                 className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -939,12 +1145,14 @@ const Visitas = () => {
                         </div>
                         <div className="p-6">
                             <p className="text-gray-600 mb-6">
-                                Selecciona la cartera a la que deseas agregar este cliente:
+                                {selectedVisit?.solicitante?.nombre && <span className="font-semibold">{selectedVisit.solicitante.nombre}: </span>}
+                                selecciona la cartera a la que se añadirá este cliente:
                             </p>
                             <div className="grid grid-cols-1 gap-4">
                                 <button
-                                    onClick={() => handleAddToClients('K1')}
-                                    className="flex items-center p-4 border-2 border-blue-100 bg-blue-50 rounded-lg hover:bg-blue-100 hover:border-blue-300 transition-all group"
+                                    disabled={guardandoDecision}
+                                    onClick={() => handleSeleccionCartera('K1')}
+                                    className="disabled:opacity-50 flex items-center p-4 border-2 border-blue-100 bg-blue-50 rounded-lg hover:bg-blue-100 hover:border-blue-300 transition-all group"
                                 >
                                     <div className="bg-blue-200 p-3 rounded-full group-hover:bg-blue-300 transition-colors">
                                         <Briefcase className="h-6 w-6 text-blue-700" />
@@ -956,8 +1164,9 @@ const Visitas = () => {
                                 </button>
 
                                 <button
-                                    onClick={() => handleAddToClients('K2')}
-                                    className="flex items-center p-4 border-2 border-green-100 bg-green-50 rounded-lg hover:bg-green-100 hover:border-green-300 transition-all group"
+                                    disabled={guardandoDecision}
+                                    onClick={() => handleSeleccionCartera('K2')}
+                                    className="disabled:opacity-50 flex items-center p-4 border-2 border-green-100 bg-green-50 rounded-lg hover:bg-green-100 hover:border-green-300 transition-all group"
                                 >
                                     <div className="bg-green-200 p-3 rounded-full group-hover:bg-green-300 transition-colors">
                                         <Briefcase className="h-6 w-6 text-green-700" />
@@ -966,6 +1175,122 @@ const Visitas = () => {
                                         <h4 className="font-bold text-green-900">Cartera K2</h4>
                                         <p className="text-sm text-green-700">Cartera Secundaria</p>
                                     </div>
+                                </button>
+
+                                <button
+                                    disabled={guardandoDecision}
+                                    onClick={() => handleSeleccionCartera('K3')}
+                                    className="disabled:opacity-50 flex items-center p-4 border-2 border-orange-100 bg-orange-50 rounded-lg hover:bg-orange-100 hover:border-orange-300 transition-all group"
+                                >
+                                    <div className="bg-orange-200 p-3 rounded-full group-hover:bg-orange-300 transition-colors">
+                                        <Briefcase className="h-6 w-6 text-orange-700" />
+                                    </div>
+                                    <div className="ml-4 text-left">
+                                        <h4 className="font-bold text-orange-900">Cartera K3</h4>
+                                        <p className="text-sm text-orange-700">Cartera Buga</p>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Ver Detalle (visitas aprobadas / no aprobadas) */}
+            {visitaDetalle && (
+                <div
+                    className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center p-4 z-50 overflow-y-auto no-print"
+                    onClick={() => setVisitaDetalle(null)}
+                >
+                    <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full my-8 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className={`px-6 py-4 border-b flex justify-between items-center ${visitaDetalle.estadoDecision === 'aprobada' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                {visitaDetalle.estadoDecision === 'aprobada'
+                                    ? <CheckCircle className="text-green-600" size={22} />
+                                    : <XCircle className="text-red-600" size={22} />}
+                                Detalle de la visita - {visitaDetalle.solicitante.nombre}
+                            </h3>
+                            <button
+                                onClick={() => setVisitaDetalle(null)}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        {/* Resultado de la decisión */}
+                        <div className={`mx-8 mt-6 p-4 rounded-lg border-2 text-sm ${visitaDetalle.estadoDecision === 'aprobada' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div>
+                                    <span className="text-xs font-semibold text-gray-600 uppercase block">Decisión</span>
+                                    <span className={`font-bold ${visitaDetalle.estadoDecision === 'aprobada' ? 'text-green-800' : 'text-red-800'}`}>
+                                        {visitaDetalle.estadoDecision === 'aprobada' ? `Aprobada - Cartera ${visitaDetalle.carteraAsignada}` : 'No aprobada'}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-xs font-semibold text-gray-600 uppercase block">Fecha de la decisión</span>
+                                    {visitaDetalle.fechaDecision ? new Date(visitaDetalle.fechaDecision).toLocaleString('es-CO') : '-'}
+                                </div>
+                                <div>
+                                    <span className="text-xs font-semibold text-gray-600 uppercase block">Decidida por</span>
+                                    {visitaDetalle.decididoPorNombre || '-'}
+                                </div>
+                            </div>
+                            {visitaDetalle.estadoDecision === 'rechazada' && (
+                                <div className="mt-3">
+                                    <span className="text-xs font-semibold text-gray-600 uppercase block">Razón / causa</span>
+                                    <p className="text-red-900 whitespace-pre-wrap">{visitaDetalle.motivoRechazo}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {renderCuerpoVisita(visitaDetalle)}
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de No Aprobación */}
+            {showRechazoModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 no-print">
+                    <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden">
+                        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-red-50">
+                            <h3 className="text-lg font-bold text-red-800">No aprobar visita</h3>
+                            <button
+                                onClick={() => setShowRechazoModal(false)}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <p className="text-gray-600">
+                                {selectedVisit?.solicitante?.nombre && <span className="font-semibold">{selectedVisit.solicitante.nombre}: </span>}
+                                escribe la razón o causa por la que no se aprueba.
+                            </p>
+                            <textarea
+                                value={motivoRechazo}
+                                onChange={(e) => setMotivoRechazo(e.target.value)}
+                                rows="4"
+                                autoFocus
+                                placeholder="Ej. No tiene fiador válido, dirección no verificada, reportado..."
+                                className="w-full border-2 border-gray-300 rounded-lg p-3 focus:border-red-500 outline-none transition-colors"
+                            ></textarea>
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowRechazoModal(false)}
+                                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!motivoRechazo.trim() || guardandoDecision}
+                                    onClick={handleConfirmarRechazo}
+                                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <XCircle size={18} />
+                                    {guardandoDecision ? 'Guardando...' : 'Confirmar'}
                                 </button>
                             </div>
                         </div>

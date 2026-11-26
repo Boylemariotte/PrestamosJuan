@@ -106,6 +106,35 @@ const visitaSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Decisión tomada al terminar la visita
+  estadoDecision: {
+    type: String,
+    enum: ['pendiente', 'aprobada', 'rechazada'],
+    default: 'pendiente'
+  },
+  carteraAsignada: {
+    type: String,
+    enum: ['K1', 'K2', 'K3', null],
+    default: null
+  },
+  motivoRechazo: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  fechaDecision: {
+    type: Date,
+    default: null
+  },
+  decididoPor: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Persona',
+    default: null
+  },
+  decididoPorNombre: {
+    type: String,
+    default: null
+  },
   fechaCreacion: {
     type: Date,
     default: Date.now
@@ -120,6 +149,7 @@ const visitaSchema = new mongoose.Schema({
 visitaSchema.index({ fechaVisita: 1 });
 visitaSchema.index({ fechaAgendamiento: 1 });
 visitaSchema.index({ completada: 1 });
+visitaSchema.index({ estadoDecision: 1 });
 visitaSchema.index({ 'solicitante.nombre': 'text', 'solicitante.cc': 'text' });
 visitaSchema.index({ 'fiador.nombre': 'text', 'fiador.cc': 'text' });
 

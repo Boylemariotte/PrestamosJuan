@@ -187,6 +187,50 @@ export const deleteVisita = async (req, res, next) => {
 };
 
 /**
+ * @desc    Registrar la decisión de una visita terminada (aprobar con cartera o rechazar con motivo)
+ * @route   PUT /api/visitas/:id/decision
+ * @body    { decision: 'aprobada', cartera: 'K1'|'K2'|'K3' } | { decision: 'rechazada', motivo: string }
+ * @access  Private
+ */
+export const decidirVisita = async (req, res, next) => {
+  try {
+    const { decision, cartera, motivo } = req.body;
+
+    if (!['aprobada', 'rechazada'].includes(decision)) {
+      return res.status(400).json({ success: false, error: 'La decisión debe ser "aprobada" o "rechazada"' });
+    }
+    if (decision === 'aprobada' && !['K1', 'K2', 'K3'].includes(cartera)) {
+      return res.status(400).json({ success: false, error: 'Debe seleccionar la cartera (K1, K2 o K3)' });
+    }
+    const motivoLimpio = typeof motivo === 'string' ? motivo.trim() : '';
+    if (decision === 'rechazada' && !motivoLimpio) {
+      return res.status(400).json({ success: false, error: 'Debe indicar la razón por la que no se aprueba' });
+    }
+
+    const visita = await Visita.findById(req.params.id);
+    if (!visita) {
+      return res.status(404).json({ success: false, error: 'Visita no encontrada' });
+    }
+    if (visita.estadoDecision && visita.estadoDecision !== 'pendiente') {
+      return res.status(409).json({ success: false, error: `Esta visita ya fue ${visita.estadoDecision}` });
+    }
+
+    visita.completada = true;
+    visita.estadoDecision = decision;
+    visita.carteraAsignada = decision === 'aprobada' ? cartera : null;
+    visita.motivoRechazo = decision === 'rechazada' ? motivoLimpio : '';
+    visita.fechaDecision = new Date();
+    visita.decididoPor = req.user?._id || null;
+    visita.decididoPorNombre = req.user?.nombre || null;
+    await visita.save();
+
+    res.status(200).json({ success: true, data: visita });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * @desc    Marcar visita como completada
  * @route   PUT /api/visitas/:id/completar
  * @access  Private
